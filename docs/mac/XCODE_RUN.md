@@ -23,7 +23,7 @@ Xcode에서 아래 파일을 연다.
 /Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Package.swift
 ```
 
-Scheme은 `PhotomeForMac`을 선택한다.
+중요: 지금은 `.xcodeproj`가 아니라 Swift Package 구조다. Scheme은 `PhotomeForMac`을 선택한다.
 
 ## 3. Scheme 환경변수 설정
 
@@ -45,6 +45,13 @@ PHOTOME_PYTHON=/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python
 ## 4. Run
 
 Run 버튼을 누르면 앱이 뜨고, 앱이 내부에서 FastAPI 백엔드를 실행한 뒤 WebView로 대시보드를 연다.
+
+CLI에서 Xcode 빌드 검증만 먼저 하고 싶으면 아래로 확인 가능하다.
+
+```bash
+cd /Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -scheme PhotomeForMac -destination 'platform=macOS' build
+```
 
 ## 자주 나는 오류
 

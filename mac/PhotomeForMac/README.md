@@ -1,13 +1,13 @@
 # PhotomeForMac SwiftUI MVP
 
-이 디렉토리는 Photome for Mac의 초기 SwiftUI shell이다.
+이 디렉토리는 Photome for Mac의 SwiftUI + WebView shell이다.
 
 현재 범위:
 
 1. 앱 창 표시
-2. 백엔드 상태 placeholder
-3. 시작/중지/대시보드 버튼
-4. 다음 단계에서 Python 백엔드 프로세스 supervisor 연결
+2. Python 백엔드 supervisor 실행/중지/재시작
+3. WebView로 기존 Photome dashboard 표시
+4. 메뉴바 아이콘에서 상태 확인, 폴더 선택, LAN 토글
 
 빌드:
 
@@ -19,7 +19,14 @@ swift build
 실행:
 
 ```bash
+cd mac/PhotomeForMac
 swift run PhotomeForMac
 ```
 
-주의: 현재는 실제 Python 백엔드를 띄우지 않는 shell MVP다. 실제 연결은 `BackendSupervisor.swift`에서 진행한다.
+Xcode 실행은 `Package.swift`를 열어서 `PhotomeForMac` scheme으로 진행한다.
+
+```text
+/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Package.swift
+```
+
+필수 환경변수와 실행 순서는 `docs/mac/XCODE_RUN.md`를 따른다.
