@@ -1,6 +1,8 @@
-# photome
+# Photome for Mac
 
-로컬 사진 라이브러리용 개인 검색 서버.
+Photome for Mac은 Docker 설치 없이 실행되는 macOS 앱형 Photome 배포를 목표로 하는 작업 공간이다. 기존 Photome의 FastAPI 백엔드, 갤러리/대시보드, 사진 스캔, SQLite, CLIP 이미지 AI 기능을 Mac 앱 내부 런타임으로 통합한다.
+
+현재 repo는 Mac 앱 전환 작업용이며, Docker는 서버/NAS/Linux/Windows/개발/CI용 보조 배포 경로로 유지한다.
 
 ## 기능 요약
 
