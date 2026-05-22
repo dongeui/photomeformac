@@ -1,0 +1,431 @@
+# CLIP zero-shot auto-tagging. Bump semantic_auto_tag_version when changing
+# thresholds, prompts, aliases, or max_aliases_per_concept.
+settings:
+  # Cap stored auto-tag aliases per hit (limits shadow/UI noise; raise if needed).
+  max_aliases_per_concept: 8
+
+concepts:
+  - tag: person
+    prompts:
+      - a photo of a person
+      - a portrait photo
+      - a human face
+    threshold: 0.235
+    tag_type: auto_person
+  - tag: baby
+    prompts:
+      - a photo of a baby
+      - an infant lying down
+      - a newborn baby
+    threshold: 0.255
+    tag_type: auto_person
+  - tag: woman
+    prompts:
+      - a photo of a woman
+      - a female portrait
+      - a girl smiling in a photo
+    threshold: 0.25
+    tag_type: auto_person
+  - tag: man
+    prompts:
+      - a photo of a man
+      - a male portrait
+      - a boy smiling in a photo
+    threshold: 0.25
+    tag_type: auto_person
+  - tag: child
+    prompts:
+      - a photo of a child
+      - a kid playing
+      - a young child in a photo
+    threshold: 0.25
+    tag_type: auto_person
+  - tag: group
+    prompts:
+      - a group photo of people
+      - friends posing for a photo
+      - people gathered together
+    threshold: 0.248
+    tag_type: auto_person
+  - tag: receipt
+    prompts:
+      - a photo of a receipt
+      - a purchase receipt with text
+      - a cash register receipt
+    threshold: 0.252
+    tag_type: auto_screen
+  - tag: screenshot
+    prompts:
+      - a smartphone screenshot
+      - a screenshot of an app
+      - a mobile app interface
+    threshold: 0.248
+    tag_type: auto_screen
+  - tag: document
+    prompts:
+      - a document with text
+      - a page full of text
+      - a printed document
+    threshold: 0.252
+    tag_type: auto_screen
+  - tag: outdoor
+    prompts:
+      - an outdoor photo
+      - a street or park scene
+      - outside in natural light
+    threshold: 0.242
+    tag_type: auto_scene
+  - tag: indoor
+    prompts:
+      - an indoor room scene
+      - inside a house or building
+      - an interior photo indoors
+    threshold: 0.242
+    tag_type: auto_scene
+  - tag: beach
+    prompts:
+      - a beach photo
+      - the sea and sand
+      - ocean waves on a beach
+    threshold: 0.25
+    tag_type: auto_scene
+  - tag: sea
+    prompts:
+      - a photo of the sea
+      - blue ocean water
+      - a coastal seaside view
+    threshold: 0.248
+    tag_type: auto_scene
+  - tag: water
+    prompts:
+      - a photo near water
+      - water surface outdoors
+      - a lake river or ocean
+    threshold: 0.246
+    tag_type: auto_scene
+  - tag: mountain
+    prompts:
+      - a mountain landscape
+      - a hiking trail on a mountain
+      - a mountain view
+    threshold: 0.248
+    tag_type: auto_scene
+  - tag: nature
+    prompts:
+      - a nature photo
+      - trees and greenery
+      - a forest or countryside scene
+    threshold: 0.242
+    tag_type: auto_scene
+  - tag: sky
+    prompts:
+      - a blue sky with clouds
+      - a sunset sky
+      - a dramatic sky landscape
+    threshold: 0.24
+    tag_type: auto_scene
+  - tag: rain
+    prompts:
+      - a rainy day outdoors
+      - rain falling in the street
+      - a wet rainy scene
+    threshold: 0.244
+    tag_type: auto_scene
+  - tag: snow
+    prompts:
+      - a snowy winter scene
+      - snow on the ground outdoors
+      - falling snow in winter
+    threshold: 0.244
+    tag_type: auto_scene
+  - tag: food
+    prompts:
+      - a photo of food
+      - a meal on a table
+      - a dish at a restaurant
+    threshold: 0.248
+    tag_type: auto_object
+  - tag: cake
+    prompts:
+      - a birthday cake
+      - a decorated cake with candles
+      - a slice of cake
+    threshold: 0.255
+    tag_type: auto_object
+  - tag: coffee
+    prompts:
+      - a cup of coffee
+      - a latte or espresso at a cafe
+      - a coffee drink
+    threshold: 0.252
+    tag_type: auto_object
+  - tag: celebration
+    prompts:
+      - a party or celebration
+      - people celebrating with drinks
+      - birthday party balloons
+    threshold: 0.25
+    tag_type: auto_event
+  - tag: wedding
+    prompts:
+      - a wedding ceremony
+      - bride and groom together
+      - wedding flowers and dress
+    threshold: 0.258
+    tag_type: auto_event
+  - tag: travel
+    prompts:
+      - a travel photo
+      - a tourist at a famous landmark
+      - sightseeing abroad
+    threshold: 0.245
+    tag_type: auto_scene
+  - tag: night
+    prompts:
+      - a night photo
+      - a dark evening scene
+      - city lights at night
+    threshold: 0.242
+    tag_type: auto_scene
+  - tag: sunset
+    prompts:
+      - a sunset photo
+      - golden hour sky
+      - sun setting over the horizon
+    threshold: 0.248
+    tag_type: auto_scene
+  - tag: vehicle
+    prompts:
+      - a car or vehicle
+      - a photo of transportation
+      - a car on the road
+    threshold: 0.232
+    tag_type: auto_object
+  - tag: animal
+    prompts:
+      - a pet or animal
+      - a dog or cat
+      - an animal close-up portrait
+    threshold: 0.24
+    tag_type: auto_object
+  - tag: flower
+    prompts:
+      - flowers blooming outdoors
+      - a flower close-up
+      - colorful flower petals
+    threshold: 0.242
+    tag_type: auto_object
+  - tag: bicycle
+    prompts:
+      - a bicycle or bike
+      - a person riding a bicycle
+      - a bicycle parked outside
+    threshold: 0.24
+    tag_type: auto_object
+  - tag: book
+    prompts:
+      - a book on a table
+      - a person reading a book
+      - an open book indoors
+    threshold: 0.242
+    tag_type: auto_object
+  - tag: classroom
+    prompts:
+      - a classroom with desks
+      - a school classroom indoors
+      - students in a classroom
+    threshold: 0.244
+    tag_type: auto_scene
+  - tag: concert
+    prompts:
+      - a live concert performance
+      - a stage performance with lights
+      - a music concert stage
+    threshold: 0.245
+    tag_type: auto_event
+
+concept_aliases:
+  person:
+    - person
+    - people
+    - 사람
+    - 인물
+  group:
+    - group
+    - people
+    - crowd
+    - 단체
+    - 여럿
+    - 모임
+  document:
+    - document
+    - 문서
+    - 서류
+  outdoor:
+    - outdoor
+    - outside
+    - 야외
+    - 외부
+  sky:
+    - sky
+    - cloud
+    - clouds
+    - 하늘
+    - 구름
+  cake:
+    - cake
+    - dessert
+    - 케이크
+    - 디저트
+  coffee:
+    - coffee
+    - cafe
+    - drink
+    - 커피
+    - 카페
+    - 음료
+  celebration:
+    - celebration
+    - birthday
+    - party
+    - 기념일
+    - 생일
+    - 파티
+  wedding:
+    - wedding
+    - 결혼
+    - 웨딩
+  travel:
+    - travel
+    - trip
+    - tourism
+    - 여행
+    - 관광
+  night:
+    - night
+    - nighttime
+    - dark
+    - 밤
+    - 야간
+  sunset:
+    - sunset
+    - sunrise
+    - golden hour
+    - 일몰
+    - 노을
+    - 해질녘
+  vehicle:
+    - vehicle
+    - car
+    - transport
+    - 차량
+    - 자동차
+    - 교통
+  animal:
+    - animal
+    - pet
+    - 동물
+    - 반려동물
+  indoor:
+    - indoor
+    - interior
+    - inside
+    - 실내
+  rain:
+    - rain
+    - rainy
+    - 비
+  snow:
+    - snow
+    - snowy
+    - 눈
+  beach:
+    - beach
+    - sea
+    - ocean
+    - coast
+    - water
+    - 해변
+    - 바다
+  sea:
+    - sea
+    - ocean
+    - water
+    - coast
+    - 바다
+  water:
+    - water
+    - sea
+    - ocean
+    - river
+    - lake
+    - 물
+  baby:
+    - baby
+    - infant
+    - newborn
+    - toddler
+    - 아기
+  woman:
+    - woman
+    - female
+    - girl
+    - 여자
+  man:
+    - man
+    - male
+    - boy
+    - 남자
+  child:
+    - child
+    - kid
+    - 어린이
+    - 아이
+  mountain:
+    - mountain
+    - hiking
+    - 산
+    - 등산
+  flower:
+    - flower
+    - flowers
+    - blossom
+    - 꽃
+    - 벚꽃
+  bicycle:
+    - bicycle
+    - bike
+    - cycling
+    - 자전거
+  book:
+    - book
+    - reading
+    - 책
+    - 독서
+  classroom:
+    - classroom
+    - school
+    - class
+    - 교실
+  concert:
+    - concert
+    - live
+    - stage
+    - 공연
+  nature:
+    - nature
+    - outdoor
+    - 자연
+    - 야외
+  food:
+    - food
+    - meal
+    - 음식
+  receipt:
+    - receipt
+    - 영수증
+  screenshot:
+    - screenshot
+    - screen
+    - 화면
+    - 스크린샷

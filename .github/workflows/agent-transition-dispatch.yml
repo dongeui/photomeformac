@@ -1,0 +1,94 @@
+name: Agent Transition Dispatch
+
+on:
+  repository_dispatch:
+    types: [agent-transition]
+
+jobs:
+  apply-transition:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Apply PR transition
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const payload = context.payload.client_payload || {};
+            const prNumber = payload.pr_number;
+            const stageLabels = [
+              "agent:dev",
+              "agent:qa",
+              "agent:planner-review",
+              "agent:changes-requested",
+              "agent:ready-to-merge",
+            ];
+
+            if (!prNumber) {
+              core.setFailed("client_payload.pr_number is required");
+              return;
+            }
+
+            const pull = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: prNumber,
+            });
+
+            const currentLabels = new Set((pull.data.labels || []).map((label) => label.name));
+            const replaceStage = payload.replace_stage;
+            const addLabels = payload.add_labels || [];
+            const removeLabels = payload.remove_labels || [];
+            const commentBody = payload.comment_body;
+
+            if (replaceStage) {
+              for (const label of stageLabels) {
+                if (label !== replaceStage && currentLabels.has(label)) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      ...context.repo,
+                      issue_number: prNumber,
+                      name: label,
+                    });
+                  } catch (error) {
+                    core.info(`Skip removing ${label}: ${error.message}`);
+                  }
+                }
+              }
+
+              if (!currentLabels.has(replaceStage)) {
+                await github.rest.issues.addLabels({
+                  ...context.repo,
+                  issue_number: prNumber,
+                  labels: [replaceStage],
+                });
+              }
+            }
+
+            for (const label of removeLabels) {
+              try {
+                await github.rest.issues.removeLabel({
+                  ...context.repo,
+                  issue_number: prNumber,
+                  name: label,
+                });
+              } catch (error) {
+                core.info(`Skip removing ${label}: ${error.message}`);
+              }
+            }
+
+            if (addLabels.length > 0) {
+              await github.rest.issues.addLabels({
+                ...context.repo,
+                issue_number: prNumber,
+                labels: addLabels,
+              });
+            }
+
+            if (commentBody) {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: prNumber,
+                body: commentBody,
+              });
+            }

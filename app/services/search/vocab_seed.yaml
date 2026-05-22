@@ -1,0 +1,1034 @@
+# Search vocabulary seed — edit freely without code changes.
+# Loaded once at startup. Restart the server to pick up changes.
+#
+# person_terms:      triggers person/face routing in the query planner
+# place_terms:       triggers place routing and place_terms extraction
+# visual_terms:      triggers visual/CLIP routing
+# ocr_terms:         triggers OCR-first routing
+# place_aliases:     variant → canonical place name (e.g. 제주도 → 제주)
+#
+# Hint sets — used by resolve_effective_mode to select the right search channel:
+# face_hints:        queries about people/faces → semantic mode
+# text_hints:        queries about text/documents → OCR mode
+# screen_hints:      queries about screenshots/UI → OCR mode
+# travel_hints:      queries about travel/outdoor scenes → semantic mode
+# celebration_hints: queries about parties/ceremonies → semantic mode
+
+person_terms:
+  - face
+  - faces
+  - person
+  - people
+  - portrait
+  - selfie
+  - family
+  - friend
+  - friends
+  - 얼굴
+  - 사람
+  - 인물
+  - 셀카
+  - 가족
+  - 친구
+  - 커플
+  - 엄마
+  - 아빠
+  - 할머니
+  - 할아버지
+  - 남자
+  - 남성
+  - 여자
+  - 여성
+  - 아기
+  - 애기
+  - 아이
+  - 어린이
+  - 형
+  - 오빠
+  - 누나
+  - 언니
+  - 동생
+  - 남동생
+  - 여동생
+  - 조카
+  - 남편
+  - 아내
+  - 선생님
+  - 친척
+  - 이모
+  - 삼촌
+  - 외삼촌
+  - 고모
+  - 사촌
+
+ocr_terms:
+  - text
+  - ocr
+  - document
+  - receipt
+  - screenshot
+  - screen
+  - error
+  - message
+  - chat
+  - 텍스트
+  - 글씨
+  - 문서
+  - 영수증
+  - 스크린샷
+  - 화면
+  - 오류
+  - 메시지
+  - 대화
+  - 카톡
+  - 카카오톡
+  - 캡처
+  - 캡쳐
+  - 갈무리
+  - 인스타
+  - 인스타그램
+  - 앱화면
+  - 공지
+  - 알림
+  - 알림창
+  - 팝업
+  - 대화창
+  - 채팅
+
+place_terms:
+  - 서울
+  - 제주
+  - 부산
+  - 공항
+  - 카페
+  - 식당
+  - 학교
+  - 집
+  - 공원
+  - 해변
+  - 바다
+  - 산
+  - 바닷가
+  - 바닷물
+  - 해안
+  - 해수욕장
+  - 바다사진
+  - 한국
+  - 대한민국
+  - 일본
+  - 日本
+  - 재팬
+  - 스위스
+  - Switzerland
+  - Schweiz/Suisse/Svizzera/Svizra
+  - seoul
+  - jeju
+  - busan
+  - airport
+  - cafe
+  - restaurant
+  - school
+  - home
+  - park
+  - beach
+  - sea
+  - ocean
+  - coast
+  - seaside
+  - water
+  - mountain
+  - 강남
+  - 홍대
+  - 명동
+  - 경복궁
+  - 인사동
+  - 이태원
+  - 한강
+  - 속초
+  - 강릉
+  - 경주
+  - 전주
+  - 대전
+  - 광주
+  - 인천
+  - 수원
+  - 대구
+  - 울산
+  - 박물관
+  - 동물원
+  - 수족관
+  - 놀이공원
+  - 놀이터
+  - 체육관
+  - 도서관
+  - 지하철
+  - 버스
+  - 기차
+  - ktx
+  - 고속도로
+
+visual_terms:
+  - baby
+  - food
+  - beach
+  - sea
+  - ocean
+  - coast
+  - water
+  - travel
+  - trip
+  - vacation
+  - wedding
+  - birthday
+  - dog
+  - cat
+  - mountain
+  - sunset
+  - 아기
+  - 음식
+  - 바다
+  - 여행
+  - 결혼식
+  - 생일
+  - 강아지
+  - 고양이
+  - 산
+  - 일몰
+  - 바닷가
+  - 바닷물
+  - 해변
+  - 해안
+  - 해수욕장
+  - 꽃
+  - 하늘
+  - 공원
+  - 캠핑
+  - 케이크
+  - 파티
+  - 소풍
+  - 나들이
+  - 드라이브
+  - 산책
+  - 등산
+  - 운동
+  - 수영
+  - 자전거
+  - 야경
+  - 일출
+  - 노을
+  - 설경
+  - 단풍
+  - 벚꽃
+  - 졸업식
+  - 입학식
+  - 돌잔치
+  - 환갑
+  - 칠순
+  - 실내
+  - 야외
+  - 거실
+  - 주방
+  - 침실
+  - 사무실
+  - 교실
+  - 무대
+  - 책
+  - 공부
+  - 요리
+  - 식사
+  - 독서
+  - 비
+  - 눈
+  - 맑은
+  - 흐린
+  - 벚꽃
+  - 단풍
+  - 산책
+  - 조깅
+  - 러닝
+  - 자전거
+  - 공연
+  - 전시
+  - 쇼핑
+  - 운전
+  - 데이트
+  - 연인
+  - 모임
+  - 단체
+  - 아이들
+  - 애들
+  - 맛집
+  - 브런치
+  - 디저트
+  - 빵
+  - 라멘
+  - 파스타
+  - 바베큐
+  - 고기
+  - 술자리
+  - 건배
+  - 호텔
+  - 숙소
+  - 리조트
+  - 수영장
+  - 온천
+  - 비행기
+  - 기차
+  - 버스
+  - 배
+  - 시장
+  - 거리
+  - 골목
+  - 도시
+  - 풍경
+  - 자연
+  - 호수
+  - 계곡
+  - 숲
+  - 동물원
+  - 수족관
+  - 놀이공원
+  - 놀이터
+  - 병원
+  - 출산
+  - 신생아
+  - 웃는
+  - 웃고있는
+  - 행복한
+  - 분위기
+  - 예쁜
+  - 클로즈업
+  - newborn
+  - cute
+  - smile
+  - smiling
+  - happy
+  - group
+  - date
+  - couple
+  - restaurant
+  - brunch
+  - dessert
+  - bread
+  - ramen
+  - pasta
+  - barbecue
+  - hotel
+  - resort
+  - pool
+  - hot spring
+  - airplane
+  - train
+  - bus
+  - boat
+  - market
+  - street
+  - city
+  - landscape
+  - nature
+  - lake
+  - river
+  - valley
+  - forest
+  - zoo
+  - aquarium
+  - amusement park
+  - playground
+
+place_aliases:
+  제주도: 제주
+  제주특별자치도: 제주
+  제주시: 제주
+  서귀포: 제주
+  서울시: 서울
+  서울특별시: 서울
+  부산시: 부산
+  부산광역시: 부산
+  인천시: 인천
+  인천광역시: 인천
+  한국: 대한민국
+  남한: 대한민국
+  korea: 대한민국
+  south korea: 대한민국
+  republic of korea: 대한민국
+  일본: 日本
+  재팬: 日本
+  japan: 日本
+  스위스: Schweiz/Suisse/Svizzera/Svizra
+  swiss: Schweiz/Suisse/Svizzera/Svizra
+  switzerland: Schweiz/Suisse/Svizzera/Svizra
+  suisse: Schweiz/Suisse/Svizzera/Svizra
+  대전시: 대전
+  대전광역시: 대전
+  대구시: 대구
+  대구광역시: 대구
+  광주시: 광주
+  광주광역시: 광주
+  울산시: 울산
+  울산광역시: 울산
+  강남구: 강남
+  강남역: 강남
+  홍대입구: 홍대
+  홍대역: 홍대
+  홍대거리: 홍대
+  명동역: 명동
+  이태원역: 이태원
+  한강공원: 한강
+  속초시: 속초
+  강릉시: 강릉
+  경주시: 경주
+  전주시: 전주
+  수원시: 수원
+  맛집: 식당
+  밥집: 식당
+  레스토랑: 식당
+  술집: 식당
+  커피숍: 카페
+  카페거리: 카페
+  놀이터: 공원
+  호텔: 숙소
+  리조트: 숙소
+  펜션: 숙소
+
+lexicon:
+  자전거: bicycle bike cycling
+  자동차: car automobile vehicle
+  차: car vehicle
+  사람: person people human
+  남자: man male person
+  남성: man male person
+  여자: woman female girl lady person portrait
+  여성: woman female girl lady person portrait
+  얼굴: face portrait person close-up selfie
+  셀카: selfie portrait face person
+  아기: baby infant toddler child kid newborn
+  애기: baby infant toddler child kid newborn
+  아이: child kid baby toddler
+  어린이: child kid toddler
+  엄마: mother mom woman family portrait
+  아빠: father dad man family portrait
+  할머니: grandmother elderly woman family portrait
+  할아버지: grandfather elderly man family portrait
+  가족: family group portrait people
+  친구: friends group people smiling
+  커플: couple love romantic portrait
+  연인: couple romantic date portrait
+  데이트: date couple romantic restaurant cafe night
+  단체: group people gathering
+  모임: gathering group people event
+  아이들: children kids group playing
+  애들: children kids group playing
+  신생아: newborn baby infant hospital family
+  강아지: dog puppy cute animal
+  고양이: cat kitten cute animal
+  꽃: flower floral bloom garden
+  나무: tree forest nature green
+  하늘: sky clouds blue
+  바다: sea ocean beach water waves coast seaside
+  바다사진: sea ocean beach water waves coast seaside
+  바닷가: seaside coast beach sea ocean
+  바닷물: sea water ocean waves
+  산: mountain hiking outdoor landscape
+  강: river stream water nature
+  공원: park outdoor green nature
+  해변: beach sand sea ocean coast
+  해안: coast seaside ocean beach
+  해수욕장: beach swimming sea ocean summer
+  숲: forest trees nature green
+  음식: food meal dish restaurant
+  맛집: restaurant food meal dining popular place
+  밥집: restaurant food meal dining
+  브런치: brunch cafe food meal
+  디저트: dessert cake sweet cafe
+  빵: bread bakery pastry food
+  라멘: ramen japanese food noodle
+  파스타: pasta italian food restaurant
+  바베큐: barbecue grill meat outdoor food
+  고기: meat barbecue grill restaurant
+  술자리: drinking gathering table friends
+  건배: toast drinking celebration friends
+  밥: rice meal korean food
+  케이크: cake dessert birthday celebration sweet
+  커피: coffee cafe drink
+  초밥: sushi japanese food meal
+  치킨: chicken fried food meal
+  피자: pizza food meal
+  술: alcohol drink beer wine glass
+  생일: birthday cake celebration party happy
+  생일파티: birthday party celebration cake candles
+  결혼식: wedding ceremony couple formal
+  졸업: graduation ceremony diploma academic
+  졸업식: graduation ceremony diploma academic
+  파티: party celebration people happy
+  여행: travel trip landscape outdoor
+  여행사진: travel trip landscape outdoor
+  휴가: vacation travel leisure outdoor
+  숙소: hotel lodging room travel
+  호텔: hotel lodging room travel
+  리조트: resort hotel vacation pool
+  펜션: pension lodging vacation travel
+  수영장: swimming pool water vacation
+  온천: hot spring spa bath travel
+  비행기: airplane flight travel airport
+  항공기: airplane aircraft flight travel
+  기차: train rail travel station
+  버스: bus transit travel road
+  배: boat ship ferry water travel
+  시장: market street shopping food
+  백화점: department store shopping indoor
+  쇼핑몰: shopping mall indoor store
+  거리: street urban city outdoor
+  골목: alley street urban
+  도시: city urban skyline street
+  풍경: landscape scenery outdoor nature
+  자연: nature outdoor landscape
+  호수: lake water nature landscape
+  계곡: valley stream water nature
+  운동: exercise sports outdoor fitness
+  등산: hiking mountain outdoor nature trail
+  수영: swimming pool water sport
+  캠핑: camping outdoor tent nature
+  카페: cafe coffee shop interior cozy
+  식당: restaurant food dining
+  집: home house indoor interior
+  실내: indoor interior room inside
+  야외: outdoor open air outside nature
+  거실: living room home interior indoor
+  주방: kitchen cooking indoor home
+  침실: bedroom bed indoor home
+  사무실: office desk workplace indoor
+  교실: classroom school desk indoor
+  무대: stage concert performance indoor
+  책: book reading study indoor
+  공부: study learning classroom desk
+  요리: cooking kitchen meal food
+  식사: meal dining table food
+  학교: school classroom building
+  공항: airport travel terminal
+  해외: abroad overseas travel landmark
+  한국: Korea South Korea Republic of Korea city travel
+  대한민국: Korea South Korea Republic of Korea city travel
+  일본: Japan Japanese city travel
+  日本: Japan Japanese city travel
+  스위스: Switzerland Swiss Alps mountain lake travel
+  Switzerland: Switzerland Swiss Alps mountain lake travel
+  Schweiz/Suisse/Svizzera/Svizra: Switzerland Swiss Alps mountain lake travel
+  서울: Seoul Korea cityscape urban
+  제주: Jeju island beach Korea outdoor
+  영수증: receipt document text paper purchase
+  문서: document paper page text
+  화면: screen screenshot app interface
+  스크린샷: screenshot screen capture app
+  오류: error failure warning message screen
+  전송: send transfer submit button
+  실패: failure failed error warning
+  동의: agree consent accept button
+  확인: confirm ok check button
+  취소: cancel button
+  버튼: button interface screen
+  대화: chat conversation message screen
+  메시지: message chat text screen
+  크리스마스: Christmas holiday decoration tree
+  새해: new year celebration fireworks
+  추석: chuseok Korean holiday family traditional
+  설날: seollal Korean new year traditional
+  봄: spring flowers cherry blossom
+  여름: summer beach outdoor sunny hot
+  가을: autumn fall foliage orange leaves
+  겨울: winter snow cold ice
+  비: rain wet weather umbrella
+  눈: snow winter white cold
+  맑은: clear sunny blue sky
+  흐린: cloudy overcast gray sky
+  벚꽃: cherry blossom spring flowers pink
+  단풍: autumn foliage fall leaves orange
+  귀여운: cute adorable
+  웃는: smiling happy laughing
+  잠자는: sleeping resting
+  야경: night city lights cityscape
+  일출: sunrise dawn morning
+  일몰: sunset dusk evening
+  형: brother male family portrait
+  오빠: brother male family portrait
+  누나: sister female family portrait
+  언니: sister female family portrait
+  동생: sibling family portrait
+  남동생: younger brother male family portrait
+  여동생: younger sister female family portrait
+  조카: nephew niece child family portrait
+  남편: husband couple family portrait
+  아내: wife couple family portrait
+  강남: Gangnam Seoul Korea urban cityscape
+  홍대: Hongdae Seoul Korea street
+  명동: Myeongdong Seoul Korea street shopping
+  경복궁: Gyeongbokgung palace Korea traditional
+  인사동: Insadong Seoul Korea traditional street
+  이태원: Itaewon Seoul Korea street night
+  한강: Han River Seoul Korea park outdoor
+  속초: Sokcho Korea beach ocean
+  강릉: Gangneung Korea beach coffee
+  경주: Gyeongju Korea historic cultural
+  전주: Jeonju Korea traditional hanok
+  놀이공원: amusement park ride fun
+  놀이터: playground children park outdoor
+  수족관: aquarium fish indoor
+  동물원: zoo animal outdoor
+  병원: hospital medical room baby birth
+  출산: newborn baby birth hospital family
+  소풍: picnic outdoor park nature
+  나들이: outing outdoor nature
+  드라이브: drive road trip car scenic
+  산책: walk stroll outdoor park
+  조깅: jogging running outdoor fitness
+  독서: reading book indoor
+  공연: performance concert stage
+  전시: exhibition gallery indoor art
+  분위기: mood cozy aesthetic atmosphere
+  예쁜: pretty beautiful aesthetic
+  웃고있는: smiling happy laughing
+  행복한: happy joyful smiling
+  흐릿한: blurry soft photo
+  흔들린: blurry motion photo
+  어두운: dark low light night
+  밝은: bright sunny light
+  클로즈업: close-up detail macro
+
+typo_corrections:
+  # 얼굴
+  어르굴: 얼굴
+  얼구: 얼굴
+  얼굴ㄹ: 얼굴
+  얼굴사진: 얼굴 사진
+  어르굴사진: 얼굴 사진
+  # 사람/성별
+  여ㅈ: 여자
+  여잔: 여자
+  여자애: 여자
+  남자애: 남자
+  남잔: 남자
+  사라: 사람
+  사름: 사람
+  인무: 인물
+  # 아기/어린이
+  아긔: 아기
+  아가: 아기
+  애긔: 아기
+  베이비: 아기
+  아깅: 아기
+  애기: 아기
+  꼬마: 어린이
+  꼬마애: 어린이
+  어린애: 어린이
+  아이들이랑: 아이들
+  애들이랑: 아이들
+  아이랑: 아이
+  # 동물
+  멍멍이: 강아지
+  멍뭉이: 강아지
+  강쥐: 강아지
+  냥이: 고양이
+  야옹이: 고양이
+  냥냥이: 고양이
+  # 날씨/자연
+  비오는: 비 오는
+  비온날: 비 오는 날
+  비오는날: 비 오는 날
+  눈오는: 눈 오는
+  눈온날: 눈 오는 날
+  눈오는날: 눈 오는 날
+  흐린날: 흐린 날
+  맑은날: 맑은 날
+  # 음식/장소
+  맛집사진: 맛집 사진
+  카페사진: 카페 사진
+  카훼: 카페
+  카폐: 카페
+  레스또랑: 레스토랑
+  레스트랑: 레스토랑
+  # 여행/활동
+  데이뚜: 데이트
+  데이투: 데이트
+  여행사진: 여행 사진
+  여행갔을때: 여행
+  여름휴가사진: 여름 휴가 사진
+  # 지명 오탈자
+  스위쓰: 스위스
+  스위짜: 스위스
+  제쥬: 제주
+  제주도사진: 제주도 사진
+  부산사진: 부산 사진
+  서울사진: 서울 사진
+  # 시간 표현
+  작녀: 작년
+  작녀에: 작년에
+  올해사진: 올해 사진
+  작년사진: 작년 사진
+  # 바다/해변
+  바닷가사진: 바닷가 사진
+  바다사딘: 바다 사진
+  해변사진: 해변 사진
+  # 기타 활동
+  셀피: 셀카
+  셀카사진: 셀카
+  단체사진: 단체 사진
+  가족사진: 가족 사진
+  졸업사진: 졸업 사진
+  웨딩사진: 웨딩 사진
+  결혼식사진: 결혼식 사진
+  # 최근/최신
+  최신사진: 최신 사진
+  최근거: 최근 사진
+  요즘사진: 최신 사진
+  # 기타 자주 쓰는 붙여쓰기
+  산책사진: 산책 사진
+  풍경사진: 풍경 사진
+  야경사진: 야경 사진
+  석양사진: 석양 사진
+  꽃사진: 꽃 사진
+  하늘사진: 하늘 사진
+  눈사람사진: 눈사람 사진
+  # 영어 비공식 표현 (English informal / abbreviation)
+  bday: birthday
+  bff: friends
+  hubby: husband
+  wifey: wife
+  kiddo: kid
+  kiddos: kids
+  kitty: cat
+  doggy: dog
+  pup: dog
+  puppy: dog
+  doggo: dog
+  kitties: cat
+  kittycat: cat
+  xmas: christmas
+  xmass: christmas
+  pic: photo
+  pics: photos
+  selfie: selfie
+  fam: family
+  bf: boyfriend
+  gf: girlfriend
+  gf photo: girlfriend photo
+  bf photo: boyfriend photo
+  vacay: vacation
+  vacations: vacation
+  hols: vacation
+  anniversary: anniversary celebration
+  grad: graduation
+
+english_expansions:
+  face: face portrait person close-up selfie
+  faces: face portrait people person close-up selfie
+  portrait: portrait face person
+  selfie: selfie portrait face person
+  woman: woman female girl lady person portrait
+  women: woman female girl lady person portrait
+  female: woman female girl lady person portrait
+  girl: girl woman female person portrait
+  baby: baby infant toddler child kid newborn
+  infant: baby infant toddler child newborn
+  toddler: baby toddler child kid
+  child: child kid baby toddler
+  kid: child kid baby toddler
+  dog: dog puppy animal
+  cat: cat kitten animal
+  food: food meal dish restaurant
+  beach: beach sea ocean sand waves
+  sea: sea ocean beach water waves coast
+  ocean: ocean sea beach water waves coast
+  coast: coast seaside beach ocean sea
+  seaside: seaside coast beach ocean sea
+  water: water sea ocean river lake
+  mountain: mountain hiking outdoor landscape
+  travel: travel trip landmark outdoor
+  party: party celebration people happy
+  birthday: birthday cake celebration party
+  wedding: wedding ceremony couple formal
+  graduation: graduation ceremony diploma academic
+  family: family group portrait people
+  friends: friends group people smiling
+  group: group people gathering friends
+  date: date couple romantic restaurant cafe
+  couple: couple romantic date portrait
+  cute: cute adorable baby pet smiling
+  smile: smiling happy face portrait
+  smiling: smiling happy laughing face
+  happy: happy joyful smiling people
+  sunset: sunset dusk evening orange sky
+  sunrise: sunrise dawn morning sky
+  indoor: indoor interior room home office
+  office: office desk workplace indoor
+  classroom: classroom school desk indoor
+  kitchen: kitchen cooking indoor food
+  bedroom: bedroom bed indoor home
+  livingroom: living room home interior
+  reading: reading book study indoor
+  study: study learning classroom desk
+  cooking: cooking kitchen meal food
+  snow: snow winter cold white
+  rain: rain wet weather outdoor
+  cloudy: cloudy overcast gray sky
+  clear: clear sunny blue sky
+  blossom: cherry blossom flowers spring
+  concert: concert performance stage live
+  exhibition: exhibition gallery museum indoor
+  flower: flower floral bloom garden
+  sky: sky clouds blue outdoor
+  restaurant: restaurant food meal dining
+  brunch: brunch cafe food meal
+  dessert: dessert cake sweet cafe
+  bread: bread bakery pastry food
+  ramen: ramen japanese food noodle
+  pasta: pasta italian food restaurant
+  barbecue: barbecue grill meat outdoor food
+  hotel: hotel lodging travel room
+  resort: resort hotel vacation pool
+  pool: swimming pool vacation water
+  airplane: airplane flight airport travel
+  flight: airplane flight airport travel
+  train: train rail station travel
+  bus: bus transit travel road
+  boat: boat ship ferry water travel
+  market: market street shopping food
+  shopping: shopping mall store market
+  street: street urban city outdoor
+  city: city urban skyline street
+  landscape: landscape scenery outdoor nature
+  nature: nature outdoor landscape forest
+  lake: lake water nature landscape
+  river: river water nature landscape
+  forest: forest trees nature green
+  zoo: zoo animal outdoor
+  aquarium: aquarium fish indoor
+  playground: playground children park outdoor
+  hospital: hospital medical room baby birth
+  husband: husband couple man portrait
+  wife: wife couple woman portrait
+  boyfriend: boyfriend couple man portrait
+  girlfriend: girlfriend couple woman portrait
+  christmas: christmas holiday winter celebration tree
+  vacation: vacation travel outdoor leisure
+  anniversary: anniversary celebration couple romantic
+  graduation: graduation ceremony diploma academic
+  bday: birthday cake celebration party
+  pet: pet cat dog animal
+  kitten: kitten cat young animal
+  puppy: puppy dog young animal
+  hiking: hiking mountain trail outdoor
+  camping: camping outdoor tent nature
+  picnic: picnic outdoor park food
+  workout: workout gym fitness exercise
+  gym: gym fitness workout indoor
+  night: night dark low-light evening
+  morning: morning sunrise light outdoor
+  afternoon: afternoon daylight outdoor
+
+clip_templates:
+  가족: a family together
+  엄마: a mother with family
+  아빠: a father with family
+  할머니: an elderly grandmother with family
+  할아버지: an elderly grandfather with family
+  아기: a cute baby infant
+  아이: a child playing
+  커플: a couple together romantic
+  연인: a romantic couple together
+  데이트: a couple on a date at a cafe or restaurant
+  단체: a group of people together
+  모임: friends or family gathering together
+  아이들: children playing together
+  애들: children playing together
+  신생아: a newborn baby infant
+  친구: friends hanging out together
+  여행: a travel vacation trip
+  한국: South Korea travel city landscape
+  대한민국: South Korea travel city landscape
+  일본: Japan travel city landscape
+  日本: Japan travel city landscape
+  스위스: Switzerland travel Alps mountain lake landscape
+  Switzerland: Switzerland travel Alps mountain lake landscape
+  Schweiz/Suisse/Svizzera/Svizra: Switzerland travel Alps mountain lake landscape
+  제주: Jeju island beach landscape Korea
+  바다: ocean beach waves sea coast water
+  바닷가: seaside coast beach sea ocean
+  해변: beach sand sea ocean coast
+  해안: coast seaside ocean beach
+  해수욕장: beach swimming sea ocean summer
+  산: mountain hiking outdoor scenic
+  공원: outdoor park green nature
+  카페: cozy cafe coffee shop interior
+  실내: an indoor room interior
+  야외: an outdoor open air scene
+  거실: a living room at home
+  주방: a kitchen with cooking
+  침실: a bedroom indoors
+  사무실: an office desk workspace
+  교실: a classroom at school
+  무대: a concert or performance stage
+  책: a book for reading study
+  독서: a person reading a book indoors
+  공부: studying at a desk classroom
+  요리: cooking food in a kitchen
+  식사: a meal on a dining table
+  맛집: food at a restaurant dining table
+  브런치: brunch food at a cafe
+  디저트: dessert cake sweets at a cafe
+  빵: bread bakery pastry food
+  라멘: ramen noodles in a restaurant
+  파스타: pasta food in a restaurant
+  바베큐: barbecue grilled meat outdoor food
+  술자리: friends drinking together at a table
+  건배: friends toasting drinks together
+  생일: birthday cake celebration party
+  결혼식: wedding ceremony formal couple
+  졸업식: graduation ceremony academic
+  파티: party celebration people
+  소풍: outdoor picnic park family
+  여름: summer outdoor sunny beach
+  숙소: hotel lodging room during travel
+  호텔: hotel room lobby travel
+  리조트: resort vacation pool hotel
+  수영장: swimming pool vacation water
+  온천: hot spring spa bath travel
+  비행기: airplane flight airport travel
+  기차: train rail station travel
+  버스: bus transit travel
+  배: boat ship ferry on water
+  시장: market street shopping food
+  쇼핑: shopping mall market store
+  거리: city street urban outdoor
+  골목: narrow alley street urban
+  도시: city skyline urban street
+  풍경: scenic landscape outdoor nature
+  자연: nature outdoor landscape
+  호수: lake water scenic nature
+  계곡: valley stream water nature
+  숲: forest trees green nature
+  놀이터: children playground park outdoor
+  동물원: zoo animals outdoor
+  수족관: aquarium fish indoors
+  병원: hospital medical room
+  출산: newborn baby at hospital with family
+  분위기: cozy aesthetic mood atmosphere
+  예쁜: pretty beautiful aesthetic photo
+  웃고있는: smiling happy people
+  행복한: happy joyful smiling people
+  클로즈업: close-up detail photo
+  겨울: winter snow cold scenery
+  봄: spring cherry blossom flowers
+  가을: autumn fall foliage leaves
+  야경: city lights night cityscape
+  일몰: sunset dusk orange sky
+  비: rainy weather outdoors
+  눈: snowy winter scenery
+  벚꽃: cherry blossom flowers in spring
+  단풍: autumn leaves foliage
+  음식: food meal restaurant table
+  강아지: cute dog puppy pet
+  고양이: cute cat kitten pet
+  꽃: flowers garden bloom colorful
+  하늘: blue sky clouds outdoor
+
+face_hints:
+  - face
+  - faces
+  - person
+  - people
+  - portrait
+  - selfie
+  - woman
+  - women
+  - female
+  - girl
+  - baby
+  - infant
+  - toddler
+  - child
+  - kid
+  - 얼굴
+  - 사람
+  - 인물
+  - 셀카
+  - 남자
+  - 남성
+  - 여자
+  - 여성
+  - 아기
+  - 애기
+  - 아이
+  - 어린이
+  - 엄마
+  - 아빠
+  - 할머니
+  - 할아버지
+  - 가족
+  - 친구
+  - 커플
+
+text_hints:
+  - text
+  - ocr
+  - document
+  - receipt
+  - error
+  - dialog
+  - message
+  - screen
+  - 텍스트
+  - 글씨
+  - 문서
+  - 영수증
+  - 오류
+  - 대화
+  - 메시지
+  - 화면
+
+screen_hints:
+  - screenshot
+  - screen
+  - ui
+  - chat
+  - popup
+  - 스크린샷
+  - 화면
+  - 앱
+  - 대화창
+  - 팝업
+
+travel_hints:
+  - travel
+  - trip
+  - vacation
+  - abroad
+  - tour
+  - beach
+  - sea
+  - ocean
+  - coast
+  - seaside
+  - 여행
+  - 휴가
+  - 해외
+  - 관광
+  - 제주
+  - 해변
+  - 바다
+  - 바닷가
+  - 해안
+  - 해수욕장
+
+celebration_hints:
+  - birthday
+  - party
+  - wedding
+  - graduation
+  - celebration
+  - 생일
+  - 파티
+  - 결혼식
+  - 졸업
+  - 졸업식
+  - 축하
+  - 크리스마스
+  - 새해

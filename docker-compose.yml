@@ -1,0 +1,49 @@
+services:
+  photome:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ${PHOTOME_DOCKER_TARGET:-runtime-ai}
+    image: ${PHOTOME_IMAGE:-photome-local-ai:local}
+    container_name: ${PHOTOME_CONTAINER_NAME:-photome}
+    restart: unless-stopped
+    ports:
+      - "${PHOTOME_PORT:-8002}:8000"
+    environment:
+      PHOTOME_SERVER_HOST: "0.0.0.0"
+      PHOTOME_SERVER_PORT: "8000"
+      PHOTOME_DATA_ROOT: "/var/lib/photome/data"
+      PHOTOME_DERIVED_ROOT: "/var/lib/photome/derived"
+      PHOTOME_MODEL_ROOT: "/var/lib/photome/models"
+      PHOTOME_GEODATA_ROOT: "/var/lib/photome/models/geodata"
+      PHOTOME_DATABASE_PATH: "/var/lib/photome/data/photome.sqlite3"
+      PHOTOME_SOURCE_ROOTS: "${PHOTOME_SOURCE_MOUNT:-/photos}"
+      PHOTOME_SOURCE_ROOT_HOST: "${PHOTOME_SOURCE_ROOT:-./photos}"
+      PHOTOME_SOURCE_ROOT_MOUNT: "${PHOTOME_SOURCE_MOUNT:-/photos}"
+      PHOTOME_CLIP_ENABLED: "${PHOTOME_CLIP_ENABLED:-1}"
+      PHOTOME_OFFLINE_MODE: "${PHOTOME_OFFLINE_MODE:-1}"
+      PHOTOME_GEOCODING_ENABLED: "${PHOTOME_GEOCODING_ENABLED:-1}"
+      PHOTOME_SCHEDULER_ENABLED: "${PHOTOME_SCHEDULER_ENABLED:-0}"
+      PHOTOME_SEMANTIC_SCHEDULER_ENABLED: "${PHOTOME_SEMANTIC_SCHEDULER_ENABLED:-1}"
+      PHOTOME_SEMANTIC_AUTO_TAG_VERSION: "${PHOTOME_SEMANTIC_AUTO_TAG_VERSION:-auto-v1}"
+      PHOTOME_LOG_LEVEL: "${PHOTOME_LOG_LEVEL:-INFO}"
+      PHOTOME_RUN_UID: "${PHOTOME_RUN_UID:-1000}"
+      PHOTOME_RUN_GID: "${PHOTOME_RUN_GID:-1000}"
+      PHOTOME_HOME: "/var/lib/photome"
+      HOME: "/var/lib/photome"
+      HF_HOME: "/var/lib/photome/models/hf"
+      TORCH_HOME: "/var/lib/photome/models/torch"
+      TRANSFORMERS_CACHE: "/var/lib/photome/models/hf"
+    volumes:
+      - ${PHOTOME_MAC_VOLUMES_ROOT:-/Volumes}:/Volumes:ro
+      - ${PHOTOME_MAC_USERS_ROOT:-/Users}:/Users:ro
+      - ${PHOTOME_SOURCE_ROOT:-./photos}:${PHOTOME_SOURCE_MOUNT:-/photos}:ro
+      - ${PHOTOME_DATA_ROOT_HOST:-./data}:/var/lib/photome/data
+      - ${PHOTOME_DERIVED_ROOT_HOST:-./derived_root}:/var/lib/photome/derived
+      - ${PHOTOME_MODEL_ROOT_HOST:-./model_cache}:/var/lib/photome/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/status', timeout=4).read(1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

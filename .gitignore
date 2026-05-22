@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Local env
+.env
+.env.*
+.codex/
+
+# macOS
+.DS_Store
+
+# Build and logs
+dist/
+build/
+*.egg-info/
+logs/*.log
+
+# Database and runtime artifacts
+db/*.sqlite*
+db/*.db*
+data/*.sqlite*
+data/*.db*
+data/recovery/
+data/models/
+model_cache/
+data/testbed/
+photos/
+*.pid
+derived_root/*
+!derived_root/.gitkeep
+!data/.gitkeep
