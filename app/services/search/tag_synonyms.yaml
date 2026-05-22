@@ -1,0 +1,400 @@
+# Search-time tag synonym expansion (hybrid shadow / tag matching).
+# CLIP concept_aliases are merged in at load time (see synonyms.py).
+# Edit without code changes; restart server to pick up.
+
+baby:
+  - 아기
+  - 애기
+  - infant
+  - newborn
+  - toddler
+아기:
+  - baby
+  - infant
+  - 애기
+  - toddler
+  - 신생아
+  - newborn
+신생아:
+  - 아기
+  - baby
+  - infant
+  - newborn
+person:
+  - 사람
+  - 얼굴
+  - 인물
+  - portrait
+얼굴:
+  - face
+  - person
+  - portrait
+  - 인물
+smile:
+  - 웃는
+  - 웃고있는
+  - smiling
+  - happy
+smiling:
+  - 웃는
+  - 웃고있는
+  - smile
+  - happy
+웃는:
+  - smiling
+  - smile
+  - 행복한
+웃고있는:
+  - smiling
+  - smile
+  - 행복한
+happy:
+  - 행복한
+  - 웃는
+  - smiling
+행복한:
+  - happy
+  - smiling
+  - 웃는
+receipt:
+  - 영수증
+  - document
+영수증:
+  - receipt
+  - document
+screenshot:
+  - 스크린샷
+  - screen
+  - 화면
+스크린샷:
+  - screenshot
+  - screen
+  - 화면
+food:
+  - 음식
+  - meal
+  - 맛집
+  - 식당
+  - restaurant
+음식:
+  - food
+  - meal
+  - 맛집
+  - 식당
+맛집:
+  - restaurant
+  - food
+  - meal
+  - 음식
+  - 식당
+restaurant:
+  - 맛집
+  - 식당
+  - food
+식당:
+  - restaurant
+  - 맛집
+  - food
+brunch:
+  - 브런치
+  - cafe
+  - food
+브런치:
+  - brunch
+  - 카페
+  - food
+dessert:
+  - 디저트
+  - cake
+  - cafe
+디저트:
+  - dessert
+  - 케이크
+  - 카페
+outdoor:
+  - 야외
+  - 자연
+  - nature
+야외:
+  - outdoor
+  - nature
+beach:
+  - 바다
+  - 바닷가
+  - 해변
+  - 해수욕장
+  - 해안
+  - sea
+  - ocean
+  - coast
+  - seaside
+  - water
+sea:
+  - 바다
+  - 바닷가
+  - 해변
+  - beach
+  - ocean
+  - coast
+  - water
+ocean:
+  - 바다
+  - 바닷가
+  - 해변
+  - beach
+  - sea
+  - coast
+  - water
+coast:
+  - 바다
+  - 바닷가
+  - 해안
+  - 해변
+  - beach
+  - sea
+  - ocean
+water:
+  - 물
+  - 바다
+  - 바닷물
+  - sea
+  - ocean
+  - river
+  - lake
+바다:
+  - beach
+  - sea
+  - ocean
+  - coast
+  - seaside
+  - water
+  - 해변
+  - 바닷가
+바닷가:
+  - beach
+  - sea
+  - ocean
+  - coast
+  - seaside
+  - 바다
+  - 해변
+해변:
+  - beach
+  - sea
+  - ocean
+  - coast
+  - 바다
+  - 바닷가
+해안:
+  - coast
+  - seaside
+  - sea
+  - ocean
+  - beach
+  - 바다
+travel:
+  - 여행
+  - trip
+  - vacation
+  - 휴가
+  - 해외
+  - hotel
+  - flight
+여행:
+  - travel
+  - trip
+  - vacation
+  - 휴가
+  - 해외
+trip:
+  - 여행
+  - travel
+  - vacation
+vacation:
+  - 휴가
+  - 여행
+  - travel
+한국:
+  - 대한민국
+  - korea
+  - south korea
+  - republic of korea
+대한민국:
+  - 한국
+  - korea
+  - south korea
+  - republic of korea
+korea:
+  - 한국
+  - 대한민국
+  - south korea
+south korea:
+  - 한국
+  - 대한민국
+  - korea
+일본:
+  - 日本
+  - japan
+  - 재팬
+日本:
+  - 일본
+  - japan
+  - 재팬
+japan:
+  - 일본
+  - 日本
+  - 재팬
+스위스:
+  - Schweiz/Suisse/Svizzera/Svizra
+  - switzerland
+  - swiss
+  - suisse
+Schweiz/Suisse/Svizzera/Svizra:
+  - 스위스
+  - switzerland
+  - swiss
+  - suisse
+switzerland:
+  - 스위스
+  - Schweiz/Suisse/Svizzera/Svizra
+  - swiss
+  - suisse
+hotel:
+  - 호텔
+  - 숙소
+  - lodging
+호텔:
+  - hotel
+  - 숙소
+  - 여행
+숙소:
+  - hotel
+  - lodging
+  - 여행
+airplane:
+  - 비행기
+  - flight
+  - 공항
+비행기:
+  - airplane
+  - flight
+  - 공항
+train:
+  - 기차
+  - railway
+기차:
+  - train
+  - railway
+market:
+  - 시장
+  - shopping
+시장:
+  - market
+  - shopping
+street:
+  - 거리
+  - 골목
+  - city
+거리:
+  - street
+  - city
+  - 골목
+landscape:
+  - 풍경
+  - 자연
+  - landscape
+풍경:
+  - landscape
+  - scenery
+  - 자연
+자연:
+  - nature
+  - landscape
+  - outdoor
+lake:
+  - 호수
+  - water
+호수:
+  - lake
+  - water
+playground:
+  - 놀이터
+  - park
+놀이터:
+  - playground
+  - 공원
+hospital:
+  - 병원
+  - medical
+병원:
+  - hospital
+  - medical
+  - 출산
+wedding:
+  - 결혼식
+  - 결혼
+결혼식:
+  - wedding
+  - 결혼
+birthday:
+  - 생일
+  - celebration
+생일:
+  - birthday
+  - celebration
+night:
+  - 야경
+  - 야간
+야경:
+  - night
+  - 야간
+celebration:
+  - 파티
+  - 생일
+  - party
+  - birthday
+파티:
+  - party
+  - celebration
+  - birthday
+dog:
+  - 강아지
+  - puppy
+  - 멍멍이
+강아지:
+  - dog
+  - puppy
+cat:
+  - 고양이
+  - kitten
+고양이:
+  - cat
+  - kitten
+mountain:
+  - 산
+  - 등산
+  - hiking
+산:
+  - mountain
+  - hiking
+  - 등산
+cake:
+  - 케이크
+  - birthday
+케이크:
+  - cake
+  - birthday
+sunset:
+  - 일몰
+  - 노을
+일몰:
+  - sunset
+  - 노을
+vehicle:
+  - 차
+  - 자동차
+  - car
+car:
+  - 차
+  - 자동차
+  - vehicle

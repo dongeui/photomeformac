@@ -1,0 +1,52 @@
+name: Agent PR Webhook
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  issue_comment:
+    types: [created]
+
+jobs:
+  deliver:
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Deliver PR event to orchestrator
+        env:
+          WEBHOOK_URL: ${{ secrets.AGENT_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.AGENT_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${WEBHOOK_URL}" || -z "${WEBHOOK_SECRET}" ]]; then
+            echo "AGENT_WEBHOOK_URL or AGENT_WEBHOOK_SECRET is not configured. Skipping."
+            exit 0
+          fi
+
+          PAYLOAD="$(
+            jq -n \
+              --arg event_name "$GITHUB_EVENT_NAME" \
+              --arg delivery_id "$GITHUB_RUN_ID" \
+              --arg repository "$GITHUB_REPOSITORY" \
+              --slurpfile raw "$GITHUB_EVENT_PATH" \
+              '{event_name: $event_name, delivery_id: $delivery_id, repository: $repository, raw_event: $raw[0]}'
+          )"
+
+          SIGNATURE="$(
+            printf '%s' "$PAYLOAD" \
+              | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" -hex \
+              | awk '{print $2}'
+          )"
+
+          curl -fsS -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Agent-Event: $GITHUB_EVENT_NAME" \
+            -H "X-Agent-Signature: sha256=$SIGNATURE" \
+            --data "$PAYLOAD"
+

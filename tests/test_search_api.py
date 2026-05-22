@@ -1,0 +1,1682 @@
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import subprocess
+import time
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Iterator
+
+import pytest
+from fastapi.testclient import TestClient
+from PIL import Image
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import PendingRollbackError
+from sqlalchemy import func, select, text
+
+from app.core.settings import load_settings
+from app.db.bootstrap import build_database_state
+from app.main import create_app
+from app.models.asset import DerivedAsset
+from app.models.job import ProcessingJob
+from app.models.media import MediaFile
+from app.models.person import Person
+from app.models.runtime import SchedulerRuntimeConfig
+from app.core.contracts import MediaTagInput
+from app.models.semantic import MediaAnalysisSignal, MediaEmbedding, MediaOCR, SearchDocument, SearchEvent
+from app.models.tag import Tag
+from app.services.caption.registry import get_caption_provider
+from app.services.processing.incremental import IncrementalScanSummary
+
+
+SCAN_DELAY_SECONDS = 1.1
+
+
+@pytest.fixture
+def source_root(tmp_path: Path) -> Path:
+    root = tmp_path / "source"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+@pytest.fixture
+def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source_root: Path) -> Iterator[TestClient]:
+    data_root = tmp_path / "data"
+    derived_root = tmp_path / "derived"
+    database_path = data_root / "photome.sqlite3"
+
+    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(source_root))
+    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
+    monkeypatch.setenv("PHOTOME_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+
+    app = create_app(load_settings())
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+def test_search_finds_scanned_media_by_filename_and_semantic_rows_exist(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "vacation-receipt.jpg")
+    scan_twice(client)
+
+    response = client.get("/search", params={"q": "receipt"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["security"]["runtime_mode"] in {"standard", "offline-local-only"}
+    assert payload["items"][0]["filename"] == "vacation-receipt.jpg"
+
+    file_id = payload["items"][0]["file_id"]
+    with client.app.state.database.session_factory() as session:
+        assert session.get(MediaOCR, file_id) is not None
+        assert session.get(MediaAnalysisSignal, file_id) is not None
+        search_document = session.get(SearchDocument, file_id)
+        assert search_document is not None
+        assert "vacation-receipt.jpg" in search_document.search_text
+        assert search_document.version == client.app.state.settings.semantic_search_version
+        indexed = session.execute(
+            text("SELECT file_id FROM search_documents_fts WHERE search_documents_fts MATCH 'receipt'")
+        ).all()
+        assert indexed == [(file_id,)]
+
+
+def test_search_tolerates_event_commit_failure(
+    client: TestClient,
+    source_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_image(source_root / "commit-failure-receipt.jpg")
+    scan_twice(client)
+
+    original_commit = client.app.state.database.session_factory.class_.commit
+
+    def flaky_commit(session):  # type: ignore[no-untyped-def]
+        raise PendingRollbackError("locked session")
+
+    monkeypatch.setattr(client.app.state.database.session_factory.class_, "commit", flaky_commit)
+    try:
+        response = client.get("/search", params={"q": "receipt"})
+    finally:
+        monkeypatch.setattr(client.app.state.database.session_factory.class_, "commit", original_commit)
+
+    assert response.status_code == 200
+    assert response.json()["total"] >= 1
+
+
+def test_offline_mode_disables_outbound_features(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    data_root = tmp_path / "data"
+    derived_root = tmp_path / "derived"
+    database_path = data_root / "photome.sqlite3"
+    source_root.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(source_root))
+    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("PHOTOME_OFFLINE_MODE", "1")
+    monkeypatch.setenv("PHOTOME_CAPTION_PROVIDER", "moondream")
+    monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "1")
+    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+
+    settings = load_settings()
+    assert settings.offline_mode is True
+    assert get_caption_provider() is None
+
+    app = create_app(settings)
+    with TestClient(app) as test_client:
+        response = test_client.get("/status")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["security"]["offline_mode"] is True
+        assert payload["security"]["outbound_network_enabled"] is False
+        assert payload["security"]["runtime_mode"] == "offline-local-only"
+        assert payload["security"]["deployment_mode"] in {"native", "docker"}
+        assert payload["security"]["deployment_label"] in {"Native local process", "Docker container"}
+        assert any("geocoding" in f.lower() for f in payload["security"]["disabled_features"])
+        assert "Caption generation is disabled." in payload["security"]["disabled_features"]
+        states = {item["name"]: item["state"] for item in payload["security"]["local_dependencies"]}
+        assert "ffmpeg" in states
+        assert "ffprobe" in states
+        assert states["CLIP semantic embedding"] == "disabled"
+        assert states["Caption provider"] == "disabled"
+        prepare = test_client.post("/ai-pack/prepare")
+        assert prepare.status_code == 409
+        assert "Offline mode blocks automatic model downloads" in prepare.json()["message"]
+        assert "load_cached=true" in prepare.json()["message"]
+
+
+def test_clip_status_degrades_when_local_ai_pack_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "source"
+    data_root = tmp_path / "data"
+    derived_root = tmp_path / "derived"
+    database_path = data_root / "photome.sqlite3"
+    source_root.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(source_root))
+    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "1")
+    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+
+    from app.services.embedding import clip as clip_embedding
+
+    monkeypatch.setattr(
+        clip_embedding,
+        "dependency_status",
+        lambda: {"open_clip_torch": "missing", "torch": "missing", "torchvision": "missing"},
+    )
+
+    app = create_app(load_settings())
+    with TestClient(app) as test_client:
+        response = test_client.get("/status")
+
+    assert response.status_code == 200
+    states = {item["name"]: item for item in response.json()["security"]["local_dependencies"]}
+    clip_state = states["CLIP semantic embedding"]
+    assert clip_state["state"] == "missing-local-ai-pack"
+    assert clip_state["dependencies"]["open_clip_torch"] == "missing"
+
+
+def test_semantic_maintenance_only_builds_missing_search_documents(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "cycle-receipt.jpg")
+    scan_twice(client)
+    item = client.get("/search", params={"q": "receipt"}).json()["items"][0]
+
+    no_op = client.app.state.pipeline.run_semantic_maintenance()
+    assert no_op["pending"] == 0
+    assert no_op["succeeded"] == 0
+
+    with client.app.state.database.session_factory() as session:
+        document = session.get(SearchDocument, item["file_id"])
+        assert document is not None
+        session.delete(document)
+        session.commit()
+
+    rebuilt = client.app.state.pipeline.run_semantic_maintenance()
+    assert rebuilt["pending"] == 1
+    assert rebuilt["succeeded"] == 1
+
+
+def test_status_reports_phase2_coverage(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "coverage-receipt.jpg")
+    scan_twice(client)
+
+    payload = client.get("/status").json()
+    coverage = payload["semantic"]["coverage"]
+
+    assert coverage["eligible_media"] >= 1
+    assert coverage["search_current"] >= 1
+    assert coverage["remaining_for_search"] >= 0
+    assert "clip_embeddings_current" in coverage
+    assert "semantic_job_errors" in coverage
+    assert payload["catalog"]["breakdown"]["summary_text"].startswith("1. 토탈 ")
+    assert "4. 미해당" in payload["catalog"]["breakdown"]["summary_text"]
+    assert "5. 오류" in payload["catalog"]["breakdown"]["summary_text"]
+    ai_payload = payload["performance"]["ai_summary"]
+    assert ai_payload["remaining_clip"] == max(0, ai_payload["eligible_media"] - ai_payload["clip_embeddings"])
+    assert ai_payload["summary_text"].startswith("1. 대상 ")
+    assert "4. 미해당" in ai_payload["summary_text"]
+    assert "5. 오류" in ai_payload["summary_text"]
+    assert any("CLIP 임베딩 상태" in note for note in ai_payload["notes"])
+
+
+def test_status_detail_files_and_ai_include_summary_notes(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "status-detail.jpg")
+    scan_twice(client)
+
+    files_detail = client.get("/status/detail/files")
+    assert files_detail.status_code == 200
+    files_payload = files_detail.json()
+    assert files_payload["summary"][0]["label"] == "1. 토탈"
+    assert len(files_payload["summary"]) == 5
+    assert any("완료:" in note for note in files_payload["notes"])
+    assert any("미해당" in item["label"] for item in files_payload["summary"])
+
+    ai_detail = client.get("/status/detail/ai")
+    assert ai_detail.status_code == 200
+    ai_payload = ai_detail.json()
+    assert ai_payload["summary"][0]["label"] == "1. 대상"
+    assert len(ai_payload["summary"]) == 5
+    assert any("CLIP 임베딩 상태" in note for note in ai_payload["notes"])
+
+
+def test_semantic_maintenance_fills_missing_clip_embeddings_when_enabled(
+    client: TestClient,
+    source_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_image(source_root / "plain-photo.jpg")
+    scan_twice(client)
+
+    pipeline = client.app.state.pipeline
+    pipeline._semantic_clip_enabled = True
+
+    def fake_embedding(media_file: MediaFile) -> dict:
+        return {
+            "model_name": "ViT-B-32/openai",
+            "version": pipeline._semantic_embedding_version,
+            "embedding_ref": f"embeddings/clip/{pipeline._semantic_embedding_version}/aa/{media_file.file_id}.npy",
+            "dimensions": 3,
+            "checksum": None,
+        }
+
+    monkeypatch.setattr(pipeline, "_materialize_clip_embedding", fake_embedding)
+    from app.services.analysis import auto_tags
+
+    monkeypatch.setattr(
+        auto_tags,
+        "tags_from_embedding_file",
+        lambda *_args, **_kwargs: [MediaTagInput(tag_type="auto", tag_value="바다")],
+    )
+
+    result = pipeline.run_semantic_maintenance(batch_size=10)
+
+    assert result["succeeded"] >= 1
+    with client.app.state.database.session_factory() as session:
+        media_file = session.scalar(select(MediaFile).where(MediaFile.filename == "plain-photo.jpg"))
+        assert media_file is not None
+        assert session.scalar(select(MediaEmbedding).where(MediaEmbedding.file_id == media_file.file_id)) is not None
+        assert session.scalar(
+            select(func.count())
+            .select_from(Tag)
+            .where(Tag.file_id == media_file.file_id, Tag.tag_type == "auto", Tag.tag_value == "바다")
+        ) == 1
+        search_document = session.get(SearchDocument, media_file.file_id)
+        assert search_document is not None
+        assert "바다" in search_document.search_text
+
+    second_no_op = client.post("/scan/semantic-maintenance").json()
+    assert second_no_op["pending"] == 0
+
+
+def test_clip_embedding_reuse_requires_matching_model_name(
+    client: TestClient,
+    source_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_image(source_root / "model-change.jpg")
+    scan_twice(client)
+
+    pipeline = client.app.state.pipeline
+    pipeline._semantic_clip_enabled = True
+    calls = {"count": 0}
+
+    with client.app.state.database.session_factory() as session:
+        media_file = session.scalar(select(MediaFile).where(MediaFile.filename == "model-change.jpg"))
+        assert media_file is not None
+        session.add(
+            MediaEmbedding(
+                file_id=media_file.file_id,
+                model_name="old-model/old-pretrained",
+                version=pipeline._semantic_embedding_version,
+                embedding_ref=f"embeddings/clip/{pipeline._semantic_embedding_version}/old/{media_file.file_id}.npy",
+                dimensions=3,
+            )
+        )
+        session.commit()
+
+    monkeypatch.setenv("PHOTOME_CLIP_MODEL_NAME", "new-model")
+    monkeypatch.setenv("PHOTOME_CLIP_PRETRAINED", "new-pretrained")
+
+    def fake_embedding(media_file: MediaFile) -> dict:
+        calls["count"] += 1
+        return {
+            "model_name": pipeline._clip_model_identifier(),
+            "version": pipeline._semantic_embedding_version,
+            "embedding_ref": f"embeddings/clip/{pipeline._semantic_embedding_version}/new/{media_file.file_id}.npy",
+            "dimensions": 3,
+            "checksum": None,
+        }
+
+    monkeypatch.setattr(pipeline, "_materialize_clip_embedding", fake_embedding)
+
+    with client.app.state.database.session_factory() as session:
+        media_file = session.scalar(select(MediaFile).where(MediaFile.filename == "model-change.jpg"))
+        assert media_file is not None
+        from app.services.processing.registry import MediaCatalog
+        from app.services.semantic import SemanticCatalog
+
+        result = pipeline._ensure_clip_embedding(
+            session,
+            media_file,
+            MediaCatalog(session),
+            SemanticCatalog(session),
+        )
+        session.commit()
+
+    assert calls["count"] == 1
+    assert result is not None
+    assert result["model_name"] == "new-model/new-pretrained"
+    with client.app.state.database.session_factory() as session:
+        rows = session.scalars(select(MediaEmbedding).where(MediaEmbedding.file_id == media_file.file_id)).all()
+        assert {row.model_name for row in rows} == {"old-model/old-pretrained", "new-model/new-pretrained"}
+
+
+def test_embedding_pending_uses_current_model_and_version(
+    client: TestClient,
+    source_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_image(source_root / "pending-model-change.jpg")
+    scan_twice(client)
+
+    pipeline = client.app.state.pipeline
+    pipeline._semantic_clip_enabled = True
+
+    with client.app.state.database.session_factory() as session:
+        media_file = session.scalar(select(MediaFile).where(MediaFile.filename == "pending-model-change.jpg"))
+        assert media_file is not None
+        session.add(
+            MediaEmbedding(
+                file_id=media_file.file_id,
+                model_name="old-model/old-pretrained",
+                version=pipeline._semantic_embedding_version,
+                embedding_ref=f"embeddings/clip/{pipeline._semantic_embedding_version}/old/{media_file.file_id}.npy",
+                dimensions=3,
+            )
+        )
+        session.commit()
+
+    monkeypatch.setenv("PHOTOME_CLIP_MODEL_NAME", "new-model")
+    monkeypatch.setenv("PHOTOME_CLIP_PRETRAINED", "new-pretrained")
+    calls = {"count": 0}
+
+    def fake_embedding(media_file: MediaFile) -> dict:
+        calls["count"] += 1
+        return {
+            "model_name": pipeline._clip_model_identifier(),
+            "version": pipeline._semantic_embedding_version,
+            "embedding_ref": f"embeddings/clip/{pipeline._semantic_embedding_version}/new/{media_file.file_id}.npy",
+            "dimensions": 3,
+            "checksum": None,
+        }
+
+    monkeypatch.setattr(pipeline, "_materialize_clip_embedding", fake_embedding)
+
+    result = pipeline.run_semantic_maintenance(batch_size=10)
+
+    assert result["succeeded"] >= 1
+    assert calls["count"] == 1
+
+
+def test_search_event_is_persisted_after_search(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "event-receipt.jpg")
+    scan_twice(client)
+
+    response = client.get("/search", params={"q": "receipt"})
+    cached_response = client.get("/search", params={"q": "receipt"})
+
+    assert response.status_code == 200
+    assert cached_response.status_code == 200
+    with client.app.state.database.session_factory() as session:
+        count = session.scalar(select(func.count()).select_from(SearchEvent))
+        assert count == 2
+
+
+def test_search_event_is_skipped_while_library_job_is_active(
+    client: TestClient,
+    source_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_image(source_root / "active-job-receipt.jpg")
+    scan_twice(client)
+
+    monkeypatch.setattr(client.app.state.pipeline, "has_active_library_job", lambda: True)
+    response = client.get("/search", params={"q": "receipt"})
+
+    assert response.status_code == 200
+    with client.app.state.database.session_factory() as session:
+        count = session.scalar(select(func.count()).select_from(SearchEvent))
+        assert count == 0
+
+
+def test_date_fallback_does_not_recurse_on_zero_results(client: TestClient) -> None:
+    response = client.get("/search", params={"q": "2099년 12월 31일 qqqzzznotfound"})
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
+def test_clip_disabled_search_does_not_load_clip_model(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.embedding import clip as clip_embedding
+
+    called = False
+
+    def mark_called() -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(clip_embedding, "ensure_models", mark_called)
+
+    response = client.get("/search", params={"q": "얼굴"})
+
+    assert response.status_code == 200
+    assert called is False
+
+
+def test_feedback_invalidates_cached_search_results(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "cached-receipt.jpg")
+    scan_twice(client)
+
+    first = client.get("/search", params={"q": "receipt"}).json()
+    assert first["total"] == 1
+    file_id = first["items"][0]["file_id"]
+
+    feedback = client.post(
+        "/search/feedback",
+        json={"file_id": file_id, "action": "hide"},
+    )
+    assert feedback.status_code == 201
+
+    second = client.get("/search", params={"q": "receipt"}).json()
+    assert second["total"] == 0
+
+
+def test_weight_profile_rejects_invalid_values(client: TestClient) -> None:
+    negative = client.put(
+        "/search/weights/hybrid/fallback",
+        json={"w_ocr": -1, "w_clip": 0.5, "w_shadow": 0.5},
+    )
+    assert negative.status_code == 422
+
+    zero_total = client.put(
+        "/search/weights/hybrid/fallback",
+        json={"w_ocr": 0, "w_clip": 0, "w_shadow": 0},
+    )
+    assert zero_total.status_code == 422
+
+
+def test_media_annotation_updates_display_name_description_and_custom_tags(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "vacation-receipt.jpg")
+    scan_twice(client)
+    item = client.get("/media", params={"q": "receipt"}).json()["items"][0]
+
+    response = client.post(
+        f"/media/{item['file_id']}/annotation",
+        data={
+            "title": "Trip receipt",
+            "description": "Dinner receipt from the family trip.",
+            "tags": "receipt, family, receipt",
+            "next": "/gallery?q=receipt",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    detail = client.get(f"/media/{item['file_id']}").json()
+    assert detail["annotation"] == {
+        "title": "Trip receipt",
+        "description": "Dinner receipt from the family trip.",
+    }
+    assert {
+        (tag["tag_type"], tag["tag_value"])
+        for tag in detail["tags"]
+        if tag["tag_type"] == "custom"
+    } == {("custom", "receipt"), ("custom", "family")}
+
+    gallery = client.get("/gallery", params={"q": "receipt"}).text
+    assert "Trip receipt" in gallery
+    assert "Dinner receipt from the family trip." in gallery
+    assert "no tags" not in gallery
+
+    title_search = client.get("/search", params={"q": "Trip"})
+    assert title_search.status_code == 200
+    assert title_search.json()["items"][0]["file_id"] == item["file_id"]
+
+    gallery_title_search = client.get("/gallery", params={"q": "Trip"}).text
+    assert "Trip receipt" in gallery_title_search
+    assert "Dinner receipt from the family trip." in gallery_title_search
+
+
+def test_gallery_recovers_from_transient_thumbnail_load_failures(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "vacation-receipt.jpg")
+    scan_twice(client)
+
+    gallery = client.get("/gallery").text
+
+    assert "attachThumbnailRecovery" in gallery
+    assert "미리보기 준비 중" in gallery
+
+
+def test_gallery_query_preserves_search_ranking(
+    client: TestClient,
+    source_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_image(source_root / "older-ranked-first.jpg")
+    create_image(source_root / "newer-ranked-second.jpg")
+    scan_twice(client)
+
+    with client.app.state.database.session_factory() as session:
+        older = session.scalar(select(MediaFile).where(MediaFile.filename == "older-ranked-first.jpg"))
+        newer = session.scalar(select(MediaFile).where(MediaFile.filename == "newer-ranked-second.jpg"))
+        assert older is not None
+        assert newer is not None
+        older.exif_datetime = datetime(2020, 1, 1, 12, 0, 0)
+        newer.exif_datetime = datetime(2025, 1, 1, 12, 0, 0)
+        older_id = older.file_id
+        newer_id = newer.file_id
+        session.commit()
+
+    def fake_search_with_meta(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return [{"file_id": older_id}, {"file_id": newer_id}], {"intent_reason": "manual"}
+
+    import app.api.gallery as gallery_api
+
+    monkeypatch.setattr(gallery_api.HybridSearchService, "search_with_meta", fake_search_with_meta)
+
+    gallery = client.get("/gallery", params={"q": "동이"}).text
+
+    # Gallery now sorts by date (newest first) within the search-matched set,
+    # so the 2025 photo appears before the 2020 photo regardless of RRF rank order.
+    assert gallery.index("newer-ranked-second.jpg") < gallery.index("older-ranked-first.jpg")
+
+
+def test_gallery_defaults_to_file_mtime_when_exif_datetime_is_missing(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    older = source_root / "older-no-exif.png"
+    newer = source_root / "newer-no-exif.png"
+    create_image(older)
+    create_image(newer)
+    scan_twice(client)
+
+    older_ts = datetime(2020, 1, 1, 12, 0, 0).timestamp()
+    newer_ts = datetime(2024, 1, 1, 12, 0, 0).timestamp()
+
+    with client.app.state.database.session_factory() as session:
+        older_row = session.scalar(select(MediaFile).where(MediaFile.filename == "older-no-exif.png"))
+        newer_row = session.scalar(select(MediaFile).where(MediaFile.filename == "newer-no-exif.png"))
+        assert older_row is not None
+        assert newer_row is not None
+        older_row.exif_datetime = None
+        newer_row.exif_datetime = None
+        older_row.mtime_ns = int(older_ts * 1_000_000_000)
+        newer_row.mtime_ns = int(newer_ts * 1_000_000_000)
+        older_row.processed_at = datetime(2026, 5, 12, 6, 10, 34)
+        newer_row.processed_at = datetime(2026, 5, 12, 6, 10, 34)
+        session.commit()
+
+    gallery = client.get("/gallery").text
+
+    assert gallery.index("newer-no-exif.png") < gallery.index("older-no-exif.png")
+    assert "2024-01-01 12:00" in gallery
+
+
+def test_gallery_asset_missing_response_is_not_cached(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "vacation-receipt.jpg")
+    scan_twice(client)
+
+    gallery = client.get("/gallery").text
+    match = re.search(r'/gallery/assets/(\d+)', gallery)
+    assert match is not None
+    asset_id = match.group(1)
+    with client.app.state.database.session_factory() as session:
+        asset = session.get(DerivedAsset, int(asset_id))
+        assert asset is not None
+        asset_path = client.app.state.settings.derived_root / asset.derived_path
+        asset_path.unlink()
+
+    response = client.get(f"/gallery/assets/{asset_id}")
+
+    assert response.status_code == 404
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_gallery_asset_rejects_absolute_path_outside_derived_root(
+    client: TestClient,
+    source_root: Path,
+    tmp_path: Path,
+) -> None:
+    create_image(source_root / "vacation-receipt.jpg")
+    scan_twice(client)
+
+    with client.app.state.database.session_factory() as session:
+        asset = session.scalars(select(DerivedAsset).limit(1)).first()
+        assert asset is not None
+        outside_file = tmp_path / "outside.jpg"
+        outside_file.write_bytes(b"not a derived asset")
+        asset.derived_path = str(outside_file)
+        session.commit()
+        asset_id = asset.id
+
+    response = client.get(f"/gallery/assets/{asset_id}")
+
+    assert response.status_code == 404
+
+
+def test_scan_accepts_source_roots_query_override(client: TestClient, tmp_path: Path) -> None:
+    selected_root = tmp_path / "selected-source"
+    selected_root.mkdir()
+    create_image(selected_root / "manual-path-receipt.jpg")
+
+    client.post("/scan", params={"source_roots": str(selected_root)})
+    time.sleep(SCAN_DELAY_SECONDS)
+    response = client.post("/scan", params={"source_roots": str(selected_root)})
+
+    assert response.status_code == 200
+    job = response.json()["job"]
+    assert job["payload"]["source_roots"] == [str(selected_root.resolve())]
+    assert job["result"]["source_roots"] == [str(selected_root.resolve())]
+    assert job["result"]["summary"]["created"] == 1
+
+    search = client.get("/search", params={"q": "receipt"})
+    assert search.status_code == 200
+    assert search.json()["total"] == 1
+
+
+def test_async_scan_starts_job_and_exposes_status(client: TestClient, tmp_path: Path) -> None:
+    selected_root = tmp_path / "async-source"
+    selected_root.mkdir()
+    create_image(selected_root / "async-receipt.jpg")
+    client.post("/scan", params={"source_roots": str(selected_root)})
+    time.sleep(SCAN_DELAY_SECONDS)
+
+    response = client.post("/scan/async", params={"source_roots": str(selected_root)})
+
+    assert response.status_code == 202
+    job = response.json()["job"]
+    assert job["status"] in {"queued", "succeeded"}
+    status_response = client.get(f"/scan/jobs/{job['job_id']}")
+    assert status_response.status_code == 200
+    status_job = status_response.json()["job"]
+    assert status_job["job_id"] == job["job_id"]
+    assert status_job["status"] == "succeeded"
+    assert status_job["result"]["summary"]["created"] == 1
+
+
+def test_scan_accepts_host_path_and_maps_it_to_docker_mount(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import app.api.scan as scan_api
+
+    host_root = tmp_path / "Volumes" / "homes" / "dejeong" / "Photos"
+    mount_root = tmp_path / "mounted-photos"
+    host_album = host_root / "album"
+    mount_album = mount_root / "album"
+    host_album.mkdir(parents=True, exist_ok=True)
+    mount_album.mkdir(parents=True, exist_ok=True)
+    create_image(mount_album / "mapped-receipt.jpg")
+
+    data_root = tmp_path / "data"
+    derived_root = tmp_path / "derived"
+    database_path = data_root / "photome.sqlite3"
+
+    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(mount_root))
+    monkeypatch.setenv("PHOTOME_SOURCE_ROOT_HOST", str(host_root))
+    monkeypatch.setenv("PHOTOME_SOURCE_ROOT_MOUNT", str(mount_root))
+    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
+    monkeypatch.setenv("PHOTOME_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+
+    original_exists = scan_api.os.path.exists
+
+    def fake_exists(path: str) -> bool:
+        if path == "/.dockerenv":
+            return True
+        return original_exists(path)
+
+    monkeypatch.setattr(scan_api.os.path, "exists", fake_exists)
+
+    app = create_app(load_settings())
+    with TestClient(app) as mapped_client:
+        response = mapped_client.post("/scan", params={"source_roots": str(host_album)})
+        assert response.status_code == 200
+        job = response.json()["job"]
+        assert job["payload"]["source_roots"] == [str(mount_album.resolve())]
+        assert job["result"]["source_roots"] == [str(mount_album.resolve())]
+
+        dashboard = mapped_client.get("/dashboard").text
+        assert str(host_root) in dashboard
+
+
+def test_scan_rejects_unmounted_explicit_docker_path_instead_of_falling_back(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import app.api.scan as scan_api
+
+    configured_root = tmp_path / "configured-source"
+    configured_root.mkdir(parents=True, exist_ok=True)
+    create_image(configured_root / "should-not-be-scanned.jpg")
+    missing_finder_root = tmp_path / "Volumes" / "nas" / "MissingPhotos"
+
+    data_root = tmp_path / "data"
+    derived_root = tmp_path / "derived"
+    database_path = data_root / "photome.sqlite3"
+
+    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(configured_root))
+    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
+    monkeypatch.setenv("PHOTOME_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+
+    original_exists = scan_api.os.path.exists
+
+    def fake_exists(path: str) -> bool:
+        if path == "/.dockerenv":
+            return True
+        return original_exists(path)
+
+    monkeypatch.setattr(scan_api.os.path, "exists", fake_exists)
+
+    app = create_app(load_settings())
+    with TestClient(app) as docker_client:
+        response = docker_client.post("/scan", params={"source_roots": str(missing_finder_root)})
+        assert response.status_code == 400
+        assert "Source root does not exist" in response.json()["detail"]
+
+        dashboard = docker_client.get("/dashboard").text
+        assert "should-not-be-scanned.jpg" not in dashboard
+
+
+def test_full_scan_imports_old_archive_files_on_first_pass(client: TestClient, tmp_path: Path) -> None:
+    nested_root = tmp_path / "archive-source"
+    nested_file = nested_root / "album-a" / "album-b" / "archive-receipt.jpg"
+    nested_file.parent.mkdir(parents=True, exist_ok=True)
+    create_image(nested_file)
+    old_timestamp = time.time() - 600
+    os.utime(nested_file, (old_timestamp, old_timestamp))
+
+    response = client.post(
+        "/scan",
+        params={"full_scan": "true", "source_roots": str(nested_root)},
+    )
+
+    assert response.status_code == 200
+    summary = response.json()["job"]["result"]["summary"]
+    assert summary["scanned"] == 1
+    assert summary["created"] == 1
+
+    search = client.get("/search", params={"q": "archive"})
+    assert search.status_code == 200
+    assert search.json()["total"] == 1
+
+
+def test_video_files_are_ignored_by_library_scan(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    video_path = source_root / "offline-video.mp4"
+    video_path.write_bytes(b"fake mp4 bytes")
+
+    _, second = scan_twice(client)
+
+    assert second["job"]["status"] == "succeeded"
+    assert second["job"]["result"]["processed"]["failed"] == 0
+    with client.app.state.database.session_factory() as session:
+        media_file = session.scalar(select(MediaFile).where(MediaFile.filename == "offline-video.mp4"))
+        assert media_file is None
+
+
+def test_existing_video_errors_are_excluded_on_next_scan(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    now = datetime.utcnow()
+    with client.app.state.database.session_factory() as session:
+        session.add(
+            MediaFile(
+                file_id="video-error-1",
+                current_path=str(source_root / "old-video.mp4"),
+                filename="old-video.mp4",
+                source_root=str(source_root),
+                relative_path="old-video.mp4",
+                media_kind="video",
+                status="error",
+                size_bytes=123,
+                mtime_ns=123,
+                partial_hash="abc",
+                fingerprint_version="v1",
+                error_stage="asset_pipeline",
+                error_message="ffmpeg is required",
+                error_count=5,
+                first_seen_at=now,
+                last_seen_at=now,
+                updated_at=now,
+            )
+        )
+        session.commit()
+
+    _, second = scan_twice(client)
+
+    assert second["job"]["status"] == "succeeded"
+    with client.app.state.database.session_factory() as session:
+        media_file = session.get(MediaFile, "video-error-1")
+        assert media_file is not None
+        assert media_file.status == "excluded"
+        assert media_file.error_stage is None
+        assert media_file.error_message is None
+
+
+def test_missing_image_source_is_demoted_to_missing_in_asset_pass(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    now = datetime.utcnow()
+    with client.app.state.database.session_factory() as session:
+        session.add(
+            MediaFile(
+                file_id="missing-image-1",
+                current_path=str(source_root / "gone.jpg"),
+                filename="gone.jpg",
+                source_root=str(source_root),
+                relative_path="gone.jpg",
+                media_kind="image",
+                status="error",
+                size_bytes=123,
+                mtime_ns=123,
+                partial_hash="abc",
+                fingerprint_version="v1",
+                error_stage="asset_pipeline",
+                error_message="old missing file error",
+                error_count=2,
+                first_seen_at=now,
+                last_seen_at=now,
+                updated_at=now,
+            )
+        )
+        session.commit()
+
+    response = client.post("/scan/retry-errors/async")
+
+    assert response.status_code == 202
+    with client.app.state.database.session_factory() as session:
+        media_file = session.get(MediaFile, "missing-image-1")
+        assert media_file is not None
+        assert media_file.status == "missing"
+
+
+def test_async_semantic_maintenance_job_exposes_status(client: TestClient, source_root: Path) -> None:
+    create_image(source_root / "semantic-job-receipt.jpg")
+    scan_twice(client)
+
+    response = client.post("/scan/semantic-maintenance/async", params={"batch_size": 10})
+
+    assert response.status_code == 202
+    job = response.json()["job"]
+    status_response = client.get(f"/scan/jobs/{job['job_id']}")
+    assert status_response.status_code == 200
+    status_job = status_response.json()["job"]
+    assert status_job["job_id"] == job["job_id"]
+    assert status_job["status"] == "succeeded"
+    assert "pending" in status_job["result"]
+
+
+def test_full_scan_reprocesses_present_missing_media(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "was-missing.jpg")
+    scan_twice(client)
+
+    with client.app.state.database.session_factory() as session:
+        media_file = session.scalar(select(MediaFile).where(MediaFile.filename == "was-missing.jpg"))
+        assert media_file is not None
+        media_file.status = "missing"
+        media_file.error_stage = None
+        media_file.error_message = None
+        file_id = media_file.file_id
+        session.commit()
+
+    response = client.post("/scan/async")
+
+    assert response.status_code == 202
+    job = response.json()["job"]
+    status_response = client.get(f"/scan/jobs/{job['job_id']}")
+    assert status_response.status_code == 200
+    completed = status_response.json()["job"]
+    assert completed["status"] == "succeeded"
+    assert completed["result"]["processed"]["succeeded"] >= 1
+
+    with client.app.state.database.session_factory() as session:
+        retried = session.get(MediaFile, file_id)
+        assert retried is not None
+        assert retried.status in {"thumb_done", "analysis_done"}
+
+
+def test_scan_retry_errors_endpoint_reprocesses_failed_media(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "retry-me.jpg")
+    scan_twice(client)
+
+    with client.app.state.database.session_factory() as session:
+        media_file = session.scalar(select(MediaFile).where(MediaFile.filename == "retry-me.jpg"))
+        assert media_file is not None
+        media_file.status = "error"
+        media_file.error_stage = "asset_pipeline"
+        media_file.error_message = "temporary failure"
+        file_id = media_file.file_id
+        session.commit()
+
+    response = client.post("/scan/retry-errors/async")
+
+    assert response.status_code == 202
+    job = response.json()["job"]
+    assert job["payload"]["retry_errors_only"] is True
+
+    status_response = client.get(f"/scan/jobs/{job['job_id']}")
+    assert status_response.status_code == 200
+    completed = status_response.json()["job"]
+    assert completed["status"] == "succeeded"
+    assert completed["result"]["retry_errors_only"] is True
+    assert completed["result"]["processed"]["succeeded"] >= 1
+
+    with client.app.state.database.session_factory() as session:
+        retried = session.get(MediaFile, file_id)
+        assert retried is not None
+        assert retried.status in {"thumb_done", "analysis_done"}
+        assert retried.error_stage is None
+        assert retried.error_message is None
+
+
+def test_async_job_dashboard_restores_phase_cards_from_local_storage(client: TestClient) -> None:
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    html = response.text
+    assert "Network" in html
+    assert "Deployment" in html
+    assert "Configured source roots" in html
+    assert "Cataloged source roots" in html
+    assert "라이브러리 동기화" in html
+    assert "openDetailPopup('files','파일 현황 기준')" in html
+    assert "1. 토탈" in html
+    assert "4. 미해당" in html
+    assert "5. 오류" in html
+    assert "1. 대상" in html
+    assert 'id="m-ai-state"' in html
+    assert "function updateAiMetricState(payload, phase1OwnsActive, phase2OwnsActive)" in html
+    assert "이미지 AI 자동 처리 대상" in html
+    assert 'const phase1StorageKey = "photome.dashboard.phase1.job";' in html
+    assert 'const phase2StorageKey = "photome.dashboard.phase2.job";' in html
+    assert 'const phase1SourceRootsStorageKey = "photome.dashboard.phase1.source_roots";' in html
+    assert "let activeLibraryJob =" in html
+    assert "function updateLibraryJobGuards()" in html
+    assert "setInterval(refreshDashboardStatus, 3000);" in html
+    assert 'id="phase1-schedule-button"' in html
+    assert 'id="phase2-schedule-button"' not in html  # removed: unified into library schedule
+    assert 'id="phase1-retry-button"' in html
+    assert "전체 동기화 시작" in html
+    assert "오류 항목만 재처리" in html
+    assert "경로 구분: Finder 저장장치는" in html
+    assert "Docker 내부 사진 폴더(/photos)는 환경변수로 따로 붙인 호환용 경로" in html
+    assert "System Tools" in html
+    assert 'id="search-inspector-card"' in html
+    assert "Developer tool for checking search routing" in html
+    assert "로컬 모델 캐시 사용" in html or "모델" in html
+    assert "Load cached model" in html or "로컬 캐시 확인" in html
+    assert "/ai-pack/prepare?load_cached=true" in html
+    assert "python -m app.main" in html or "docker compose --env-file .env.docker.example up -d photome" in html
+    assert 'id="phase1-full-scan"' not in html
+    assert 'params.set("full_scan", "true");' in html
+    assert "function formatElapsed(startedAt, finishedAt)" in html
+    assert "async function pollJob(jobId, resultNode, render)" in html
+    assert "if (progress.message) lines.push(progress.message);" in html
+    assert "function renderLibraryJob(job)" in html
+    assert "resumeJob(phase1StorageKey, scanCard, scanButton, scanResult, renderScanJob);" in html
+    assert "resumeJob(phase2StorageKey, semanticCard, semanticButton, semanticResult, renderSemanticJob);" in html
+    assert 'fetch("/scan/retry-errors/async"' in html
+    assert 'cycleSchedule("library", phase1ScheduleButton)' in html
+    assert "sourceRootsField.value = rememberedSourceRoots;" in html
+    assert 'id="source-picker-open"' in html
+    assert 'fetch(`/source-roots/browse?' in html
+
+
+def test_dashboard_people_manager_keeps_visible_alias_input(client: TestClient) -> None:
+    with client.app.state.database.session_factory() as session:
+        session.add(Person(display_name="윤겸", aliases_json=["윤겸이", "겸이"]))
+        session.commit()
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    html = response.text
+    assert 'class="person-alias-input" name="aliases" value="윤겸이, 겸이"' in html
+    assert 'placeholder="애칭 입력, 쉼표로 구분"' in html
+    assert "function getAliasesFromForm(form)" in html
+    assert 'input.value.split(",").map' in html
+
+
+def test_preferred_input_source_roots_ignores_mount_exists_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    from app.api import status as status_api
+
+    def raise_blocking(self: Path) -> bool:
+        raise BlockingIOError(11, "Resource temporarily unavailable")
+
+    monkeypatch.setattr(status_api, "_is_docker_runtime", lambda: True)
+    monkeypatch.setattr(Path, "exists", raise_blocking)
+    settings = SimpleNamespace(source_root_host=None, source_root_mount=None)
+
+    result = status_api._preferred_input_source_roots(
+        settings,
+        configured=["/photos"],
+        known=["/Volumes/homes/dejeong/Photos"],
+    )
+
+    assert result == ["/photos"]
+
+
+def test_dashboard_script_is_valid_javascript(client: TestClient, tmp_path: Path) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    match = re.search(r"<script>(?P<script>.*)</script>", response.text, re.S)
+    assert match is not None
+    script_path = tmp_path / "dashboard.js"
+    script_path.write_text(match.group("script"))
+
+    result = subprocess.run(
+        [node, "--check", str(script_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_source_root_browser_lists_configured_roots(client: TestClient, source_root: Path) -> None:
+    response = client.get("/source-roots/browse")
+
+    assert response.status_code == 200
+    payload = response.json()
+    paths = {entry["path"] for entry in payload["entries"]}
+    assert str(source_root.resolve()) in paths
+
+    child = source_root / "nested"
+    child.mkdir()
+    listing = client.get("/source-roots/browse", params={"path": str(source_root)})
+
+    assert listing.status_code == 200
+    listing_payload = listing.json()
+    assert listing_payload["path"] == str(source_root.resolve())
+    assert any(entry["path"] == str(child.resolve()) for entry in listing_payload["entries"])
+
+
+def test_source_root_browser_rejects_paths_outside_allowed_roots(client: TestClient, tmp_path: Path) -> None:
+    outside = tmp_path / "outside-source-browser"
+    outside.mkdir()
+
+    response = client.get("/source-roots/browse", params={"path": str(outside)})
+
+    assert response.status_code == 403
+
+
+def test_dashboard_detail_renderer_escapes_server_supplied_labels(client: TestClient) -> None:
+    html = client.get("/dashboard").text
+
+    assert "${escapeHtml(item.section)}" in html
+    assert "${escapeHtml(item.sublabel)}" in html
+    assert "${escapeHtml(item.label)}" in html
+    assert "${escapeHtml(error.message)}" in html
+
+
+def test_async_semantic_job_returns_conflict_when_catalog_is_locked(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_locked(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise OperationalError("INSERT INTO processing_jobs ...", {}, RuntimeError("database is locked"))
+
+    monkeypatch.setattr(client.app.state.pipeline, "submit_semantic_maintenance_job", raise_locked)
+
+    response = client.post("/scan/semantic-maintenance/async", params={"batch_size": 10})
+
+    assert response.status_code == 409
+    assert "Another library job is still writing to the catalog" in response.json()["detail"]
+
+
+def test_phase2_async_is_blocked_while_phase1_job_is_active(client: TestClient) -> None:
+    with client.app.state.database.session_factory() as session:
+        session.add(
+            ProcessingJob(
+                job_kind="scan",
+                status="running",
+                payload_json={"trigger": "test"},
+                attempts=1,
+            )
+        )
+        session.commit()
+
+    response = client.post("/scan/semantic-maintenance/async", params={"batch_size": 10})
+
+    assert response.status_code == 409
+    assert "Phase 1 scan is already active" in response.json()["detail"]
+
+
+def test_phase1_async_is_blocked_while_phase2_job_is_active(client: TestClient) -> None:
+    with client.app.state.database.session_factory() as session:
+        session.add(
+            ProcessingJob(
+                job_kind="semantic_maintenance",
+                status="running",
+                payload_json={"trigger": "test"},
+                attempts=1,
+            )
+        )
+        session.commit()
+
+    response = client.post("/scan/async")
+
+    assert response.status_code == 409
+    assert "Phase 2 semantic work is already active" in response.json()["detail"]
+
+
+def test_startup_recovers_interrupted_library_jobs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    source_root.mkdir(parents=True, exist_ok=True)
+    data_root = tmp_path / "data"
+    derived_root = tmp_path / "derived"
+    database_path = data_root / "photome.sqlite3"
+
+    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(source_root))
+    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
+    monkeypatch.setenv("PHOTOME_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+
+    settings = load_settings()
+    database = build_database_state(settings)
+    with database.session_factory() as session:
+        job = ProcessingJob(
+            job_kind="scan",
+            status="running",
+            payload_json={"source_roots": [str(source_root)]},
+            attempts=1,
+        )
+        session.add(job)
+        session.commit()
+        job_id = job.id
+
+    app = create_app(settings)
+    with TestClient(app) as test_client:
+        status_payload = test_client.get("/status").json()
+        assert status_payload["jobs"]["active_library_job"] is None
+        with test_client.app.state.database.session_factory() as session:
+            recovered = session.get(ProcessingJob, job_id)
+            assert recovered is not None
+            assert recovered.status == "canceled"
+            assert recovered.error_stage == "interrupted"
+            assert recovered.result_json["progress"]["resume_supported"] is True
+
+
+def test_cycle_scheduler_phase_updates_runtime_schedule(client: TestClient) -> None:
+    client.app.state.scheduler.stop()
+    first = client.post("/scheduler/cycle/library")
+    second = client.post("/scheduler/cycle/library")
+    phase2 = client.post("/scheduler/cycle/phase2")
+
+    assert first.status_code == 200
+    assert first.json()["scheduler"]["phase1_interval_hours"] == 6
+    assert first.json()["scheduler"]["library_interval_hours"] == 6
+    assert second.status_code == 200
+    assert second.json()["scheduler"]["phase1_interval_hours"] == 12
+    assert second.json()["scheduler"]["library_interval_hours"] == 12
+    assert phase2.status_code == 200
+    assert phase2.json()["scheduler"]["phase2_interval_hours"] == 6
+    assert first.json()["scheduler"]["next_library_run_at"] is not None
+    assert phase2.json()["scheduler"]["next_semantic_maintenance_at"] is not None
+
+    with client.app.state.database.session_factory() as session:
+        runtime_config = session.get(SchedulerRuntimeConfig, 1)
+        assert runtime_config is not None
+        assert runtime_config.last_phase1_run_at is not None
+        assert runtime_config.last_phase2_run_at is not None
+
+
+def test_semantic_maintenance_async_defaults_to_manual_batch_size(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.processing.pipeline import PipelineSummary
+
+    captured: dict[str, int | bool | str] = {}
+
+    def fake_submit(*, batch_size: int, run_now: bool, trigger: str) -> PipelineSummary:
+        captured.update(batch_size=batch_size, run_now=run_now, trigger=trigger)
+        return PipelineSummary(
+            job_id="semantic-default-batch",
+            job_kind="semantic_maintenance",
+            status="queued",
+            payload={"batch_size": batch_size, "trigger": trigger},
+            result=None,
+        )
+
+    monkeypatch.setattr(client.app.state.pipeline, "submit_semantic_maintenance_job", fake_submit)
+    monkeypatch.setattr(client.app.state.pipeline, "run_semantic_job", lambda job_id: None)
+
+    response = client.post("/scan/semantic-maintenance/async")
+
+    assert response.status_code == 202
+    assert captured == {"batch_size": 1000, "run_now": False, "trigger": "api-async"}
+
+
+def test_scheduler_runs_idle_semantic_maintenance_in_background(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scheduler = client.app.state.scheduler
+    scheduler.stop()
+    now = datetime.utcnow()
+    calls: list[int] = []
+    active_snapshots: list[dict[str, object | None]] = []
+
+    with client.app.state.database.session_factory() as session:
+        config = session.get(SchedulerRuntimeConfig, 1) or SchedulerRuntimeConfig(id=1)
+        config.phase1_interval_hours = None
+        config.phase2_interval_hours = None
+        config.last_phase2_run_at = now - timedelta(seconds=601)
+        session.add(config)
+        session.commit()
+
+    monkeypatch.setattr(client.app.state.pipeline, "has_semantic_maintenance_work", lambda: True)
+
+    def fake_maintenance(*, batch_size: int):
+        calls.append(batch_size)
+        snapshot = scheduler.snapshot(now)
+        active_snapshots.append(
+            {
+                "kind": snapshot.background_task_kind,
+                "state": snapshot.background_task_state,
+                "message": snapshot.background_task_message,
+            }
+        )
+        return {"pending": batch_size, "succeeded": 0, "failed": 0, "has_more": True}
+
+    monkeypatch.setattr(client.app.state.pipeline, "run_semantic_maintenance", fake_maintenance)
+
+    scheduler.tick(now)
+
+    assert calls == [500]
+    assert active_snapshots == [
+        {
+            "kind": "semantic_maintenance",
+            "state": "running",
+            "message": "이미지 AI 누락분을 뒤에서 분석 중",
+        }
+    ]
+    assert scheduler.snapshot(now).background_task_state is None
+
+
+def test_run_scan_job_persists_running_state_before_long_work(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    pipeline = client.app.state.pipeline
+    database = client.app.state.database
+    source_root = tmp_path / "source"
+    source_root.mkdir(exist_ok=True)
+    image_path = source_root / "sample.jpg"
+    image_path.write_bytes(b"fake")
+
+    summary = pipeline.submit_scan_job(
+        full_scan=True,
+        run_now=False,
+        trigger="test",
+        source_roots=(source_root,),
+    )
+
+    def fake_run(self, session, progress_callback=None):  # type: ignore[no-untyped-def]
+        with database.session_factory() as verify_session:
+            job = verify_session.get(ProcessingJob, summary.job_id)
+            assert job is not None
+            assert job.status == "running"
+            assert job.started_at is not None
+            assert (job.result_json or {}).get("progress", {}).get("stage") == "scanning"
+        return IncrementalScanSummary(scanned=1, created=0, updated=0, moved=0, missing=0, failed=0)
+
+    monkeypatch.setattr("app.services.processing.pipeline.IncrementalScanService.run", fake_run)
+    monkeypatch.setattr(pipeline, "_process_pending_media", lambda *args, **kwargs: {"pending": 0, "succeeded": 0, "failed": 0})
+    monkeypatch.setattr(pipeline, "_run_scan_semantic_followup", lambda *args, **kwargs: {"pending": 0, "succeeded": 0, "failed": 0})
+
+    result = pipeline.run_scan_job(summary.job_id)
+
+    assert result.status == "succeeded"
+
+
+def test_run_scan_job_persists_scan_count_progress_for_dashboard(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    pipeline = client.app.state.pipeline
+    database = client.app.state.database
+    source_root = tmp_path / "source"
+    source_root.mkdir(exist_ok=True)
+    image_path = source_root / "sample.jpg"
+    image_path.write_bytes(b"fake")
+
+    summary = pipeline.submit_scan_job(
+        full_scan=True,
+        run_now=False,
+        trigger="test-progress",
+        source_roots=(source_root,),
+    )
+
+    def fake_run(self, session, progress_callback=None):  # type: ignore[no-untyped-def]
+        assert progress_callback is not None
+        progress_callback(
+            {
+                "stage": "discovering_files",
+                "message": f"경로를 읽고 있습니다: {source_root}",
+                "source_root": str(source_root),
+                "source_root_index": 1,
+                "source_root_total": 1,
+                "files_found": 0,
+            }
+        )
+        progress_callback(
+            {
+                "stage": "processing_scan_records",
+                "message": "3개의 파일을 찾았습니다. 사진 정보를 갱신 중입니다 (2/3).",
+                "files_found": 3,
+                "scan": {"current": 2, "total": 3, "succeeded": 2, "failed": 0},
+                "current_path": str(image_path),
+            }
+        )
+        with database.session_factory() as verify_session:
+            job = verify_session.get(ProcessingJob, summary.job_id)
+            assert job is not None
+            progress = (job.result_json or {}).get("progress", {})
+            assert progress["stage"] == "processing_scan_records"
+            assert progress["files_found"] == 3
+            assert progress["scan"] == {"current": 2, "total": 3, "succeeded": 2, "failed": 0}
+            assert progress["source_roots"] == [str(source_root)]
+            assert progress["current_path"] == str(image_path)
+        return IncrementalScanSummary(scanned=3, created=0, updated=0, moved=0, missing=0, failed=0)
+
+    monkeypatch.setattr("app.services.processing.pipeline.IncrementalScanService.run", fake_run)
+    monkeypatch.setattr(pipeline, "_process_pending_media", lambda *args, **kwargs: {"pending": 0, "succeeded": 0, "failed": 0})
+    monkeypatch.setattr(pipeline, "_run_scan_semantic_followup", lambda *args, **kwargs: {"pending": 0, "succeeded": 0, "failed": 0})
+
+    result = pipeline.run_scan_job(summary.job_id)
+
+    assert result.status == "succeeded"
+
+
+def test_phase1_scan_processes_new_and_error_media_together(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pipeline = client.app.state.pipeline
+    captured: dict[str, tuple[str, ...] | None] = {"statuses": None}
+
+    def fake_run(self, session, progress_callback=None):  # type: ignore[no-untyped-def]
+        return IncrementalScanSummary(scanned=0, created=0, updated=0, moved=0, missing=0, failed=0)
+
+    def fake_process_pending_media(self, session, *, trigger_job_id, parent_job=None, statuses=("metadata_done",)):  # type: ignore[no-untyped-def]
+        captured["statuses"] = statuses
+        return {"pending": 0, "succeeded": 0, "failed": 0}
+
+    monkeypatch.setattr("app.services.processing.pipeline.IncrementalScanService.run", fake_run)
+    monkeypatch.setattr(type(pipeline), "_process_pending_media", fake_process_pending_media)
+    monkeypatch.setattr(type(pipeline), "_run_scan_semantic_followup", lambda *args, **kwargs: {"pending": 0, "succeeded": 0, "failed": 0})
+
+    summary = pipeline.submit_scan_job(full_scan=True, run_now=True, trigger="test-phase1")
+
+    assert summary.status == "succeeded"
+    assert captured["statuses"] == ("metadata_done", "error", "missing")
+
+
+def test_scan_job_runs_semantic_followup_by_default(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pipeline = client.app.state.pipeline
+    calls: list[int] = []
+
+    def fake_run(self, session, progress_callback=None):  # type: ignore[no-untyped-def]
+        return IncrementalScanSummary(scanned=0, created=0, updated=0, moved=0, missing=0, failed=0)
+
+    monkeypatch.setattr("app.services.processing.pipeline.IncrementalScanService.run", fake_run)
+    monkeypatch.setattr(type(pipeline), "_process_pending_media", lambda *args, **kwargs: {"pending": 0, "succeeded": 0, "failed": 0})
+
+    def fake_semantic_followup(self, session, job, *, batch_size):  # type: ignore[no-untyped-def]
+        calls.append(batch_size)
+        return {"pending": 3, "succeeded": 3, "failed": 0}
+
+    monkeypatch.setattr(type(pipeline), "_run_scan_semantic_followup", fake_semantic_followup)
+
+    summary = pipeline.submit_scan_job(full_scan=True, run_now=True, trigger="test-phase1-followup")
+
+    assert summary.status == "succeeded"
+    assert calls == [500]
+
+
+def test_run_semantic_job_persists_running_state_before_long_work(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pipeline = client.app.state.pipeline
+    database = client.app.state.database
+
+    summary = pipeline.submit_semantic_maintenance_job(
+        batch_size=10,
+        run_now=False,
+        trigger="test",
+    )
+
+    def fake_maintenance(*, batch_size: int, progress_callback=None):  # type: ignore[no-untyped-def]
+        with database.session_factory() as verify_session:
+            job = verify_session.get(ProcessingJob, summary.job_id)
+            assert job is not None
+            assert job.status == "running"
+            assert job.started_at is not None
+            assert (job.result_json or {}).get("progress", {}).get("stage") == "collecting"
+        if progress_callback is not None:
+            progress_callback({"mode": "maintenance", "pending": 0, "current": 0, "succeeded": 0, "failed": 0})
+        return {"skipped": False, "pending": 0, "succeeded": 0, "failed": 0, "has_more": False}
+
+    monkeypatch.setattr(pipeline, "run_semantic_maintenance", fake_maintenance)
+
+    result = pipeline.run_semantic_job(summary.job_id)
+
+    assert result.status == "succeeded"
+
+
+def test_async_semantic_job_runs_chunks_until_exhausted(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pipeline = client.app.state.pipeline
+    summary = pipeline.submit_semantic_maintenance_job(
+        batch_size=10,
+        run_now=False,
+        trigger="test",
+    )
+    chunks = [
+        {
+            "skipped": False,
+            "pending": 10,
+            "succeeded": 10,
+            "failed": 0,
+            "has_more": True,
+            "embeddings_created": 10,
+            "auto_tag_files": 4,
+            "auto_tag_values": 20,
+            "search_documents_updated": 10,
+        },
+        {
+            "skipped": False,
+            "pending": 3,
+            "succeeded": 3,
+            "failed": 0,
+            "has_more": False,
+            "embeddings_created": 3,
+            "auto_tag_files": 2,
+            "auto_tag_values": 8,
+            "search_documents_updated": 3,
+        },
+    ]
+    calls = {"count": 0}
+
+    def fake_maintenance(*, batch_size: int, progress_callback=None):  # type: ignore[no-untyped-def]
+        result = chunks[calls["count"]]
+        calls["count"] += 1
+        if progress_callback is not None:
+            progress_callback({
+                "mode": "maintenance",
+                "pending": result["pending"],
+                "current": result["pending"],
+                "succeeded": result["succeeded"],
+                "failed": result["failed"],
+                "batch_size": batch_size,
+                "embeddings_created": result["embeddings_created"],
+                "auto_tag_files": result["auto_tag_files"],
+                "auto_tag_values": result["auto_tag_values"],
+                "search_documents_updated": result["search_documents_updated"],
+            })
+        return result
+
+    monkeypatch.setattr(pipeline, "run_semantic_maintenance", fake_maintenance)
+
+    result = pipeline.run_semantic_job(summary.job_id)
+
+    assert calls["count"] == 2
+    assert result.status == "succeeded"
+    assert result.result is not None
+    assert result.result["full_run"] is True
+    assert result.result["chunks"] == 2
+    assert result.result["succeeded"] == 13
+    assert result.result["embeddings_created"] == 13
+    assert result.result["auto_tag_values"] == 28
+    assert result.result["search_documents_updated"] == 13
+
+
+def test_scan_rejects_missing_source_root(client: TestClient, tmp_path: Path) -> None:
+    response = client.post("/scan", params={"source_roots": str(tmp_path / "missing")})
+
+    assert response.status_code == 400
+    assert "Source root does not exist" in response.json()["detail"]
+
+
+def test_scan_missing_source_root_explains_docker_mount(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = tmp_path / ".dockerenv"
+    marker.touch()
+    import app.api.scan as scan_api
+
+    original_exists = scan_api.os.path.exists
+
+    def fake_exists(path: str) -> bool:
+        if path == "/.dockerenv":
+            return True
+        return original_exists(path)
+
+    monkeypatch.setattr(scan_api.os.path, "exists", fake_exists)
+
+    response = client.post("/scan", params={"source_roots": "/Volumes/__nonexistent_test_path_abc123__"})
+
+    assert response.status_code == 400
+    assert "Source root does not exist" in response.json()["detail"]
+    assert "Finder/host NAS paths" in response.json()["detail"]
+
+
+def test_scan_missing_mapped_source_root_explains_auto_mapping(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.api.scan as scan_api
+
+    marker = tmp_path / ".dockerenv"
+    marker.touch()
+    original_exists = scan_api.os.path.exists
+
+    def fake_exists(path: str) -> bool:
+        if path == "/.dockerenv":
+            return True
+        return original_exists(path)
+
+    monkeypatch.setattr(scan_api.os.path, "exists", fake_exists)
+    monkeypatch.setenv("PHOTOME_SOURCE_ROOT_HOST", "/Volumes/homes/dejeong/Photos")
+    monkeypatch.setenv("PHOTOME_SOURCE_ROOT_MOUNT", "/photos")
+
+    app = create_app(load_settings())
+    with TestClient(app) as mapped_client:
+        response = mapped_client.post("/scan", params={"source_roots": "/Volumes/homes/dejeong/Photos/missing"})
+
+    assert response.status_code == 400
+    assert "Source root does not exist" in response.json()["detail"]
+    assert "auto-map Finder/NAS paths" in response.json()["detail"]
+
+
+def scan_twice(client: TestClient) -> tuple[dict, dict]:
+    first = client.post("/scan").json()
+    time.sleep(SCAN_DELAY_SECONDS)
+    second = client.post("/scan").json()
+    return first, second
+
+
+def create_image(path: Path) -> None:
+    image = Image.new("RGB", (80, 60), color=(40, 80, 120))
+    image.save(path, format="JPEG")
