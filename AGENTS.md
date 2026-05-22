@@ -19,9 +19,11 @@
 
 ## 프로젝트 요약
 
+- 이 저장소는 Photome for Mac 작업 공간이다.
+- 목표는 Docker 설치 없이 실행되는 macOS 앱 안에 Photome의 FastAPI + scanner + processing pipeline + SQLite + web UI + local AI 기능을 통합하는 것이다.
 - Photome는 NAS/로컬 원본 미디어를 읽기 전용으로 스캔하는 로컬 우선 사진 라이브러리다.
-- 런타임은 FastAPI + scanner + processing pipeline + SQLite다.
 - 현재 제품 범위는 `이미지 중심`이다. 영상은 기본 sync/search 대상에서 제외한다.
+- Docker는 기능 차별용이 아니라 서버/NAS/Linux/Windows/개발/CI용 보조 배포 경로로 유지한다.
 
 ## 커뮤니케이션
 
