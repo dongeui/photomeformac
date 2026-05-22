@@ -1,0 +1,81 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "PackageStructure": ["<PackageStructure>"]
+  "PhotomeForMac-arm64-apple-macosx-debug.exe": ["<PhotomeForMac-arm64-apple-macosx-debug.exe>"]
+  "PhotomeForMac-arm64-apple-macosx-debug.module": ["<PhotomeForMac-arm64-apple-macosx-debug.module>"]
+  "main": ["<PhotomeForMac-arm64-apple-macosx-debug.exe>","<PhotomeForMac-arm64-apple-macosx-debug.module>"]
+  "test": ["<PhotomeForMac-arm64-apple-macosx-debug.exe>","<PhotomeForMac-arm64-apple-macosx-debug.module>"]
+default: "main"
+nodes:
+  "/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Sources/PhotomeForMac/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac":
+    is-mutated: true
+commands:
+  "/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac-entitlement.plist":
+    tool: write-auxiliary-file
+    inputs: ["<entitlement-plist>","<com.apple.security.get-task-allow>"]
+    outputs: ["/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac-entitlement.plist"]
+    description: "Write auxiliary file /Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac-entitlement.plist"
+
+  "/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Sources/PhotomeForMac/BackendSupervisor.swift","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Sources/PhotomeForMac/ContentView.swift","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Sources/PhotomeForMac/PhotomeForMacApp.swift"]
+    outputs: ["/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/sources"]
+    description: "Write auxiliary file /Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/sources"
+
+  "/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.product/Objects.LinkFileList":
+    tool: write-auxiliary-file
+    inputs: ["<link-file-list>","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/BackendSupervisor.swift.o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/ContentView.swift.o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/PhotomeForMacApp.swift.o"]
+    outputs: ["/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.product/Objects.LinkFileList"]
+    description: "Write auxiliary file /Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.product/Objects.LinkFileList"
+
+  "/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Library/Developer/CommandLineTools/usr/bin/swiftc"]
+    outputs: ["/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+
+  "<PhotomeForMac-arm64-apple-macosx-debug.exe>":
+    tool: phony
+    inputs: ["<PhotomeForMac-arm64-apple-macosx-debug.exe-CodeSigning>"]
+    outputs: ["<PhotomeForMac-arm64-apple-macosx-debug.exe>"]
+
+  "<PhotomeForMac-arm64-apple-macosx-debug.module>":
+    tool: phony
+    inputs: ["/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/BackendSupervisor.swift.o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/ContentView.swift.o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/PhotomeForMacApp.swift.o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/Modules/PhotomeForMac.swiftmodule"]
+    outputs: ["<PhotomeForMac-arm64-apple-macosx-debug.module>"]
+
+  "C.PhotomeForMac-arm64-apple-macosx-debug.exe":
+    tool: shell
+    inputs: ["/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/BackendSupervisor.swift.o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/ContentView.swift.o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/PhotomeForMacApp.swift.o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.product/Objects.LinkFileList"]
+    outputs: ["/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac"]
+    description: "Linking ./.build/arm64-apple-macosx/debug/PhotomeForMac"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-L","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug","-o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac","-module-name","PhotomeForMac","-Xlinker","-no_warn_duplicate_libraries","-emit-executable","-Xlinker","-alias","-Xlinker","_PhotomeForMac_main","-Xlinker","_main","-Xlinker","-rpath","-Xlinker","@loader_path","@/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.product/Objects.LinkFileList","-Xlinker","-rpath","-Xlinker","/Library/Developer/CommandLineTools/usr/lib/swift-6.2/macosx","-target","arm64-apple-macosx14.0","-Xlinker","-add_ast_path","-Xlinker","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/Modules/PhotomeForMac.swiftmodule","-I","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-L","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-plugin-path","/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g"]
+
+  "C.PhotomeForMac-arm64-apple-macosx-debug.exe-entitlements":
+    tool: shell
+    inputs: ["/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac-entitlement.plist"]
+    outputs: ["<PhotomeForMac-arm64-apple-macosx-debug.exe-CodeSigning>"]
+    description: "Applying debug entitlements to ./.build/arm64-apple-macosx/debug/PhotomeForMac"
+    args: ["codesign","--force","--sign","-","--entitlements","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac-entitlement.plist","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac"]
+
+  "C.PhotomeForMac-arm64-apple-macosx-debug.module":
+    tool: shell
+    inputs: ["/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Sources/PhotomeForMac/BackendSupervisor.swift","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Sources/PhotomeForMac/ContentView.swift","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Sources/PhotomeForMac/PhotomeForMacApp.swift","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/sources"]
+    outputs: ["/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/BackendSupervisor.swift.o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/ContentView.swift.o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/PhotomeForMacApp.swift.o","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/Modules/PhotomeForMac.swiftmodule"]
+    description: "Compiling Swift Module 'PhotomeForMac' (3 sources)"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-module-name","PhotomeForMac","-emit-dependencies","-emit-module","-emit-module-path","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/Modules/PhotomeForMac.swiftmodule","-output-file-map","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/output-file-map.json","-incremental","-c","@/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/PhotomeForMac.build/sources","-I","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx14.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j10","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-Xfrontend","-entry-point-function-name","-Xfrontend","PhotomeForMac_main","-swift-version","6","-I","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-L","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-plugin-path","/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g","-Xcc","-isysroot","-Xcc","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-Xcc","-fPIC","-Xcc","-g","-package-name","photomeformac"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Sources/PhotomeForMac/","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Package.swift","/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+
