@@ -18,6 +18,8 @@ venv/
 # Build and logs
 dist/
 build/
+.build/
+mac/**/.build/
 *.egg-info/
 logs/*.log
 
