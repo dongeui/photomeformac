@@ -1,0 +1,65 @@
+# Xcode에서 Photome for Mac 실행
+
+## 1. 백엔드 Python 준비
+
+터미널에서 한 번만 실행한다.
+
+```bash
+cd /Users/dongeui/Desktop/code/photomeformac
+bash scripts/bootstrap_mac_backend_venv.sh
+```
+
+완료 후 Python 경로는 다음이다.
+
+```text
+/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python
+```
+
+## 2. Xcode에서 열기
+
+Xcode에서 아래 파일을 연다.
+
+```text
+/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Package.swift
+```
+
+Scheme은 `PhotomeForMac`을 선택한다.
+
+## 3. Scheme 환경변수 설정
+
+상단 Scheme 메뉴에서:
+
+```text
+PhotomeForMac > Edit Scheme... > Run > Arguments > Environment Variables
+```
+
+아래 2개를 추가하고 체크박스를 켠다.
+
+```text
+PHOTOME_REPO_ROOT=/Users/dongeui/Desktop/code/photomeformac
+PHOTOME_PYTHON=/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python
+```
+
+중요: `source .venv/bin/activate` 같은 활성화 스크립트를 Xcode에 넣는 게 아니다. Xcode에는 `PHOTOME_PYTHON` 값으로 실제 Python 실행 파일 경로를 넣는다.
+
+## 4. Run
+
+Run 버튼을 누르면 앱이 뜨고, 앱이 내부에서 FastAPI 백엔드를 실행한 뒤 WebView로 대시보드를 연다.
+
+## 자주 나는 오류
+
+### Python import 오류
+
+대부분 Xcode가 시스템 Python(`/usr/bin/python3`)을 잡아서 생긴다. `PHOTOME_PYTHON`이 아래 값인지 확인한다.
+
+```text
+/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python
+```
+
+### 앱은 뜨는데 WebView가 비어 있음
+
+백엔드 시작 중일 수 있다. 상단 상태가 `실행 중`으로 바뀌는지 보고, 안 바뀌면 메뉴바에서 `백엔드 재시작`을 누른다.
+
+### 포트 충돌
+
+기본 포트는 `8000`이다. 기존에 같은 포트를 쓰는 프로세스가 있으면 종료 후 다시 실행한다.
