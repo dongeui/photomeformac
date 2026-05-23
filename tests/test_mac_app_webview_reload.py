@@ -48,7 +48,7 @@ def test_backend_supervisor_persists_source_roots_lan_and_ai_mode_state() -> Non
     assert "self?.sourceRoots = paths" in content
 
 
-def test_content_view_shows_selected_source_roots_and_ai_pack_panel() -> None:
+def test_content_view_shows_selected_source_roots_ai_pack_and_quick_actions() -> None:
     content = Path(
         "mac/PhotomeForMac/Sources/PhotomeForMac/ContentView.swift"
     ).read_text(encoding="utf-8")
@@ -57,19 +57,37 @@ def test_content_view_shows_selected_source_roots_and_ai_pack_panel() -> None:
     assert 'Text("선택된 폴더")' in content
     assert 'ForEach(backend.sourceRoots, id: \\.self)' in content
     assert 'private var aiPackPanel: some View {' in content
-    assert 'Button(backend.offlineMode ? "캐시만 로드" : "모델 준비")' in content
-    assert 'Button("모델 폴더 열기")' in content
+    assert 'private var quickActionsPanel: some View {' in content
+    assert 'Button("전체 동기화 시작")' in content
+    assert 'Button("이미지 AI 이어서 분석")' in content
+    assert 'backend.triggerLibraryScan()' in content
+    assert 'backend.triggerSemanticMaintenance()' in content
     assert 'backend.prepareAIModel(loadCached: backend.offlineMode)' in content
 
 
-def test_backend_supervisor_supports_ai_pack_status_and_prepare_calls() -> None:
+def test_backend_supervisor_supports_ai_pack_status_prepare_and_library_job_status() -> None:
     content = Path(
         "mac/PhotomeForMac/Sources/PhotomeForMac/BackendSupervisor.swift"
     ).read_text(encoding="utf-8")
 
     assert 'struct AIPackStatus: Decodable' in content
-    assert 'var aiPackStatusURL: URL {' in content
+    assert 'struct LibraryJobStatus {' in content
+    assert '@Published private(set) var libraryJobStatus: LibraryJobStatus?' in content
+    assert 'var statusURL: URL {' in content
     assert 'func prepareAIModel(loadCached: Bool)' in content
-    assert 'let endpoint = loadCached ? "ai-pack/prepare?load_cached=true" : "ai-pack/prepare"' in content
-    assert 'let status = try JSONDecoder().decode(AIPackStatus.self, from: data)' in content
-    assert 'func openModelCache() {' in content
+    assert 'func triggerLibraryScan() {' in content
+    assert 'func triggerSemanticMaintenance() {' in content
+    assert 'static func parseLibraryJobStatus(payload: [String: Any]?) -> LibraryJobStatus?' in content
+    assert 'static func summarizeLibraryJob(_ job: [String: Any]) -> String {' in content
+
+
+def test_menu_bar_exposes_scan_and_semantic_actions() -> None:
+    content = Path(
+        "mac/PhotomeForMac/Sources/PhotomeForMac/PhotomeForMacApp.swift"
+    ).read_text(encoding="utf-8")
+
+    assert 'Button("전체 동기화 시작")' in content
+    assert 'Button("이미지 AI 이어서 분석")' in content
+    assert 'backend.triggerLibraryScan()' in content
+    assert 'backend.triggerSemanticMaintenance()' in content
+    assert 'if let libraryJobStatus = backend.libraryJobStatus, backend.hasActiveLibraryJob {' in content

@@ -23,6 +23,18 @@ struct PhotomeForMacApp: App {
 
                 Divider()
 
+                Button("전체 동기화 시작") {
+                    backend.triggerLibraryScan()
+                }
+                .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
+
+                Button("이미지 AI 이어서 분석") {
+                    backend.triggerSemanticMaintenance()
+                }
+                .disabled(!backend.isRunning || !backend.clipEnabled || backend.hasActiveLibraryJob)
+
+                Divider()
+
                 Button(backend.aiModeLabel) {
                     backend.toggleOfflineMode()
                 }
@@ -49,6 +61,12 @@ struct PhotomeForMacApp: App {
 
             Divider()
 
+            if let libraryJobStatus = backend.libraryJobStatus, backend.hasActiveLibraryJob {
+                Text("현재 작업: \(libraryJobStatus.summary)")
+            } else {
+                Text("현재 작업: 대기 중")
+            }
+
             if let aiPackStatus = backend.aiPackStatus, backend.clipEnabled {
                 Text("이미지 AI: \(aiPackStatus.summary)")
             } else if !backend.clipEnabled {
@@ -56,6 +74,18 @@ struct PhotomeForMacApp: App {
             } else {
                 Text("이미지 AI: 상태 확인 중")
             }
+
+            Divider()
+
+            Button("전체 동기화 시작") {
+                backend.triggerLibraryScan()
+            }
+            .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
+
+            Button("이미지 AI 이어서 분석") {
+                backend.triggerSemanticMaintenance()
+            }
+            .disabled(!backend.isRunning || !backend.clipEnabled || backend.hasActiveLibraryJob)
 
             Button(backend.offlineMode ? "캐시만 로드" : "모델 준비") {
                 backend.prepareAIModel(loadCached: backend.offlineMode)
@@ -82,6 +112,10 @@ struct PhotomeForMacApp: App {
 
             Button(backend.lanEnabled ? "LAN 공유 끄기" : "LAN 공유 켜기") {
                 backend.toggleLAN()
+            }
+
+            Button("로그 보기") {
+                backend.showLogsPlaceholder()
             }
 
             Divider()
@@ -115,6 +149,9 @@ struct PhotomeForMacApp: App {
     private var menuBarIcon: String {
         switch backend.state {
         case .running:
+            if backend.hasActiveLibraryJob {
+                return "arrow.triangle.2.circlepath"
+            }
             return "photo.stack.fill"
         case .starting, .stopping:
             return "arrow.triangle.2.circlepath"
