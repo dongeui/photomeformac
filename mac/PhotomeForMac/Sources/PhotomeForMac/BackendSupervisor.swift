@@ -14,18 +14,23 @@ final class BackendSupervisor: ObservableObject {
     @Published private(set) var state: State = .stopped
     @Published private(set) var statusMessage: String = "백엔드가 아직 실행되지 않았습니다."
     @Published private(set) var lastError: String?
+    @Published private(set) var logFileURL: URL?
     @Published var lanEnabled = false
 
     let port: Int
 
     private var process: Process?
     private var healthTask: Task<Void, Never>?
+    private var outputPipe: Pipe?
+    private var logHandle: FileHandle?
 
     init(port: Int = 8000) {
         self.port = port
     }
 
     deinit {
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        try? logHandle?.close()
         process?.terminate()
         healthTask?.cancel()
     }
@@ -71,6 +76,8 @@ final class BackendSupervisor: ObservableObject {
             let python = try Self.findPythonExecutable(repoRoot: repoRoot)
             let appDataRoot = Self.defaultAppDataRoot()
             try FileManager.default.createDirectory(at: appDataRoot, withIntermediateDirectories: true)
+            let logFileURL = try Self.prepareLogFile(appDataRoot: appDataRoot)
+            self.logFileURL = logFileURL
 
             let env = try Self.buildBackendEnv(
                 repoRoot: repoRoot,
@@ -87,11 +94,17 @@ final class BackendSupervisor: ObservableObject {
             proc.environment = env
 
             let pipe = Pipe()
+            let logHandle = try FileHandle(forWritingTo: logFileURL)
+            try logHandle.seekToEnd()
+            try Self.appendLogBanner(to: logHandle, port: port, lanEnabled: lanEnabled)
             proc.standardOutput = pipe
             proc.standardError = pipe
+            Self.attachLogStreaming(pipe: pipe, logHandle: logHandle)
 
             try proc.run()
             process = proc
+            outputPipe = pipe
+            self.logHandle = logHandle
             statusMessage = "백엔드 실행 확인 중입니다."
             startHealthLoop()
         } catch {
@@ -110,8 +123,12 @@ final class BackendSupervisor: ObservableObject {
         statusMessage = "백엔드를 중지합니다."
         healthTask?.cancel()
         healthTask = nil
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        outputPipe = nil
         process?.terminate()
         process = nil
+        try? logHandle?.close()
+        logHandle = nil
         state = .stopped
         statusMessage = "백엔드가 중지되었습니다."
     }
@@ -153,7 +170,12 @@ final class BackendSupervisor: ObservableObject {
     }
 
     func showLogsPlaceholder() {
-        statusMessage = "로그 보기 UI는 다음 단계에서 연결합니다."
+        guard let logFileURL else {
+            statusMessage = "아직 생성된 로그 파일이 없습니다."
+            return
+        }
+        NSWorkspace.shared.open(logFileURL)
+        statusMessage = "로그 파일을 엽니다. · \(logFileURL.path)"
     }
 
     private func startHealthLoop() {
@@ -192,6 +214,40 @@ final class BackendSupervisor: ObservableObject {
     private static func defaultAppDataRoot() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         return base.appendingPathComponent("Photome", isDirectory: true)
+    }
+
+    private static func prepareLogFile(appDataRoot: URL) throws -> URL {
+        let logsDirectory = appDataRoot.appendingPathComponent("logs", isDirectory: true)
+        try FileManager.default.createDirectory(at: logsDirectory, withIntermediateDirectories: true)
+        let logFileURL = logsDirectory.appendingPathComponent("photome-backend.log")
+        if !FileManager.default.fileExists(atPath: logFileURL.path) {
+            FileManager.default.createFile(atPath: logFileURL.path, contents: Data())
+        }
+        return logFileURL
+    }
+
+    private static func appendLogBanner(to handle: FileHandle, port: Int, lanEnabled: Bool) throws {
+        let formatter = ISO8601DateFormatter()
+        let banner = "\n[\(formatter.string(from: Date()))] Photome backend start · port=\(port) · lan=\(lanEnabled ? "on" : "off")\n"
+        if let data = banner.data(using: .utf8) {
+            try handle.write(contentsOf: data)
+        }
+    }
+
+    private static func attachLogStreaming(pipe: Pipe, logHandle: FileHandle) {
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else {
+                handle.readabilityHandler = nil
+                return
+            }
+            do {
+                try logHandle.seekToEnd()
+                try logHandle.write(contentsOf: data)
+            } catch {
+                handle.readabilityHandler = nil
+            }
+        }
     }
 
     private static func findRepoRoot() throws -> URL {
