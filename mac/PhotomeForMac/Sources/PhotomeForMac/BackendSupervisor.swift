@@ -46,6 +46,28 @@ final class BackendSupervisor: ObservableObject {
         }
     }
 
+    struct LibraryJobStatus {
+        let jobID: String?
+        let jobKind: String
+        let status: String
+        let summary: String
+
+        var isRunning: Bool {
+            ["queued", "running"].contains(status)
+        }
+
+        var badgeTitle: String {
+            switch jobKind {
+            case "scan":
+                return "동기화"
+            case "semantic_backfill", "semantic_maintenance":
+                return "이미지 AI"
+            default:
+                return "작업"
+            }
+        }
+    }
+
     private struct AIPackPrepareResponse: Decodable {
         let ok: Bool
         let message: String
@@ -57,6 +79,7 @@ final class BackendSupervisor: ObservableObject {
     @Published private(set) var logFileURL: URL?
     @Published private(set) var sourceRoots: [String]
     @Published private(set) var aiPackStatus: AIPackStatus?
+    @Published private(set) var libraryJobStatus: LibraryJobStatus?
     @Published var lanEnabled: Bool {
         didSet {
             guard lanEnabled != oldValue else { return }
@@ -80,7 +103,7 @@ final class BackendSupervisor: ObservableObject {
 
     private var process: Process?
     private var healthTask: Task<Void, Never>?
-    private var aiPackTask: Task<Void, Never>?
+    private var actionTask: Task<Void, Never>?
     private var outputPipe: Pipe?
     private var logHandle: FileHandle?
 
@@ -110,7 +133,7 @@ final class BackendSupervisor: ObservableObject {
         try? logHandle?.close()
         process?.terminate()
         healthTask?.cancel()
-        aiPackTask?.cancel()
+        actionTask?.cancel()
     }
 
     var isRunning: Bool {
@@ -119,6 +142,10 @@ final class BackendSupervisor: ObservableObject {
 
     var isBusy: Bool {
         state == .starting || state == .stopping
+    }
+
+    var hasActiveLibraryJob: Bool {
+        libraryJobStatus?.isRunning == true
     }
 
     var baseURL: URL {
@@ -137,11 +164,25 @@ final class BackendSupervisor: ObservableObject {
         baseURL.appendingPathComponent("ai-pack/status")
     }
 
+    var statusURL: URL {
+        baseURL.appendingPathComponent("status")
+    }
+
     var modelCacheURL: URL {
         Self.defaultAppDataRoot().appendingPathComponent("models", isDirectory: true)
     }
 
     var menuTitle: String {
+        if let libraryJobStatus, state == .running {
+            switch libraryJobStatus.jobKind {
+            case "scan":
+                return "Photome 스캔 중"
+            case "semantic_backfill", "semantic_maintenance":
+                return "Photome 이미지 AI 중"
+            default:
+                return "Photome 작업 중"
+            }
+        }
         switch state {
         case .running: return "Photome 실행 중"
         case .starting: return "Photome 시작 중"
@@ -215,8 +256,8 @@ final class BackendSupervisor: ObservableObject {
         statusMessage = "백엔드를 중지합니다."
         healthTask?.cancel()
         healthTask = nil
-        aiPackTask?.cancel()
-        aiPackTask = nil
+        actionTask?.cancel()
+        actionTask = nil
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         outputPipe = nil
         process?.terminate()
@@ -226,6 +267,7 @@ final class BackendSupervisor: ObservableObject {
         state = .stopped
         statusMessage = "백엔드가 중지되었습니다."
         aiPackStatus = nil
+        libraryJobStatus = nil
     }
 
     func restart() {
@@ -308,30 +350,61 @@ final class BackendSupervisor: ObservableObject {
             return
         }
 
-        aiPackTask?.cancel()
-        aiPackTask = Task { [weak self] in
+        actionTask?.cancel()
+        actionTask = Task { [weak self] in
             guard let self else { return }
             let endpoint = loadCached ? "ai-pack/prepare?load_cached=true" : "ai-pack/prepare"
-            guard let url = URL(string: endpoint, relativeTo: self.baseURL) else { return }
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                let payload = try JSONDecoder().decode(AIPackPrepareResponse.self, from: data)
-                let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-                await MainActor.run {
-                    self.statusMessage = payload.message
-                    if !payload.ok || statusCode >= 400 {
-                        self.lastError = payload.message
-                    }
-                }
-                await self.refreshAIPackStatus()
-            } catch {
-                await MainActor.run {
-                    self.lastError = error.localizedDescription
-                    self.statusMessage = "모델 준비 요청 실패: \(error.localizedDescription)"
+            let result = await self.postJSON(endpoint: endpoint)
+            await MainActor.run {
+                self.statusMessage = result.message
+                if !result.ok {
+                    self.lastError = result.message
                 }
             }
+            await self.refreshAIPackStatus()
+            await self.refreshLibraryJobStatus()
+        }
+    }
+
+    func triggerLibraryScan() {
+        guard isRunning else {
+            statusMessage = "먼저 백엔드를 실행하세요."
+            return
+        }
+        actionTask?.cancel()
+        actionTask = Task { [weak self] in
+            guard let self else { return }
+            let result = await self.postJSON(endpoint: "scan/async")
+            await MainActor.run {
+                self.statusMessage = result.ok ? "전체 동기화를 시작했습니다." : result.message
+                if !result.ok {
+                    self.lastError = result.message
+                }
+            }
+            await self.refreshLibraryJobStatus()
+        }
+    }
+
+    func triggerSemanticMaintenance() {
+        guard isRunning else {
+            statusMessage = "먼저 백엔드를 실행하세요."
+            return
+        }
+        guard clipEnabled else {
+            statusMessage = "이미지 AI가 꺼져 있습니다."
+            return
+        }
+        actionTask?.cancel()
+        actionTask = Task { [weak self] in
+            guard let self else { return }
+            let result = await self.postJSON(endpoint: "scan/semantic-maintenance/async")
+            await MainActor.run {
+                self.statusMessage = result.ok ? "이미지 AI 분석을 시작했습니다." : result.message
+                if !result.ok {
+                    self.lastError = result.message
+                }
+            }
+            await self.refreshLibraryJobStatus()
         }
     }
 
@@ -342,29 +415,26 @@ final class BackendSupervisor: ObservableObject {
             var firstSuccess = false
             while !Task.isCancelled {
                 let healthy = await self.probeHealth()
-                await MainActor.run {
-                    if healthy {
-                        firstSuccess = true
+                if healthy {
+                    firstSuccess = true
+                    await MainActor.run {
                         self.state = .running
                         self.statusMessage = self.lanEnabled
                             ? "실행 중 · LAN 공유 켜짐 · \(self.dashboardURL.absoluteString)"
                             : "실행 중 · 로컬 전용 · \(self.dashboardURL.absoluteString)"
-                        self.refreshAIPackStatusIfNeeded()
-                    } else if firstSuccess {
+                    }
+                    await self.refreshAIPackStatus()
+                    await self.refreshLibraryJobStatus()
+                } else if firstSuccess {
+                    await MainActor.run {
                         self.state = .error
                         self.statusMessage = "백엔드 응답이 끊겼습니다."
                         self.aiPackStatus = nil
+                        self.libraryJobStatus = nil
                     }
                 }
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
-        }
-    }
-
-    private func refreshAIPackStatusIfNeeded() {
-        aiPackTask?.cancel()
-        aiPackTask = Task { [weak self] in
-            await self?.refreshAIPackStatus()
         }
     }
 
@@ -383,6 +453,42 @@ final class BackendSupervisor: ObservableObject {
         }
     }
 
+    private func refreshLibraryJobStatus() async {
+        do {
+            let (data, response) = try await URLSession.shared.data(from: statusURL)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
+            let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let job = Self.parseLibraryJobStatus(payload: decoded)
+            await MainActor.run {
+                self.libraryJobStatus = job
+                if let job, job.isRunning {
+                    self.statusMessage = job.summary
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.libraryJobStatus = nil
+            }
+        }
+    }
+
+    private func postJSON(endpoint: String) async -> (ok: Bool, message: String) {
+        guard let url = URL(string: endpoint, relativeTo: baseURL) else {
+            return (false, "잘못된 요청 경로")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            let message = Self.extractMessage(from: payload)
+            return (statusCode < 400, message)
+        } catch {
+            return (false, error.localizedDescription)
+        }
+    }
+
     private nonisolated func probeHealth() async -> Bool {
         do {
             let (_, response) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(port)/healthz")!)
@@ -390,6 +496,109 @@ final class BackendSupervisor: ObservableObject {
         } catch {
             return false
         }
+    }
+
+    private static func extractMessage(from payload: [String: Any]?) -> String {
+        if let message = payload?["message"] as? String, !message.isEmpty {
+            return message
+        }
+        if let detail = payload?["detail"] as? String, !detail.isEmpty {
+            return detail
+        }
+        if let job = payload?["job"] as? [String: Any] {
+            let jobKind = job["job_kind"] as? String ?? "job"
+            let status = job["status"] as? String ?? "queued"
+            let kindLabel: String
+            switch jobKind {
+            case "scan": kindLabel = "전체 동기화"
+            case "semantic_backfill", "semantic_maintenance": kindLabel = "이미지 AI"
+            default: kindLabel = jobKind
+            }
+            return "\(kindLabel) 작업이 \(status) 상태로 등록됐습니다."
+        }
+        return "요청을 처리했습니다."
+    }
+
+    static func parseLibraryJobStatus(payload: [String: Any]?) -> LibraryJobStatus? {
+        guard
+            let payload,
+            let jobs = payload["jobs"] as? [String: Any],
+            let active = jobs["active_library_job"] as? [String: Any],
+            let jobKind = active["job_kind"] as? String,
+            let status = active["status"] as? String
+        else {
+            return nil
+        }
+        return LibraryJobStatus(
+            jobID: active["job_id"] as? String,
+            jobKind: jobKind,
+            status: status,
+            summary: summarizeLibraryJob(active)
+        )
+    }
+
+    static func summarizeLibraryJob(_ job: [String: Any]) -> String {
+        let result = job["result"] as? [String: Any]
+        let progress = result?["progress"] as? [String: Any]
+        let kind = job["job_kind"] as? String ?? ""
+
+        if kind == "scan" {
+            let scan = progress?["scan"] as? [String: Any]
+            if let total = intValue(scan?["total"]) {
+                let current = intValue(scan?["current"]) ?? 0
+                let found = intValue(progress?["files_found"]) ?? total
+                let failed = intValue(scan?["failed"]) ?? 0
+                return "스캔 중 · \(current) / \(total) · 발견 \(found) · 실패 \(failed)"
+            }
+            let processed = progress?["processed"] as? [String: Any]
+            if let total = intValue(processed?["total"]) {
+                let current = intValue(processed?["current"]) ?? 0
+                let succeeded = intValue(processed?["succeeded"]) ?? 0
+                let failed = intValue(processed?["failed"]) ?? 0
+                return "처리 중 · \(current) / \(total) · 완료 \(succeeded) · 실패 \(failed)"
+            }
+            let summary = progress?["summary"] as? [String: Any]
+            if let scanned = intValue(summary?["scanned"]) {
+                let failed = intValue(summary?["failed"]) ?? 0
+                return "스캔 중 · 발견 \(scanned) · 실패 \(failed)"
+            }
+            let stage = progress?["stage"] as? String
+            let message = progress?["message"] as? String
+            return "처리 중 · \(stage ?? message ?? "작업 중")"
+        }
+
+        let chunk = intValue(progress?["chunk"])
+        let pending = intValue(progress?["pending"])
+        let current = intValue(progress?["current"])
+        let totalDone = intValue(progress?["total_succeeded"]) ?? intValue(progress?["succeeded"]) ?? 0
+        let totalFailed = intValue(progress?["total_failed"]) ?? intValue(progress?["failed"]) ?? 0
+        let totalEmbeddings = intValue(progress?["total_embeddings_created"]) ?? intValue(progress?["embeddings_created"]) ?? 0
+        let totalTags = intValue(progress?["total_auto_tag_values"]) ?? intValue(progress?["auto_tag_values"]) ?? 0
+        var parts = ["검색 분석 중"]
+        if let chunk {
+            parts.append("묶음 \(chunk)")
+        }
+        if pending != nil || current != nil {
+            parts.append("\(current ?? 0) / \(pending ?? current ?? 0)")
+        }
+        parts.append("완료 \(totalDone)")
+        parts.append("실패 \(totalFailed)")
+        parts.append("AI +\(totalEmbeddings)")
+        parts.append("태그 +\(totalTags)")
+        return parts.joined(separator: " · ")
+    }
+
+    static func intValue(_ value: Any?) -> Int? {
+        if let intValue = value as? Int {
+            return intValue
+        }
+        if let doubleValue = value as? Double {
+            return Int(doubleValue)
+        }
+        if let stringValue = value as? String, let intValue = Int(stringValue) {
+            return intValue
+        }
+        return nil
     }
 
     private static func defaultAppDataRoot() -> URL {

@@ -39,6 +39,16 @@ struct ContentView: View {
                 .foregroundStyle(statusColor)
                 .clipShape(Capsule())
 
+            if let libraryJobStatus = backend.libraryJobStatus, backend.hasActiveLibraryJob {
+                Text("\(libraryJobStatus.badgeTitle) · \(libraryJobStatus.summary)")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.14))
+                    .foregroundStyle(.blue)
+                    .clipShape(Capsule())
+            }
+
             if let aiPackStatus = backend.aiPackStatus, backend.clipEnabled {
                 Text(aiPackStatus.summary)
                     .font(.caption.weight(.semibold))
@@ -55,6 +65,16 @@ struct ContentView: View {
                 .lineLimit(1)
 
             Spacer()
+
+            Button("전체 동기화") {
+                backend.triggerLibraryScan()
+            }
+            .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
+
+            Button("이미지 AI 이어서") {
+                backend.triggerSemanticMaintenance()
+            }
+            .disabled(!backend.isRunning || !backend.clipEnabled || backend.hasActiveLibraryJob)
 
             Button(backend.aiModeLabel) {
                 backend.toggleOfflineMode()
@@ -111,6 +131,13 @@ struct ContentView: View {
                     .textSelection(.enabled)
             }
 
+            if let libraryJobStatus = backend.libraryJobStatus, backend.hasActiveLibraryJob {
+                Text(libraryJobStatus.summary)
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+                    .multilineTextAlignment(.center)
+            }
+
             if !backend.sourceRoots.isEmpty {
                 VStack(spacing: 6) {
                     Text("선택된 폴더")
@@ -127,6 +154,7 @@ struct ContentView: View {
             }
 
             aiPackPanel
+            quickActionsPanel
 
             HStack {
                 Button("백엔드 시작") {
@@ -145,10 +173,37 @@ struct ContentView: View {
             }
         }
         .padding(32)
-        .frame(maxWidth: 620)
+        .frame(maxWidth: 700)
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(radius: 20)
+    }
+
+    private var quickActionsPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("빠른 작업")
+                .font(.headline)
+
+            Text("메뉴바 없이도 여기서 전체 동기화와 이미지 AI 분석을 바로 시작할 수 있습니다.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Button("전체 동기화 시작") {
+                    backend.triggerLibraryScan()
+                }
+                .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
+
+                Button("이미지 AI 이어서 분석") {
+                    backend.triggerSemanticMaintenance()
+                }
+                .disabled(!backend.isRunning || !backend.clipEnabled || backend.hasActiveLibraryJob)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.primary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
     private var aiPackPanel: some View {
