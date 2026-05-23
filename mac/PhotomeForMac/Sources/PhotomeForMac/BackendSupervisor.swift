@@ -11,15 +11,68 @@ final class BackendSupervisor: ObservableObject {
         case error = "오류"
     }
 
+    struct AIPackStatus: Decodable {
+        let stage: String
+        let depsReady: Bool
+        let modelReady: Bool
+        let modelLoading: Bool
+        let modelError: String?
+        let config: [String: String]
+
+        enum CodingKeys: String, CodingKey {
+            case stage
+            case depsReady = "deps_ready"
+            case modelReady = "model_ready"
+            case modelLoading = "model_loading"
+            case modelError = "model_error"
+            case config
+        }
+
+        var summary: String {
+            switch stage {
+            case "ready":
+                return "모델 준비 완료"
+            case "downloading":
+                return "모델 준비 중"
+            case "needs_download":
+                return "모델 다운로드 필요"
+            case "needs_packages":
+                return "local AI pack 설치 필요"
+            case "error":
+                return modelError.map { "오류: \($0)" } ?? "모델 준비 오류"
+            default:
+                return stage
+            }
+        }
+    }
+
+    private struct AIPackPrepareResponse: Decodable {
+        let ok: Bool
+        let message: String
+    }
+
     @Published private(set) var state: State = .stopped
     @Published private(set) var statusMessage: String = "백엔드가 아직 실행되지 않았습니다."
     @Published private(set) var lastError: String?
     @Published private(set) var logFileURL: URL?
     @Published private(set) var sourceRoots: [String]
+    @Published private(set) var aiPackStatus: AIPackStatus?
     @Published var lanEnabled: Bool {
         didSet {
             guard lanEnabled != oldValue else { return }
             UserDefaults.standard.set(lanEnabled, forKey: Self.lanEnabledDefaultsKey)
+        }
+    }
+    @Published var clipEnabled: Bool {
+        didSet {
+            guard clipEnabled != oldValue else { return }
+            UserDefaults.standard.set(clipEnabled, forKey: Self.clipEnabledDefaultsKey)
+        }
+    }
+    @Published var offlineMode: Bool {
+        didSet {
+            guard offlineMode != oldValue else { return }
+            UserDefaults.standard.set(offlineMode, forKey: Self.offlineModeDefaultsKey)
         }
     }
 
@@ -27,16 +80,29 @@ final class BackendSupervisor: ObservableObject {
 
     private var process: Process?
     private var healthTask: Task<Void, Never>?
+    private var aiPackTask: Task<Void, Never>?
     private var outputPipe: Pipe?
     private var logHandle: FileHandle?
 
     private static let sourceRootsDefaultsKey = "PhotomeSourceRoots"
     private static let lanEnabledDefaultsKey = "PhotomeLANEnabled"
+    private static let clipEnabledDefaultsKey = "PhotomeClipEnabled"
+    private static let offlineModeDefaultsKey = "PhotomeOfflineMode"
 
     init(port: Int = 8000) {
         self.port = port
         self.sourceRoots = UserDefaults.standard.stringArray(forKey: Self.sourceRootsDefaultsKey) ?? []
         self.lanEnabled = UserDefaults.standard.bool(forKey: Self.lanEnabledDefaultsKey)
+        if UserDefaults.standard.object(forKey: Self.clipEnabledDefaultsKey) == nil {
+            self.clipEnabled = true
+        } else {
+            self.clipEnabled = UserDefaults.standard.bool(forKey: Self.clipEnabledDefaultsKey)
+        }
+        if UserDefaults.standard.object(forKey: Self.offlineModeDefaultsKey) == nil {
+            self.offlineMode = true
+        } else {
+            self.offlineMode = UserDefaults.standard.bool(forKey: Self.offlineModeDefaultsKey)
+        }
     }
 
     deinit {
@@ -44,6 +110,7 @@ final class BackendSupervisor: ObservableObject {
         try? logHandle?.close()
         process?.terminate()
         healthTask?.cancel()
+        aiPackTask?.cancel()
     }
 
     var isRunning: Bool {
@@ -66,6 +133,14 @@ final class BackendSupervisor: ObservableObject {
         baseURL.appendingPathComponent("healthz")
     }
 
+    var aiPackStatusURL: URL {
+        baseURL.appendingPathComponent("ai-pack/status")
+    }
+
+    var modelCacheURL: URL {
+        Self.defaultAppDataRoot().appendingPathComponent("models", isDirectory: true)
+    }
+
     var menuTitle: String {
         switch state {
         case .running: return "Photome 실행 중"
@@ -74,6 +149,10 @@ final class BackendSupervisor: ObservableObject {
         case .error: return "Photome 오류"
         case .stopped: return "Photome 중지됨"
         }
+    }
+
+    var aiModeLabel: String {
+        offlineMode ? "AI 오프라인" : "AI 온라인 준비"
     }
 
     func start() {
@@ -95,7 +174,9 @@ final class BackendSupervisor: ObservableObject {
                 python: python,
                 appDataRoot: appDataRoot,
                 port: port,
-                lan: lanEnabled
+                lan: lanEnabled,
+                clipEnabled: clipEnabled,
+                offlineMode: offlineMode
             )
 
             let proc = Process()
@@ -134,6 +215,8 @@ final class BackendSupervisor: ObservableObject {
         statusMessage = "백엔드를 중지합니다."
         healthTask?.cancel()
         healthTask = nil
+        aiPackTask?.cancel()
+        aiPackTask = nil
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         outputPipe = nil
         process?.terminate()
@@ -142,6 +225,7 @@ final class BackendSupervisor: ObservableObject {
         logHandle = nil
         state = .stopped
         statusMessage = "백엔드가 중지되었습니다."
+        aiPackStatus = nil
     }
 
     func restart() {
@@ -155,6 +239,23 @@ final class BackendSupervisor: ObservableObject {
 
     func toggleLAN() {
         lanEnabled.toggle()
+        if process != nil {
+            restart()
+        }
+    }
+
+    func toggleClipEnabled() {
+        clipEnabled.toggle()
+        aiPackStatus = nil
+        statusMessage = clipEnabled ? "이미지 AI를 켰습니다." : "이미지 AI를 껐습니다."
+        if process != nil {
+            restart()
+        }
+    }
+
+    func toggleOfflineMode() {
+        offlineMode.toggle()
+        statusMessage = offlineMode ? "AI 오프라인 모드로 전환했습니다." : "AI 온라인 준비 모드로 전환했습니다."
         if process != nil {
             restart()
         }
@@ -190,6 +291,50 @@ final class BackendSupervisor: ObservableObject {
         statusMessage = "로그 파일을 엽니다. · \(logFileURL.path)"
     }
 
+    func openModelCache() {
+        let cacheURL = modelCacheURL
+        try? FileManager.default.createDirectory(at: cacheURL, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(cacheURL)
+        statusMessage = "모델 캐시 폴더를 엽니다. · \(cacheURL.path)"
+    }
+
+    func prepareAIModel(loadCached: Bool) {
+        guard isRunning else {
+            statusMessage = "먼저 백엔드를 실행하세요."
+            return
+        }
+        guard clipEnabled else {
+            statusMessage = "이미지 AI가 꺼져 있습니다."
+            return
+        }
+
+        aiPackTask?.cancel()
+        aiPackTask = Task { [weak self] in
+            guard let self else { return }
+            let endpoint = loadCached ? "ai-pack/prepare?load_cached=true" : "ai-pack/prepare"
+            guard let url = URL(string: endpoint, relativeTo: self.baseURL) else { return }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let payload = try JSONDecoder().decode(AIPackPrepareResponse.self, from: data)
+                let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+                await MainActor.run {
+                    self.statusMessage = payload.message
+                    if !payload.ok || statusCode >= 400 {
+                        self.lastError = payload.message
+                    }
+                }
+                await self.refreshAIPackStatus()
+            } catch {
+                await MainActor.run {
+                    self.lastError = error.localizedDescription
+                    self.statusMessage = "모델 준비 요청 실패: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
     private func startHealthLoop() {
         healthTask?.cancel()
         healthTask = Task { [weak self] in
@@ -204,12 +349,36 @@ final class BackendSupervisor: ObservableObject {
                         self.statusMessage = self.lanEnabled
                             ? "실행 중 · LAN 공유 켜짐 · \(self.dashboardURL.absoluteString)"
                             : "실행 중 · 로컬 전용 · \(self.dashboardURL.absoluteString)"
+                        self.refreshAIPackStatusIfNeeded()
                     } else if firstSuccess {
                         self.state = .error
                         self.statusMessage = "백엔드 응답이 끊겼습니다."
+                        self.aiPackStatus = nil
                     }
                 }
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
+    }
+
+    private func refreshAIPackStatusIfNeeded() {
+        aiPackTask?.cancel()
+        aiPackTask = Task { [weak self] in
+            await self?.refreshAIPackStatus()
+        }
+    }
+
+    private func refreshAIPackStatus() async {
+        do {
+            let (data, response) = try await URLSession.shared.data(from: aiPackStatusURL)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
+            let status = try JSONDecoder().decode(AIPackStatus.self, from: data)
+            await MainActor.run {
+                self.aiPackStatus = status
+            }
+        } catch {
+            await MainActor.run {
+                self.aiPackStatus = nil
             }
         }
     }
@@ -310,12 +479,24 @@ final class BackendSupervisor: ObservableObject {
         python: URL,
         appDataRoot: URL,
         port: Int,
-        lan: Bool
+        lan: Bool,
+        clipEnabled: Bool,
+        offlineMode: Bool
     ) throws -> [String: String] {
         let script = repoRoot.appendingPathComponent("scripts/mac_app_backend_env.py")
         let proc = Process()
+        var arguments = [script.path, appDataRoot.path, "--port", String(port)]
+        if lan {
+            arguments.append("--lan")
+        }
+        if !clipEnabled {
+            arguments.append("--no-clip")
+        }
+        if !offlineMode {
+            arguments.append("--online")
+        }
         proc.executableURL = python
-        proc.arguments = [script.path, appDataRoot.path, "--port", String(port)] + (lan ? ["--lan"] : [])
+        proc.arguments = arguments
         proc.currentDirectoryURL = repoRoot
 
         let output = Pipe()

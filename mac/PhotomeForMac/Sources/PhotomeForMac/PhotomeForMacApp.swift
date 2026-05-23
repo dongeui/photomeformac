@@ -20,6 +20,20 @@ struct PhotomeForMacApp: App {
                     backend.restart()
                 }
                 .disabled(backend.isBusy)
+
+                Divider()
+
+                Button(backend.aiModeLabel) {
+                    backend.toggleOfflineMode()
+                }
+
+                Button(backend.clipEnabled ? "이미지 AI 끄기" : "이미지 AI 켜기") {
+                    backend.toggleClipEnabled()
+                }
+
+                Button("모델 캐시 폴더 열기") {
+                    backend.openModelCache()
+                }
             }
         }
 
@@ -32,6 +46,33 @@ struct PhotomeForMacApp: App {
                 backend.openDashboard()
             }
             .disabled(!backend.isRunning)
+
+            Divider()
+
+            if let aiPackStatus = backend.aiPackStatus, backend.clipEnabled {
+                Text("이미지 AI: \(aiPackStatus.summary)")
+            } else if !backend.clipEnabled {
+                Text("이미지 AI: 꺼짐")
+            } else {
+                Text("이미지 AI: 상태 확인 중")
+            }
+
+            Button(backend.offlineMode ? "캐시만 로드" : "모델 준비") {
+                backend.prepareAIModel(loadCached: backend.offlineMode)
+            }
+            .disabled(!backend.isRunning || !backend.clipEnabled || backend.aiPackStatus?.modelLoading == true)
+
+            Button(backend.aiModeLabel) {
+                backend.toggleOfflineMode()
+            }
+
+            Button(backend.clipEnabled ? "이미지 AI 끄기" : "이미지 AI 켜기") {
+                backend.toggleClipEnabled()
+            }
+
+            Button("모델 캐시 폴더 열기") {
+                backend.openModelCache()
+            }
 
             Divider()
 
