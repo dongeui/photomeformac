@@ -28,7 +28,7 @@ def test_backend_supervisor_wires_real_log_file_support() -> None:
     assert "아직 생성된 로그 파일이 없습니다." in content
 
 
-def test_backend_supervisor_persists_source_roots_and_lan_state() -> None:
+def test_backend_supervisor_persists_source_roots_lan_and_ai_mode_state() -> None:
     content = Path(
         "mac/PhotomeForMac/Sources/PhotomeForMac/BackendSupervisor.swift"
     ).read_text(encoding="utf-8")
@@ -36,13 +36,19 @@ def test_backend_supervisor_persists_source_roots_and_lan_state() -> None:
     assert "@Published private(set) var sourceRoots: [String]" in content
     assert 'private static let sourceRootsDefaultsKey = "PhotomeSourceRoots"' in content
     assert 'private static let lanEnabledDefaultsKey = "PhotomeLANEnabled"' in content
+    assert 'private static let clipEnabledDefaultsKey = "PhotomeClipEnabled"' in content
+    assert 'private static let offlineModeDefaultsKey = "PhotomeOfflineMode"' in content
     assert "self.sourceRoots = UserDefaults.standard.stringArray" in content
     assert "self.lanEnabled = UserDefaults.standard.bool" in content
+    assert "self.clipEnabled = true" in content
+    assert "self.offlineMode = true" in content
     assert "UserDefaults.standard.set(lanEnabled, forKey: Self.lanEnabledDefaultsKey)" in content
+    assert "UserDefaults.standard.set(clipEnabled, forKey: Self.clipEnabledDefaultsKey)" in content
+    assert "UserDefaults.standard.set(offlineMode, forKey: Self.offlineModeDefaultsKey)" in content
     assert "self?.sourceRoots = paths" in content
 
 
-def test_content_view_shows_selected_source_roots() -> None:
+def test_content_view_shows_selected_source_roots_and_ai_pack_panel() -> None:
     content = Path(
         "mac/PhotomeForMac/Sources/PhotomeForMac/ContentView.swift"
     ).read_text(encoding="utf-8")
@@ -50,3 +56,20 @@ def test_content_view_shows_selected_source_roots() -> None:
     assert 'if !backend.sourceRoots.isEmpty {' in content
     assert 'Text("선택된 폴더")' in content
     assert 'ForEach(backend.sourceRoots, id: \\.self)' in content
+    assert 'private var aiPackPanel: some View {' in content
+    assert 'Button(backend.offlineMode ? "캐시만 로드" : "모델 준비")' in content
+    assert 'Button("모델 폴더 열기")' in content
+    assert 'backend.prepareAIModel(loadCached: backend.offlineMode)' in content
+
+
+def test_backend_supervisor_supports_ai_pack_status_and_prepare_calls() -> None:
+    content = Path(
+        "mac/PhotomeForMac/Sources/PhotomeForMac/BackendSupervisor.swift"
+    ).read_text(encoding="utf-8")
+
+    assert 'struct AIPackStatus: Decodable' in content
+    assert 'var aiPackStatusURL: URL {' in content
+    assert 'func prepareAIModel(loadCached: Bool)' in content
+    assert 'let endpoint = loadCached ? "ai-pack/prepare?load_cached=true" : "ai-pack/prepare"' in content
+    assert 'let status = try JSONDecoder().decode(AIPackStatus.self, from: data)' in content
+    assert 'func openModelCache() {' in content
