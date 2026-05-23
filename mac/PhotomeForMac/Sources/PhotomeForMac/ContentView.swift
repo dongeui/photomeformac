@@ -126,17 +126,41 @@ struct WebDashboardView: NSViewRepresentable {
     let url: URL
     let reloadToken: String
 
+    final class Coordinator {
+        var lastReloadToken: String?
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    static func needsReload(currentURL: URL?, currentToken: String?, desiredURL: URL, desiredToken: String) -> Bool {
+        guard currentURL?.absoluteString == desiredURL.absoluteString else {
+            return true
+        }
+        return currentToken != desiredToken
+    }
+
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.allowsBackForwardNavigationGestures = true
+        context.coordinator.lastReloadToken = reloadToken
         webView.load(URLRequest(url: url))
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        guard webView.url?.absoluteString != url.absoluteString else { return }
+        guard Self.needsReload(
+            currentURL: webView.url,
+            currentToken: context.coordinator.lastReloadToken,
+            desiredURL: url,
+            desiredToken: reloadToken
+        ) else {
+            return
+        }
+        context.coordinator.lastReloadToken = reloadToken
         webView.load(URLRequest(url: url))
     }
 }
