@@ -89,6 +89,21 @@ struct ContentView: View {
                     .textSelection(.enabled)
             }
 
+            if !backend.sourceRoots.isEmpty {
+                VStack(spacing: 6) {
+                    Text("선택된 폴더")
+                        .font(.caption.weight(.semibold))
+                    ForEach(backend.sourceRoots, id: \.self) { path in
+                        Text(path)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .lineLimit(2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+
             HStack {
                 Button("백엔드 시작") {
                     backend.start()
