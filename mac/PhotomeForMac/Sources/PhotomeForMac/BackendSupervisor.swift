@@ -15,7 +15,13 @@ final class BackendSupervisor: ObservableObject {
     @Published private(set) var statusMessage: String = "백엔드가 아직 실행되지 않았습니다."
     @Published private(set) var lastError: String?
     @Published private(set) var logFileURL: URL?
-    @Published var lanEnabled = false
+    @Published private(set) var sourceRoots: [String]
+    @Published var lanEnabled: Bool {
+        didSet {
+            guard lanEnabled != oldValue else { return }
+            UserDefaults.standard.set(lanEnabled, forKey: Self.lanEnabledDefaultsKey)
+        }
+    }
 
     let port: Int
 
@@ -24,8 +30,13 @@ final class BackendSupervisor: ObservableObject {
     private var outputPipe: Pipe?
     private var logHandle: FileHandle?
 
+    private static let sourceRootsDefaultsKey = "PhotomeSourceRoots"
+    private static let lanEnabledDefaultsKey = "PhotomeLANEnabled"
+
     init(port: Int = 8000) {
         self.port = port
+        self.sourceRoots = UserDefaults.standard.stringArray(forKey: Self.sourceRootsDefaultsKey) ?? []
+        self.lanEnabled = UserDefaults.standard.bool(forKey: Self.lanEnabledDefaultsKey)
     }
 
     deinit {
@@ -160,8 +171,9 @@ final class BackendSupervisor: ObservableObject {
             guard response == .OK else { return }
             let paths = panel.urls.map { $0.path }
             Task { @MainActor in
+                self?.sourceRoots = paths
                 self?.statusMessage = "선택한 폴더: \(paths.joined(separator: ", "))"
-                UserDefaults.standard.set(paths, forKey: "PhotomeSourceRoots")
+                UserDefaults.standard.set(paths, forKey: Self.sourceRootsDefaultsKey)
                 if self?.process != nil {
                     self?.restart()
                 }
@@ -323,7 +335,7 @@ final class BackendSupervisor: ObservableObject {
         env["PYTHONPATH"] = repoRoot.path
         env["PHOTOME_REPO_ROOT"] = repoRoot.path
 
-        if let sourceRoots = UserDefaults.standard.stringArray(forKey: "PhotomeSourceRoots"), !sourceRoots.isEmpty {
+        if let sourceRoots = UserDefaults.standard.stringArray(forKey: Self.sourceRootsDefaultsKey), !sourceRoots.isEmpty {
             env["PHOTOME_SOURCE_ROOTS"] = sourceRoots.joined(separator: ",")
         }
         return env
