@@ -51,7 +51,17 @@ CLI에서 Xcode 빌드 검증만 먼저 하고 싶으면 아래로 확인 가능
 ```bash
 cd /Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -scheme PhotomeForMac -destination 'platform=macOS' build
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 ```
+
+임시 `.app`/`.dmg` 산출물은 아래로 만들 수 있다.
+
+```bash
+cd /Users/dongeui/Desktop/code/photomeformac
+scripts/build_mac_app_bundle.sh
+```
+
+기본은 로컬 테스트용 ad-hoc 서명이다. Developer ID 배포는 `PHOTOME_MAC_SIGN_IDENTITY="Developer ID Application: ..." scripts/build_mac_app_bundle.sh`로 서명 identity를 지정한 뒤 notarization을 붙인다.
 
 ## 자주 나는 오류
 

@@ -8,6 +8,7 @@ let package = Package(
         .executable(name: "PhotomeForMac", targets: ["PhotomeForMac"])
     ],
     targets: [
-        .executableTarget(name: "PhotomeForMac")
+        .executableTarget(name: "PhotomeForMac"),
+        .testTarget(name: "PhotomeForMacTests", dependencies: ["PhotomeForMac"])
     ]
 )
