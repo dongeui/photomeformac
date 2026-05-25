@@ -11,11 +11,12 @@
 5. 이미지 AI on/off, 오프라인/온라인 준비 모드 전환, 모델 캐시 폴더 열기/준비 요청
 6. 전체 동기화/이미지 AI 빠른 실행과 메뉴바 작업 상태 표시
 
-빌드:
+빌드/테스트:
 
 ```bash
 cd mac/PhotomeForMac
 swift build
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 ```
 
 실행:
@@ -24,6 +25,14 @@ swift build
 cd mac/PhotomeForMac
 swift run PhotomeForMac
 ```
+
+임시 앱 번들/DMG 생성:
+
+```bash
+scripts/build_mac_app_bundle.sh
+```
+
+기본은 ad-hoc 서명이다. 실제 배포용 서명은 `PHOTOME_MAC_SIGN_IDENTITY="Developer ID Application: ..." scripts/build_mac_app_bundle.sh`로 실행한 뒤 notarization을 붙인다.
 
 Xcode 실행은 `Package.swift`를 열어서 `PhotomeForMac` scheme으로 진행한다.
 
