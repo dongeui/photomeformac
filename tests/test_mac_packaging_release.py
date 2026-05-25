@@ -7,6 +7,7 @@ APP_SWIFT = ROOT / "mac" / "PhotomeForMac" / "Sources" / "PhotomeForMac" / "Phot
 BACKEND_SWIFT = ROOT / "mac" / "PhotomeForMac" / "Sources" / "PhotomeForMac" / "BackendSupervisor.swift"
 RELEASE_DOC = ROOT / "docs" / "mac" / "RELEASE_CHECKLIST.md"
 ICONSET = ROOT / "mac" / "PhotomeForMac" / "Resources" / "Assets.xcassets" / "AppIcon.appiconset"
+WORKFLOW = ROOT / ".github" / "workflows" / "mac-release.yml"
 
 
 def test_build_script_creates_signed_dmg_with_applications_symlink_and_backend_bundle():
@@ -35,6 +36,8 @@ def test_app_has_login_item_menu_and_service_management():
     assert "import ServiceManagement" in text
     assert "SMAppService.mainApp" in text
     assert "로그인 시 자동 시작" in text
+    assert "exportDiagnosticsBundle" in text
+    assert "진단 내보내기" in text
 
 
 def test_backend_prefers_bundled_backend_and_python_runtime():
@@ -42,6 +45,8 @@ def test_backend_prefers_bundled_backend_and_python_runtime():
     assert "Bundle.main.resourceURL?.appendingPathComponent(\"photome-backend\"" in text
     assert "python-runtime/bin/python" in text
     assert "PHOTOME_REPO_ROOT" in text
+    assert "createDiagnosticsBundle" in text
+    assert "diagnostics.json" in text
 
 
 def test_release_checklist_tracks_remaining_deployment_qa_items():
@@ -54,6 +59,7 @@ def test_release_checklist_tracks_remaining_deployment_qa_items():
         "Python runtime",
         "Xcode 실행 QA",
         "권한/사진 접근 UX",
+        "LAN 공유 보호",
         "launch-at-login",
         "자동 업데이트 전략",
         "NAS/대용량 라이브러리 QA",
@@ -65,3 +71,12 @@ def test_app_iconset_contains_required_sizes():
     assert (ICONSET / "Contents.json").exists()
     for size in [16, 32, 64, 128, 256, 512, 1024]:
         assert (ICONSET / f"icon_{size}x{size}.png").exists()
+
+
+def test_mac_release_workflow_uploads_dmg_and_can_publish_release():
+    text = WORKFLOW.read_text()
+    assert "workflow_dispatch" in text
+    assert "scripts/build_mac_app_bundle.sh" in text
+    assert "actions/upload-artifact" in text
+    assert "gh release upload" in text
+    assert "PhotomeForMac.dmg" in text
