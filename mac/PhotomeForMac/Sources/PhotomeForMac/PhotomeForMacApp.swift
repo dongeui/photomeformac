@@ -1,8 +1,10 @@
 import SwiftUI
+import ServiceManagement
 
 @main
 struct PhotomeForMacApp: App {
     @StateObject private var backend = BackendSupervisor()
+    @State private var launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
 
     var body: some Scene {
         WindowGroup {
@@ -114,6 +116,10 @@ struct PhotomeForMacApp: App {
                 backend.toggleLAN()
             }
 
+            Button(launchAtLoginEnabled ? "로그인 시 자동 시작 끄기" : "로그인 시 자동 시작 켜기") {
+                toggleLaunchAtLogin()
+            }
+
             Button("로그 보기") {
                 backend.showLogsPlaceholder()
             }
@@ -143,6 +149,23 @@ struct PhotomeForMacApp: App {
                 backend.stop()
                 NSApp.terminate(nil)
             }
+        }
+    }
+
+    private func toggleLaunchAtLogin() {
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+                launchAtLoginEnabled = false
+                backend.updateStatusMessage("로그인 시 자동 시작을 껐습니다.")
+            } else {
+                try SMAppService.mainApp.register()
+                launchAtLoginEnabled = true
+                backend.updateStatusMessage("로그인 시 자동 시작을 켰습니다.")
+            }
+        } catch {
+            launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+            backend.updateStatusMessage("로그인 자동 시작 변경 실패: \(error.localizedDescription)")
         }
     }
 

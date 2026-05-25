@@ -40,4 +40,4 @@ Xcode 실행은 `Package.swift`를 열어서 `PhotomeForMac` scheme으로 진행
 /Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Package.swift
 ```
 
-필수 환경변수와 실행 순서는 `docs/mac/XCODE_RUN.md`를 따른다.
+필수 환경변수와 실행 순서는 `docs/mac/XCODE_RUN.md`를 따른다. 배포/서명/notarization/대용량 QA는 `docs/mac/RELEASE_CHECKLIST.md`를 따른다.
