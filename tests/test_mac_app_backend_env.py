@@ -35,7 +35,10 @@ def test_mac_app_env_lan_mode_must_be_explicit(tmp_path: Path) -> None:
     lan_env = build_backend_env(tmp_path, lan=True)
 
     assert local_env["PHOTOME_SERVER_HOST"] == "127.0.0.1"
+    assert "PHOTOME_LAN_ADMIN_TOKEN" not in local_env
     assert lan_env["PHOTOME_SERVER_HOST"] == "0.0.0.0"
+    assert lan_env["PHOTOME_LAN_ADMIN_TOKEN"]
+    assert (tmp_path / "lan-admin-token").exists()
 
 
 def test_mac_app_env_can_disable_clip_without_disabling_app(tmp_path: Path) -> None:

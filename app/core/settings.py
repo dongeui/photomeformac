@@ -104,6 +104,7 @@ class AppSettings:
     semantic_auto_tag_version: str
     semantic_search_version: str
     asset_processing_workers: int
+    lan_admin_token: str
 
     @property
     def thumbnail_root(self) -> Path:
@@ -199,4 +200,5 @@ def load_settings() -> AppSettings:
         semantic_auto_tag_version=_env("PHOTOMINE_SEMANTIC_AUTO_TAG_VERSION", "auto-v1"),
         semantic_search_version=_env("PHOTOMINE_SEMANTIC_SEARCH_VERSION", "search-v4"),
         asset_processing_workers=max(1, min(4, _env_int("PHOTOMINE_ASSET_PROCESSING_WORKERS", 1))),
+        lan_admin_token=_env("PHOTOME_LAN_ADMIN_TOKEN", ""),
     )

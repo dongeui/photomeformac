@@ -168,7 +168,11 @@ struct ContentView: View {
                 }
 
                 Button("로그 보기") {
-                    backend.showLogsPlaceholder()
+                    backend.showLogs()
+                }
+
+                Button("진단 내보내기") {
+                    backend.exportDiagnosticsBundle()
                 }
             }
         }

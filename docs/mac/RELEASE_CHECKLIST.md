@@ -117,7 +117,17 @@ GUI QA:
 - source-root 변경이 catalog/person 매핑을 삭제하지 않는지 확인
 - NAS 오프라인/마운트 해제 시 앱이 크래시하지 않는지 확인
 
-## 8. launch-at-login
+## 8. LAN 공유 보호
+
+LAN 공유를 켜면 백엔드는 `0.0.0.0`에 바인딩한다. 원격 기기의 조회성 화면은 열 수 있지만, 스캔/사람 관리/검색 가중치/원본 다운로드 같은 관리자성 API는 `X-Photome-Admin-Token` 보호를 받는다. Mac 앱은 LAN 모드에서 앱 데이터 폴더의 `lan-admin-token`을 자동 생성해 백엔드에 전달한다.
+
+확인할 점:
+
+- 같은 Mac의 WebView/localhost 요청은 토큰 없이 계속 동작
+- 다른 기기의 관리자 API 호출은 토큰 없으면 401
+- 토큰 파일은 앱 데이터 폴더에만 있고 저장소에는 커밋하지 않음
+
+## 9. launch-at-login
 
 메뉴바에 `로그인 시 자동 시작 켜기/끄기`가 추가됐다. macOS `SMAppService.mainApp`를 사용한다.
 
@@ -126,7 +136,7 @@ GUI QA:
 - 실제 `.app` bundle로 실행해야 정상 등록된다.
 - SwiftPM `swift run`에서는 OS 정책상 실패할 수 있으며 실패 메시지를 상태바에 표시한다.
 
-## 9. 자동 업데이트 전략
+## 10. 자동 업데이트 전략
 
 아직 updater binary는 붙이지 않았다. 다음 중 하나를 선택한다.
 
@@ -138,9 +148,11 @@ GUI QA:
    - 구현 단순
    - 자동 업데이트 UX는 약함
 
+GitHub Actions `Mac Release` workflow가 ad-hoc DMG artifact를 만들고, tag(`mac-v*`) 또는 수동 dispatch에서 GitHub Release asset 업로드까지 수행한다. Developer ID/notarized DMG 배포는 로컬 인증서/Keychain 준비 후 같은 스크립트를 사용한다.
+
 현재 권장: 첫 공개 전까지는 GitHub Releases + notarized DMG, 이후 Sparkle 2 추가.
 
-## 10. NAS/대용량 라이브러리 QA
+## 11. NAS/대용량 라이브러리 QA
 
 실제 배포 전 QA 순서:
 

@@ -328,13 +328,34 @@ final class BackendSupervisor: ObservableObject {
         }
     }
 
-    func showLogsPlaceholder() {
+    func showLogs() {
         guard let logFileURL else {
             statusMessage = "아직 생성된 로그 파일이 없습니다."
             return
         }
         NSWorkspace.shared.open(logFileURL)
         statusMessage = "로그 파일을 엽니다. · \(logFileURL.path)"
+    }
+
+    func exportDiagnosticsBundle() {
+        do {
+            let exportURL = try Self.createDiagnosticsBundle(
+                logFileURL: logFileURL,
+                sourceRoots: sourceRoots,
+                lanEnabled: lanEnabled,
+                clipEnabled: clipEnabled,
+                offlineMode: offlineMode,
+                state: state,
+                dashboardURL: dashboardURL,
+                lastError: lastError,
+                statusMessage: statusMessage
+            )
+            NSWorkspace.shared.activateFileViewerSelecting([exportURL])
+            statusMessage = "진단 번들을 만들었습니다. · \(exportURL.path)"
+        } catch {
+            lastError = error.localizedDescription
+            statusMessage = "진단 번들 생성 실패: \(error.localizedDescription)"
+        }
     }
 
     func openModelCache() {
@@ -608,6 +629,48 @@ final class BackendSupervisor: ObservableObject {
     private static func defaultAppDataRoot() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         return base.appendingPathComponent("Photome", isDirectory: true)
+    }
+
+    private static func createDiagnosticsBundle(
+        logFileURL: URL?,
+        sourceRoots: [String],
+        lanEnabled: Bool,
+        clipEnabled: Bool,
+        offlineMode: Bool,
+        state: State,
+        dashboardURL: URL,
+        lastError: String?,
+        statusMessage: String
+    ) throws -> URL {
+        let appDataRoot = defaultAppDataRoot()
+        let exportsDirectory = appDataRoot.appendingPathComponent("diagnostics", isDirectory: true)
+        try FileManager.default.createDirectory(at: exportsDirectory, withIntermediateDirectories: true)
+
+        let formatter = ISO8601DateFormatter()
+        let safeStamp = formatter.string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let bundleURL = exportsDirectory.appendingPathComponent("photome-diagnostics-\(safeStamp)", isDirectory: true)
+        try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+
+        if let logFileURL, FileManager.default.fileExists(atPath: logFileURL.path) {
+            try FileManager.default.copyItem(at: logFileURL, to: bundleURL.appendingPathComponent("photome-backend.log"))
+        }
+
+        let payload: [String: Any] = [
+            "created_at": formatter.string(from: Date()),
+            "app_data_root": appDataRoot.path,
+            "dashboard_url": dashboardURL.absoluteString,
+            "state": state.rawValue,
+            "lan_enabled": lanEnabled,
+            "clip_enabled": clipEnabled,
+            "offline_mode": offlineMode,
+            "source_roots": sourceRoots,
+            "last_error": lastError ?? "",
+            "status_message": statusMessage,
+            "macos_version": ProcessInfo.processInfo.operatingSystemVersionString
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: bundleURL.appendingPathComponent("diagnostics.json"), options: .atomic)
+        return bundleURL
     }
 
     private static func prepareLogFile(appDataRoot: URL) throws -> URL {
