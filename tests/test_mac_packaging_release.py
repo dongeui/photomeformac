@@ -1,0 +1,67 @@
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+BUILD_SCRIPT = ROOT / "scripts" / "build_mac_app_bundle.sh"
+NOTARY_SCRIPT = ROOT / "scripts" / "notarize_mac_app.sh"
+APP_SWIFT = ROOT / "mac" / "PhotomeForMac" / "Sources" / "PhotomeForMac" / "PhotomeForMacApp.swift"
+BACKEND_SWIFT = ROOT / "mac" / "PhotomeForMac" / "Sources" / "PhotomeForMac" / "BackendSupervisor.swift"
+RELEASE_DOC = ROOT / "docs" / "mac" / "RELEASE_CHECKLIST.md"
+ICONSET = ROOT / "mac" / "PhotomeForMac" / "Resources" / "Assets.xcassets" / "AppIcon.appiconset"
+
+
+def test_build_script_creates_signed_dmg_with_applications_symlink_and_backend_bundle():
+    text = BUILD_SCRIPT.read_text()
+    assert "PHOTOME_MAC_SIGN_IDENTITY" in text
+    assert "codesign --verify" in text
+    assert "ln -s /Applications" in text
+    assert "PHOTOME_BUNDLE_BACKEND" in text
+    assert "photome-backend" in text
+    assert "PHOTOME_BUNDLE_PYTHON" in text
+    assert "NSLocalNetworkUsageDescription" in text
+
+
+def test_notarize_script_uses_keychain_profile_or_env_without_committed_secret():
+    text = NOTARY_SCRIPT.read_text()
+    assert "PHOTOME_NOTARY_PROFILE" in text
+    assert "notarytool submit" in text
+    assert "stapler staple" in text
+    assert "app-specific-password" in text
+    forbidden = ["AC_PASSWORD=", "APPLE_PASSWORD=", "-----BEGIN PRIVATE KEY-----"]
+    assert not any(token in text for token in forbidden)
+
+
+def test_app_has_login_item_menu_and_service_management():
+    text = APP_SWIFT.read_text()
+    assert "import ServiceManagement" in text
+    assert "SMAppService.mainApp" in text
+    assert "로그인 시 자동 시작" in text
+
+
+def test_backend_prefers_bundled_backend_and_python_runtime():
+    text = BACKEND_SWIFT.read_text()
+    assert "Bundle.main.resourceURL?.appendingPathComponent(\"photome-backend\"" in text
+    assert "python-runtime/bin/python" in text
+    assert "PHOTOME_REPO_ROOT" in text
+
+
+def test_release_checklist_tracks_remaining_deployment_qa_items():
+    text = RELEASE_DOC.read_text()
+    for phrase in [
+        "Developer ID",
+        "notarization",
+        "DMG",
+        "App icon",
+        "Python runtime",
+        "Xcode 실행 QA",
+        "권한/사진 접근 UX",
+        "launch-at-login",
+        "자동 업데이트 전략",
+        "NAS/대용량 라이브러리 QA",
+    ]:
+        assert phrase in text
+
+
+def test_app_iconset_contains_required_sizes():
+    assert (ICONSET / "Contents.json").exists()
+    for size in [16, 32, 64, 128, 256, 512, 1024]:
+        assert (ICONSET / f"icon_{size}x{size}.png").exists()

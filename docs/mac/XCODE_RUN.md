@@ -61,7 +61,7 @@ cd /Users/dongeui/Desktop/code/photomeformac
 scripts/build_mac_app_bundle.sh
 ```
 
-기본은 로컬 테스트용 ad-hoc 서명이다. Developer ID 배포는 `PHOTOME_MAC_SIGN_IDENTITY="Developer ID Application: ..." scripts/build_mac_app_bundle.sh`로 서명 identity를 지정한 뒤 notarization을 붙인다.
+기본은 로컬 테스트용 ad-hoc 서명이다. Developer ID 배포는 `PHOTOME_MAC_SIGN_IDENTITY="Developer ID Application: ..." scripts/build_mac_app_bundle.sh`로 서명 identity를 지정한 뒤 notarization을 붙인다. 전체 릴리즈 체크리스트는 `docs/mac/RELEASE_CHECKLIST.md`를 따른다.
 
 ## 자주 나는 오류
 

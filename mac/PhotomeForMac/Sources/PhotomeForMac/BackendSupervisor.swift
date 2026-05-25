@@ -196,6 +196,10 @@ final class BackendSupervisor: ObservableObject {
         offlineMode ? "AI 오프라인" : "AI 온라인 준비"
     }
 
+    func updateStatusMessage(_ message: String) {
+        statusMessage = message
+    }
+
     func start() {
         guard state == .stopped || state == .error else { return }
         state = .starting
@@ -647,6 +651,9 @@ final class BackendSupervisor: ObservableObject {
         }
 
         var candidates: [URL] = []
+        if let bundled = Bundle.main.resourceURL?.appendingPathComponent("photome-backend", isDirectory: true) {
+            candidates.append(bundled)
+        }
         candidates.append(URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true))
         candidates.append(URL(fileURLWithPath: "/Users/dongeui/Desktop/code/photomeformac", isDirectory: true))
 
@@ -672,10 +679,14 @@ final class BackendSupervisor: ObservableObject {
         let candidates = [
             repoRoot.appendingPathComponent(".venv/bin/python"),
             repoRoot.appendingPathComponent(".venv311/bin/python"),
+            Bundle.main.resourceURL?.appendingPathComponent("python-runtime/bin/python"),
+            Bundle.main.resourceURL?.appendingPathComponent("python-runtime/bin/python3"),
+            URL(fileURLWithPath: "/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python"),
+            URL(fileURLWithPath: "/Users/dongeui/Desktop/code/photomeformac/.venv311/bin/python"),
             URL(fileURLWithPath: "/Users/dongeui/Desktop/code/photome/.venv/bin/python"),
             URL(fileURLWithPath: "/Users/dongeui/Desktop/code/photome/.venv311/bin/python"),
             URL(fileURLWithPath: "/usr/bin/python3")
-        ]
+        ].compactMap { $0 }
 
         for candidate in candidates where FileManager.default.isExecutableFile(atPath: candidate.path) {
             return candidate
