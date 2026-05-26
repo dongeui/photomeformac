@@ -176,6 +176,8 @@ def test_person_alias_mapping_updates_tags_search_and_dashboard(
     assert 'id="people-sort"' in dashboard
     assert 'id="person-reassign-filter"' in dashboard
     assert "isPeopleMergeInProgress" in dashboard
+    assert "peopleMergeOptionLabel" in dashboard
+    assert "label === canonical ? canonical" in dashboard
     assert "병합 완료. 목록을 새로고침합니다..." in dashboard
     assert 'class="person-preview-face"' in dashboard
     assert 'class="reassign-select"' in dashboard
@@ -432,7 +434,9 @@ def build_face_analysis_result(image_path: Path, faces: list[dict[str, object]])
 
 
 def get_media_item(client: TestClient, *, filename: str) -> dict[str, object]:
-    items = client.get("/media").json()["items"]
+    response = client.get("/media", params={"limit": 500})
+    response.raise_for_status()
+    items = response.json()["items"]
     for item in items:
         if item["filename"] == filename:
             return item
