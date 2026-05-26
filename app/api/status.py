@@ -2455,6 +2455,15 @@ async def dashboard(request: Request) -> HTMLResponse:
         element.disabled = isBusy;
       }});
     }}
+    function peopleCanonicalLabel(personId) {{
+      return `person-${{String(personId || "").padStart(6, "0")}}`;
+    }}
+    function peopleMergeOptionLabel(row) {{
+      const personId = row.dataset.personId || "";
+      const canonical = peopleCanonicalLabel(personId);
+      const label = (row.dataset.personLabel || canonical).trim();
+      return label === canonical ? canonical : `${{label}} · ${{canonical}}`;
+    }}
     function updatePeopleMergeBar() {{
       if (isPeopleMergeInProgress) return;
       const rows = selectedPersonRows();
@@ -2464,10 +2473,9 @@ async def dashboard(request: Request) -> HTMLResponse:
       const previous = peopleMergeTarget.value;
       peopleMergeTarget.replaceChildren(...rows.map((row) => {{
         const personId = row.dataset.personId || "";
-        const label = row.dataset.personLabel || `person-${{personId}}`;
         const option = document.createElement("option");
         option.value = personId;
-        option.textContent = `${{label}} · person-${{String(personId).padStart(6, "0")}}`;
+        option.textContent = peopleMergeOptionLabel(row);
         return option;
       }}));
       if (rows.some((row) => row.dataset.personId === previous)) peopleMergeTarget.value = previous;
