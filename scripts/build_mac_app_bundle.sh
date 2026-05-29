@@ -30,10 +30,17 @@ cp "$BINARY_PATH" "$MACOS_DIR/$APP_NAME"
 chmod 755 "$MACOS_DIR/$APP_NAME"
 
 if [[ -d "$PACKAGE_DIR/Resources/Assets.xcassets/AppIcon.appiconset" ]]; then
-  mkdir -p "$RESOURCES_DIR/AppIcon.iconset"
-  cp "$PACKAGE_DIR/Resources/Assets.xcassets/AppIcon.appiconset"/*.png "$RESOURCES_DIR/AppIcon.iconset/" 2>/dev/null || true
+  ICONSET_DIR="$RESOURCES_DIR/AppIcon.iconset"
+  mkdir -p "$ICONSET_DIR"
+  ICONSET_SRC="$PACKAGE_DIR/Resources/Assets.xcassets/AppIcon.appiconset"
+  for size in 16 32 128 256 512; do
+    [[ -f "$ICONSET_SRC/icon_${size}x${size}.png" ]] && cp "$ICONSET_SRC/icon_${size}x${size}.png" "$ICONSET_DIR/icon_${size}x${size}.png"
+    [[ -f "$ICONSET_SRC/icon_${size}x${size}@2x.png" ]] && cp "$ICONSET_SRC/icon_${size}x${size}@2x.png" "$ICONSET_DIR/icon_${size}x${size}@2x.png"
+  done
   if command -v iconutil >/dev/null 2>&1; then
-    iconutil -c icns "$RESOURCES_DIR/AppIcon.iconset" -o "$RESOURCES_DIR/AppIcon.icns" >/dev/null 2>&1 || true
+    if ! iconutil -c icns "$ICONSET_DIR" -o "$RESOURCES_DIR/AppIcon.icns" 2>/dev/null; then
+      echo "warning: iconutil failed; AppIcon.icns may be missing" >&2
+    fi
   fi
 fi
 
@@ -106,12 +113,23 @@ if [[ "$BUNDLE_BACKEND" == "1" ]]; then
 fi
 
 if [[ "$BUNDLE_PYTHON" == "1" ]]; then
-  PY_SRC="${PHOTOME_PYTHON_BUNDLE_SRC:-$ROOT_DIR/.venv}"
-  if [[ ! -d "$PY_SRC" ]]; then
-    echo "PHOTOME_BUNDLE_PYTHON=1 이지만 Python runtime source가 없습니다: $PY_SRC" >&2
+  if [[ -n "${PHOTOME_PYTHON_BUNDLE_SRC:-}" ]]; then
+    PY_SRC="$PHOTOME_PYTHON_BUNDLE_SRC"
+  else
+    PY_SRC=""
+    for candidate in "$ROOT_DIR/.venv311" "$ROOT_DIR/.venv" "$ROOT_DIR/venv"; do
+      if [[ -d "$candidate" && -x "$candidate/bin/python3" ]]; then
+        PY_SRC="$candidate"
+        break
+      fi
+    done
+  fi
+  if [[ -z "$PY_SRC" || ! -d "$PY_SRC" ]]; then
+    echo "PHOTOME_BUNDLE_PYTHON=1 이지만 Python runtime source를 찾을 수 없습니다 (PHOTOME_PYTHON_BUNDLE_SRC 또는 ./.venv311/./.venv 필요)" >&2
     exit 2
   fi
   rsync -a --delete "$PY_SRC/" "$RESOURCES_DIR/python-runtime/"
+  echo "bundled python runtime from: $PY_SRC"
 fi
 
 codesign --force --deep --options runtime --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
@@ -120,13 +138,44 @@ codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 mkdir -p "$DMG_STAGING"
 cp -R "$APP_BUNDLE" "$DMG_STAGING/"
 ln -s /Applications "$DMG_STAGING/Applications"
+
+DMG_RW="$DIST_DIR/$APP_NAME-rw.dmg"
+rm -f "$DMG_RW"
 hdiutil create \
   -volname "$APP_NAME" \
   -srcfolder "$DMG_STAGING" \
   -ov \
-  -format UDZO \
-  "$DMG_PATH" >/dev/null
+  -format UDRW \
+  "$DMG_RW" >/dev/null
 rm -rf "$DMG_STAGING"
+
+MOUNT_DIR="$(hdiutil attach "$DMG_RW" -readwrite -noverify -noautoopen | awk '/\/Volumes\// {print $3; exit}')"
+if [[ -n "$MOUNT_DIR" ]]; then
+  osascript <<APPLESCRIPT 2>/dev/null || true
+tell application "Finder"
+  tell disk "$APP_NAME"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {200, 200, 760, 540}
+    set theViewOptions to the icon view options of container window
+    set arrangement of theViewOptions to not arranged
+    set icon size of theViewOptions to 128
+    set position of item "$APP_NAME.app" of container window to {140, 170}
+    set position of item "Applications" of container window to {420, 170}
+    update without registering applications
+    delay 0.5
+    close
+  end tell
+end tell
+APPLESCRIPT
+  sync
+  hdiutil detach "$MOUNT_DIR" >/dev/null 2>&1 || true
+fi
+
+hdiutil convert "$DMG_RW" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH" >/dev/null
+rm -f "$DMG_RW"
 
 printf '%s\n' "$APP_BUNDLE"
 printf '%s\n' "$DMG_PATH"

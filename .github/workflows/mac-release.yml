@@ -11,6 +11,11 @@ on:
         description: "Build number"
         required: true
         default: "1"
+      bundle_python:
+        description: "Bundle Python runtime (.venv) into the app"
+        required: true
+        type: boolean
+        default: false
       publish_release:
         description: "Create/update GitHub Release"
         required: true
@@ -44,7 +49,22 @@ jobs:
           echo "PHOTOME_MAC_VERSION=${version}" >> "$GITHUB_ENV"
           echo "PHOTOME_MAC_BUILD=${{ inputs.build || github.run_number }}" >> "$GITHUB_ENV"
 
+      - name: Set up Python (for runtime bundling)
+        if: inputs.bundle_python == true
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build runtime venv
+        if: inputs.bundle_python == true
+        run: |
+          python3.11 -m venv .venv311
+          .venv311/bin/pip install --upgrade pip wheel setuptools
+          .venv311/bin/pip install -e ".[clip]"
+
       - name: Build ad-hoc signed app and DMG
+        env:
+          PHOTOME_BUNDLE_PYTHON: ${{ inputs.bundle_python && '1' || '0' }}
         run: scripts/build_mac_app_bundle.sh
 
       - name: Upload DMG artifact

@@ -95,19 +95,19 @@ SwiftUI `onDrop(of: [.fileURL])` 사용.
 **파일:** `BackendSupervisor.swift` 또는 별도 `UpdateChecker.swift`,
 `mac/PhotomeForMac/Resources/Info.plist`에 SUFeedURL (Sparkle 사용 시).
 
-### S2.2 DMG 비주얼 폴리시 — `status: TODO`
+### S2.2 DMG 비주얼 폴리시 — `status: DONE`
 
 현재는 표준 DMG. create-dmg 도구 또는 hdiutil layout 스크립트로 배경/창 위치 지정.
 
 **파일:** `scripts/build_mac_app_bundle.sh` (선택적 단계 추가).
 
-### S2.3 App icon 마무리 — `status: TODO`
+### S2.3 App icon 마무리 — `status: DONE`
 
 `mac/PhotomeForMac/Resources/Assets.xcassets/AppIcon.appiconset/`의 모든 사이즈 채워졌는지 확인.
 
 **검증:** Xcode 또는 `iconutil` 출력 확인.
 
-### S2.4 Python runtime 번들 자동화 — `status: TODO`
+### S2.4 Python runtime 번들 자동화 — `status: DONE`
 
 현재 `PHOTOME_BUNDLE_PYTHON=1` + `PHOTOME_PYTHON_BUNDLE_SRC=...` 수동.
 사용자가 venv 위치 지정 필요. GitHub Actions workflow에서 자동 빌드 가능하게.
@@ -175,6 +175,7 @@ PHOTOME_NOTARY_PROFILE=photome-notary scripts/notarize_mac_app.sh
 
 ## 진행 기록 (가장 최근부터)
 
+- 2026-05-30: S2.2/2.3/2.4 완료 — build 스크립트가 iconset filter, Finder DMG layout(osascript), .venv311/.venv 자동 탐색 + GitHub Actions workflow에 bundle_python input 추가.
 - 2026-05-30: S0.2b 완료 — 대시보드에 리소스 설정 카드 추가 (CPU 슬라이더, AI threads, batch sizes). 184 tests pass.
 - 2026-05-30: S1.1-1.4 + S3.4 완료 — drag&drop, notifications, dock badge, quit confirmation, crash recovery. swift build OK.
 - 2026-05-30: photome DB(.recover로 손상 복구) photomeformac data + Mac 앱 Library 양쪽에 배치. 26787 media / 595 people / 10710 faces.
