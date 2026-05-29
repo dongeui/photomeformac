@@ -1,15 +1,21 @@
 import SwiftUI
+import AppKit
 import ServiceManagement
 
 @main
 struct PhotomeForMacApp: App {
     @StateObject private var backend = BackendSupervisor()
     @State private var launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+    @NSApplicationDelegateAdaptor(PhotomeAppDelegate.self) private var appDelegate
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(backend)
+                .onAppear {
+                    appDelegate.backend = backend
+                    backend.requestNotificationAuthorization()
+                }
         }
         .commands {
             CommandGroup(after: .appInfo) {
@@ -187,5 +193,25 @@ struct PhotomeForMacApp: App {
         case .stopped:
             return "photo.stack"
         }
+    }
+}
+
+final class PhotomeAppDelegate: NSObject, NSApplicationDelegate {
+    weak var backend: BackendSupervisor?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let backend, backend.hasActiveLibraryJob else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "백그라운드 작업이 진행 중입니다"
+        alert.informativeText = "지금 종료하면 진행 중인 동기화/이미지 AI 작업이 중단됩니다. 계속 종료할까요?"
+        alert.addButton(withTitle: "종료")
+        alert.addButton(withTitle: "취소")
+        alert.alertStyle = .warning
+        let response = alert.runModal()
+        return response == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
     }
 }

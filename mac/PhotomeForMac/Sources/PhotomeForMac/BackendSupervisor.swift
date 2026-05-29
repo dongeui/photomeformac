@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import UserNotifications
 
 @MainActor
 final class BackendSupervisor: ObservableObject {
@@ -106,11 +107,14 @@ final class BackendSupervisor: ObservableObject {
     private var actionTask: Task<Void, Never>?
     private var outputPipe: Pipe?
     private var logHandle: FileHandle?
+    private var crashRestartAttempts: Int = 0
+    private var lastNotifiedJobID: String?
 
     private static let sourceRootsDefaultsKey = "PhotomeSourceRoots"
     private static let lanEnabledDefaultsKey = "PhotomeLANEnabled"
     private static let clipEnabledDefaultsKey = "PhotomeClipEnabled"
     private static let offlineModeDefaultsKey = "PhotomeOfflineMode"
+    private static let maxCrashRestartAttempts: Int = 1
 
     init(port: Int = 8000) {
         self.port = port
@@ -237,6 +241,11 @@ final class BackendSupervisor: ObservableObject {
             proc.standardOutput = pipe
             proc.standardError = pipe
             Self.attachLogStreaming(pipe: pipe, logHandle: logHandle)
+            proc.terminationHandler = { [weak self] terminatedProc in
+                Task { @MainActor [weak self] in
+                    self?.handleProcessTermination(terminatedProc)
+                }
+            }
 
             try proc.run()
             process = proc
@@ -264,7 +273,10 @@ final class BackendSupervisor: ObservableObject {
         actionTask = nil
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         outputPipe = nil
-        process?.terminate()
+        if let proc = process {
+            proc.terminationHandler = nil
+            proc.terminate()
+        }
         process = nil
         try? logHandle?.close()
         logHandle = nil
@@ -272,6 +284,53 @@ final class BackendSupervisor: ObservableObject {
         statusMessage = "백엔드가 중지되었습니다."
         aiPackStatus = nil
         libraryJobStatus = nil
+        crashRestartAttempts = 0
+        updateDockBadge()
+    }
+
+    private func handleProcessTermination(_ terminatedProc: Process) {
+        guard process === terminatedProc else { return }
+        guard state == .running || state == .starting else { return }
+        let exitStatus = terminatedProc.terminationStatus
+        process = nil
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        outputPipe = nil
+        try? logHandle?.close()
+        logHandle = nil
+        healthTask?.cancel()
+        healthTask = nil
+        if crashRestartAttempts < Self.maxCrashRestartAttempts {
+            crashRestartAttempts += 1
+            state = .error
+            lastError = "백엔드가 비정상 종료(코드 \(exitStatus))되어 재시작합니다."
+            statusMessage = lastError ?? "백엔드 비정상 종료"
+            scheduleNotification(title: "Photome 백엔드 재시작",
+                                 body: "백엔드가 예기치 않게 종료되어 자동으로 다시 시작합니다.")
+            start()
+        } else {
+            state = .error
+            lastError = "백엔드가 반복적으로 비정상 종료됩니다(코드 \(exitStatus)). 로그를 확인하세요."
+            statusMessage = lastError ?? "백엔드 반복 비정상 종료"
+            scheduleNotification(title: "Photome 백엔드 오류",
+                                 body: "자동 재시작에 실패했습니다. 메뉴에서 ‘로그 보기’로 원인을 확인하세요.")
+        }
+        updateDockBadge()
+    }
+
+    func appendSourceRoots(_ urls: [URL]) {
+        let normalized = urls.compactMap { url -> String? in
+            let path = url.path
+            return path.isEmpty ? nil : path
+        }
+        let existing = Set(sourceRoots)
+        let merged = sourceRoots + normalized.filter { !existing.contains($0) }
+        guard merged.count != sourceRoots.count else { return }
+        sourceRoots = merged
+        UserDefaults.standard.set(sourceRoots, forKey: Self.sourceRootsDefaultsKey)
+        statusMessage = "원본 폴더 \(normalized.count)개를 추가했습니다."
+        if process != nil {
+            restart()
+        }
     }
 
     func restart() {
@@ -444,9 +503,11 @@ final class BackendSupervisor: ObservableObject {
                     firstSuccess = true
                     await MainActor.run {
                         self.state = .running
+                        self.crashRestartAttempts = 0
                         self.statusMessage = self.lanEnabled
                             ? "실행 중 · LAN 공유 켜짐 · \(self.dashboardURL.absoluteString)"
                             : "실행 중 · 로컬 전용 · \(self.dashboardURL.absoluteString)"
+                        self.updateDockBadge()
                     }
                     await self.refreshAIPackStatus()
                     await self.refreshLibraryJobStatus()
@@ -485,16 +546,76 @@ final class BackendSupervisor: ObservableObject {
             let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             let job = Self.parseLibraryJobStatus(payload: decoded)
             await MainActor.run {
+                let previous = self.libraryJobStatus
                 self.libraryJobStatus = job
                 if let job, job.isRunning {
                     self.statusMessage = job.summary
                 }
+                self.handleJobTransition(previous: previous, current: job)
+                self.updateDockBadge()
             }
         } catch {
             await MainActor.run {
+                let previous = self.libraryJobStatus
                 self.libraryJobStatus = nil
+                self.handleJobTransition(previous: previous, current: nil)
+                self.updateDockBadge()
             }
         }
+    }
+
+    private func handleJobTransition(previous: LibraryJobStatus?, current: LibraryJobStatus?) {
+        guard let previous, previous.isRunning else { return }
+        if let current, current.isRunning, current.jobID == previous.jobID { return }
+        let key = "\(previous.jobID ?? "?")|\(previous.jobKind)"
+        if key == lastNotifiedJobID { return }
+        lastNotifiedJobID = key
+        let succeeded: Bool
+        if let current, !current.isRunning, current.jobID == previous.jobID {
+            succeeded = current.status == "succeeded"
+        } else {
+            succeeded = true
+        }
+        let kindLabel: String
+        switch previous.jobKind {
+        case "scan": kindLabel = "사진 동기화"
+        case "semantic_backfill", "semantic_maintenance": kindLabel = "이미지 AI"
+        default: kindLabel = "작업"
+        }
+        let title = succeeded ? "\(kindLabel) 완료" : "\(kindLabel) 종료"
+        let body = succeeded
+            ? "백그라운드 \(kindLabel)가 끝났습니다."
+            : "백그라운드 \(kindLabel)가 정상 종료되지 않았습니다. 대시보드에서 상태를 확인하세요."
+        scheduleNotification(title: title, body: body)
+    }
+
+    private func updateDockBadge() {
+        let badge: String
+        if let job = libraryJobStatus, job.isRunning {
+            switch job.jobKind {
+            case "scan": badge = "스캔"
+            case "semantic_backfill", "semantic_maintenance": badge = "AI"
+            default: badge = "…"
+            }
+        } else if state == .error {
+            badge = "!"
+        } else {
+            badge = ""
+        }
+        NSApp.dockTile.badgeLabel = badge.isEmpty ? nil : badge
+    }
+
+    func requestNotificationAuthorization() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    private func scheduleNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
 
     private func postJSON(endpoint: String) async -> (ok: Bool, message: String) {

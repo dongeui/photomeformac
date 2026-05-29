@@ -1,8 +1,10 @@
 import SwiftUI
 import WebKit
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var backend: BackendSupervisor
+    @State private var dropTargeted: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,12 +18,61 @@ struct ContentView: View {
                 if !backend.isRunning {
                     landing
                 }
+
+                if dropTargeted {
+                    RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [8]))
+                        .background(Color.accentColor.opacity(0.08))
+                        .overlay(
+                            VStack(spacing: 6) {
+                                Image(systemName: "folder.badge.plus").font(.system(size: 36))
+                                Text("원본 폴더로 추가").font(.headline)
+                            }
+                            .foregroundStyle(Color.accentColor)
+                        )
+                        .padding(24)
+                        .allowsHitTesting(false)
+                }
+            }
+            .onDrop(of: [UTType.fileURL], isTargeted: $dropTargeted) { providers in
+                Task { await handleDroppedProviders(providers) }
+                return true
             }
         }
         .frame(minWidth: 1100, minHeight: 760)
         .onAppear {
             if backend.state == .stopped {
                 backend.start()
+            }
+        }
+    }
+
+    @MainActor
+    private func handleDroppedProviders(_ providers: [NSItemProvider]) async {
+        var urls: [URL] = []
+        for provider in providers {
+            guard provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) else { continue }
+            if let url = await Self.loadFileURL(from: provider) {
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+                    urls.append(url)
+                }
+            }
+        }
+        guard !urls.isEmpty else { return }
+        backend.appendSourceRoots(urls)
+    }
+
+    private static func loadFileURL(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<URL?, Never>) in
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                    continuation.resume(returning: url)
+                } else if let url = item as? URL {
+                    continuation.resume(returning: url)
+                } else {
+                    continuation.resume(returning: nil)
+                }
             }
         }
     }
