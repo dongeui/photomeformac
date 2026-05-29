@@ -20,6 +20,7 @@ from fastapi.responses import HTMLResponse
 
 from app.api.ai_pack import get_ai_pack_state
 from app.api.deps import require_state
+from app.api.performance_settings import resource_settings_snapshot
 from app.api.serializers import serialize_scheduler_snapshot
 from app.core.settings import AppSettings
 from app.services.analysis.opencv_zoo import SFACE_MODEL, YU_NET_MODEL, _is_valid_model_file
@@ -661,6 +662,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     scheduler = payload["scheduler"]
     semantic = payload["semantic"]
     performance = payload["performance"]
+    resource_settings = performance.get("resource_settings") or {}
     catalog = payload["catalog"]
     jobs = payload["jobs"]
     health = payload["health"]
@@ -2184,6 +2186,43 @@ async def dashboard(request: Request) -> HTMLResponse:
         </div>
       </article>
 
+      <article class="card full" id="resource-settings-card">
+        <h2>리소스 설정</h2>
+        <p class="sub">이 Mac의 CPU/메모리 자원을 포토미가 얼마나 세게 쓸지 정합니다. CPU는 동시 처리 수와 AI 스레드, 메모리는 한 번에 잡아먹는 분석 묶음 크기로 조절합니다.</p>
+        <div class="pill-row">
+          <span class="pill"><strong>CPU 강도</strong> <span id="resource-cpu-profile">{escape(str(resource_settings.get("cpu_profile_label") or "균형"))}</span></span>
+          <span class="pill"><strong>메모리 압력</strong> <span id="resource-memory-profile">{escape(str(resource_settings.get("memory_profile_label") or "보통"))}</span></span>
+          <span class="pill"><strong>설정 파일</strong> <code>{escape(str(resource_settings.get("env_file") or ".env"))}</code></span>
+        </div>
+        <form class="scan-form" id="resource-settings-form" onsubmit="return false">
+          <label>
+            CPU 병렬 처리
+            <input type="range" id="resource-workers" min="1" max="{int(resource_settings.get('asset_processing_workers_cap') or 1)}" value="{int(resource_settings.get('asset_processing_workers') or 1)}">
+            <span class="field-help">동시 처리 수 <strong id="resource-workers-value">{int(resource_settings.get('asset_processing_workers') or 1)}</strong> / {int(resource_settings.get('asset_processing_workers_cap') or 1)}. 높일수록 전체 동기화 때 CPU를 더 세게 씁니다.</span>
+          </label>
+          <label>
+            AI CPU 스레드
+            <input type="range" id="resource-torch-threads" min="1" max="{int(resource_settings.get('torch_threads_cap') or 1)}" value="{int(resource_settings.get('torch_threads') or 1)}">
+            <span class="field-help">CLIP/OCR 쪽 스레드 <strong id="resource-torch-threads-value">{int(resource_settings.get('torch_threads') or 1)}</strong> / {int(resource_settings.get('torch_threads_cap') or 1)}. 높일수록 이미지 AI가 CPU를 더 적극적으로 씁니다.</span>
+          </label>
+          <label>
+            백그라운드 AI 묶음 크기
+            <input type="number" id="resource-maintenance-batch" min="50" max="5000" step="50" value="{int(resource_settings.get('semantic_maintenance_batch_size') or 500)}">
+            <span class="field-help">자동으로 뒤에서 도는 이미지 AI 묶음입니다. 클수록 빠르지만 메모리를 더 씁니다.</span>
+          </label>
+          <label>
+            수동 AI 묶음 크기
+            <input type="number" id="resource-manual-batch" min="50" max="5000" step="50" value="{int(resource_settings.get('semantic_manual_batch_size') or 1000)}">
+            <span class="field-help">"지금 분석" 눌렀을 때 한 번에 처리할 양입니다.</span>
+          </label>
+          <div class="scan-actions">
+            <button type="button" id="resource-settings-save">저장</button>
+            <span class="field-help">저장하면 다음 동기화/이미지 AI 작업부터 반영됩니다. 이미 돌고 있는 작업은 끝날 때까지 기존 값으로 갑니다.</span>
+          </div>
+          <pre class="scan-result" id="resource-settings-result" aria-live="polite"></pre>
+        </form>
+      </article>
+
       <article class="card full admin-only">
         <h2>System Tools</h2>
         <p class="sub">Status of local tools and AI models required by photome.</p>
@@ -2291,6 +2330,17 @@ async def dashboard(request: Request) -> HTMLResponse:
     const semanticCard = document.getElementById("phase2-card");
     const semanticButton = document.getElementById("phase2-semantic-button");
     const semanticCancelButton = document.getElementById("phase2-cancel-button");
+    const resourceForm = document.getElementById("resource-settings-form");
+    const resourceSaveButton = document.getElementById("resource-settings-save");
+    const resourceResult = document.getElementById("resource-settings-result");
+    const resourceWorkers = document.getElementById("resource-workers");
+    const resourceWorkersValue = document.getElementById("resource-workers-value");
+    const resourceTorchThreads = document.getElementById("resource-torch-threads");
+    const resourceTorchThreadsValue = document.getElementById("resource-torch-threads-value");
+    const resourceMaintenanceBatch = document.getElementById("resource-maintenance-batch");
+    const resourceManualBatch = document.getElementById("resource-manual-batch");
+    const resourceCpuProfile = document.getElementById("resource-cpu-profile");
+    const resourceMemoryProfile = document.getElementById("resource-memory-profile");
     const phase1StorageKey = "photome.dashboard.phase1.job";
     const phase2StorageKey = "photome.dashboard.phase2.job";
     const phase1SourceRootsStorageKey = "photome.dashboard.phase1.source_roots";
@@ -2326,6 +2376,60 @@ async def dashboard(request: Request) -> HTMLResponse:
     function escapeHtml(value) {{
       return String(value ?? "").replace(/[&<>"']/g, (ch) => ({{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}}[ch]));
     }}
+    function updateResourceLabels() {{
+      const workers = Number(resourceWorkers?.value || 1);
+      const workerCap = Number(resourceWorkers?.max || workers || 1);
+      const torchThreads = Number(resourceTorchThreads?.value || 1);
+      const maintenanceBatch = Number(resourceMaintenanceBatch?.value || 500);
+      const manualBatch = Number(resourceManualBatch?.value || 1000);
+      if (resourceWorkersValue) resourceWorkersValue.textContent = String(workers);
+      if (resourceTorchThreadsValue) resourceTorchThreadsValue.textContent = String(torchThreads);
+      if (resourceCpuProfile) {{
+        const ratio = workers / Math.max(1, workerCap);
+        resourceCpuProfile.textContent = ratio >= 0.85 ? "최대" : ratio >= 0.6 ? "고성능" : ratio >= 0.35 ? "균형" : "절약";
+      }}
+      if (resourceMemoryProfile) {{
+        const score = Math.max(maintenanceBatch, manualBatch);
+        resourceMemoryProfile.textContent = score >= 1500 ? "높음" : score >= 700 ? "보통" : "낮음";
+      }}
+    }}
+    async function saveResourceSettings() {{
+      if (!resourceSaveButton) return;
+      resourceSaveButton.disabled = true;
+      if (resourceResult) resourceResult.textContent = "저장 중...";
+      try {{
+        const response = await fetch("/settings/performance", {{
+          method: "POST",
+          headers: {{"Content-Type": "application/json"}},
+          body: JSON.stringify({{
+            asset_processing_workers: Number(resourceWorkers?.value || 1),
+            torch_threads: Number(resourceTorchThreads?.value || 1),
+            semantic_maintenance_batch_size: Number(resourceMaintenanceBatch?.value || 500),
+            semantic_manual_batch_size: Number(resourceManualBatch?.value || 1000),
+          }}),
+        }});
+        const data = await response.json().catch(() => ({{message: "설정 저장에 실패했습니다."}}));
+        if (!response.ok) throw new Error(data?.detail || data?.message || "설정 저장 실패");
+        if (data?.settings) {{
+          if (resourceWorkers && data.settings.asset_processing_workers) resourceWorkers.value = String(data.settings.asset_processing_workers);
+          if (resourceTorchThreads && data.settings.torch_threads) resourceTorchThreads.value = String(data.settings.torch_threads);
+          if (resourceMaintenanceBatch && data.settings.semantic_maintenance_batch_size) resourceMaintenanceBatch.value = String(data.settings.semantic_maintenance_batch_size);
+          if (resourceManualBatch && data.settings.semantic_manual_batch_size) resourceManualBatch.value = String(data.settings.semantic_manual_batch_size);
+          performanceSnapshot.resource_settings = data.settings;
+        }}
+        updateResourceLabels();
+        if (resourceResult) resourceResult.textContent = data?.message || "저장 완료";
+      }} catch (error) {{
+        if (resourceResult) resourceResult.textContent = error?.message || "설정 저장 실패";
+      }} finally {{
+        resourceSaveButton.disabled = false;
+      }}
+    }}
+    [resourceWorkers, resourceTorchThreads, resourceMaintenanceBatch, resourceManualBatch].forEach((element) => {{
+      element?.addEventListener("input", updateResourceLabels);
+    }});
+    resourceSaveButton?.addEventListener("click", saveResourceSettings);
+    updateResourceLabels();
     function personSearchText(person) {{
       return [
         person.display_name,
@@ -4066,6 +4170,7 @@ async def status(request: Request) -> dict[str, Any]:
         search_ready_percent = round((search_documents_current / eligible_media_count) * 100, 1) if eligible_media_count else 0
         clip_coverage_percent = round((clip_embeddings_current / eligible_media_count) * 100, 1) if eligible_media_count else 0
         catalog_breakdown = _catalog_breakdown(pipeline_snapshot["media"].get("status_counts") or {})
+        resource_settings = resource_settings_snapshot(settings, pipeline)
         ai_summary = _ai_summary(
             eligible_media=eligible_media_count,
             clip_embeddings=clip_embeddings_current,
@@ -4116,6 +4221,7 @@ async def status(request: Request) -> dict[str, Any]:
                 "clip_coverage_percent": clip_coverage_percent,
                 "remaining_clip": max(0, eligible_media_count - clip_embeddings_current),
                 "ai_summary": ai_summary,
+                "resource_settings": resource_settings,
             },
             "catalog": {
                 **pipeline_snapshot["media"],

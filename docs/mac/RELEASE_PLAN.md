@@ -32,7 +32,7 @@
 - `553eb09` OCR heuristics + delta scan cache — 확인 결과 이미 적용됨 ✅ `status: DONE`
 - **`698139f` Dashboard resource controls** — 분할 진행:
   - **S0.2a** 백엔드 infra + performance API + Mac env path 적응 — `status: DONE`
-  - **S0.2b** 대시보드 UI (CSS/HTML/JS) — `status: TODO`
+  - **S0.2b** 대시보드 UI (CSS/HTML/JS) — `status: DONE`
 
 ### S0.3 photomeformac 자체 테스트 검증 — `status: DONE`
 
@@ -42,7 +42,7 @@
 
 ## Stage 1. Mac shell UX 강화
 
-### S1.1 Finder Drag & Drop으로 source root 추가 — `status: TODO`
+### S1.1 Finder Drag & Drop으로 source root 추가 — `status: DONE`
 
 `ContentView.swift` 또는 메뉴바에서 폴더 드래그 → `backend.appendSourceRoot(url)`.
 SwiftUI `onDrop(of: [.fileURL])` 사용.
@@ -52,7 +52,7 @@ SwiftUI `onDrop(of: [.fileURL])` 사용.
 
 **테스트:** Swift unit test로 URL → string 정규화 검증.
 
-### S1.2 macOS UserNotifications — `status: TODO`
+### S1.2 macOS UserNotifications — `status: DONE`
 
 스캔/AI 작업 완료 시 알림. `UNUserNotificationCenter` 사용. 사용자 권한 요청 흐름 필요.
 
@@ -61,13 +61,13 @@ SwiftUI `onDrop(of: [.fileURL])` 사용.
 
 **검증:** library job status가 running → succeeded로 바뀌는 순간 알림 발사.
 
-### S1.3 Dock badge — `status: TODO`
+### S1.3 Dock badge — `status: DONE`
 
 활성 작업 있을 때 `NSApp.dockTile.badgeLabel`에 진행 % 또는 "..." 표시.
 
 **파일:** `BackendSupervisor.swift`의 libraryJobStatus 옵저버에 묶음.
 
-### S1.4 Quit confirmation — `status: TODO`
+### S1.4 Quit confirmation — `status: DONE`
 
 스캔/AI 진행 중 앱 종료 시 confirm dialog. `NSApplication.shouldTerminate` 처리.
 
@@ -134,7 +134,7 @@ SwiftUI `onDrop(of: [.fileURL])` 사용.
 
 `RELEASE_CHECKLIST.md` Section 11. 사용자 환경 필요.
 
-### S3.4 백엔드 크래시 복구 — `status: TODO`
+### S3.4 백엔드 크래시 복구 — `status: DONE`
 
 `BackendSupervisor`가 backend process 비정상 종료 감지 시 자동 재시작 시도 1회 후 사용자 알림.
 
@@ -175,6 +175,9 @@ PHOTOME_NOTARY_PROFILE=photome-notary scripts/notarize_mac_app.sh
 
 ## 진행 기록 (가장 최근부터)
 
+- 2026-05-30: S0.2b 완료 — 대시보드에 리소스 설정 카드 추가 (CPU 슬라이더, AI threads, batch sizes). 184 tests pass.
+- 2026-05-30: S1.1-1.4 + S3.4 완료 — drag&drop, notifications, dock badge, quit confirmation, crash recovery. swift build OK.
+- 2026-05-30: photome DB(.recover로 손상 복구) photomeformac data + Mac 앱 Library 양쪽에 배치. 26787 media / 595 people / 10710 faces.
 - 2026-05-29: S0.2a 완료 — performance settings API + 백엔드 infra. Mac shell은 `PHOTOME_ENV_FILE`를 앱 데이터 폴더의 `photome.env`로 주입함. 188 tests pass.
 - 2026-05-29: S0.1 백포팅 완료 (alias + people UI + preview cache, 184 tests pass).
 - 2026-05-29: 플랜 문서 생성.
