@@ -14,7 +14,6 @@ from app.core.settings import AppSettings
 from app.models.runtime import SchedulerRuntimeConfig
 from app.services.processing.pipeline import ProcessingPipeline
 from app.services.processing.pipeline import LibraryJobBusyError
-from app.services.processing.pipeline import SEMANTIC_MAINTENANCE_BATCH_SIZE
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -111,7 +110,7 @@ class SchedulerService:
                     )
                     try:
                         self._pipeline.run_semantic_maintenance(
-                            batch_size=SEMANTIC_MAINTENANCE_BATCH_SIZE,
+                            batch_size=self._settings.semantic_maintenance_batch_size,
                         )
                     finally:
                         self._clear_background_task()

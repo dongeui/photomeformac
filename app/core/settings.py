@@ -40,6 +40,32 @@ def _env_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_optional_int(name: str) -> int | None:
+    value = _env_value(name)
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ValueError(f"Environment variable {name} must be an integer") from exc
+
+
+def _cpu_count() -> int:
+    return max(1, int(os.cpu_count() or 1))
+
+
+def _clamp(value: int, lower: int, upper: int) -> int:
+    return max(lower, min(upper, int(value)))
+
+
+def asset_worker_cap() -> int:
+    return max(1, min(16, _cpu_count()))
+
+
+def torch_thread_cap() -> int:
+    return max(1, _cpu_count())
+
+
 def _env_paths(name: str, default: tuple[Path, ...]) -> tuple[Path, ...]:
     value = _env_value(name)
     if value is None or value.strip() == "":
@@ -104,6 +130,9 @@ class AppSettings:
     semantic_auto_tag_version: str
     semantic_search_version: str
     asset_processing_workers: int
+    torch_threads: int | None
+    semantic_maintenance_batch_size: int
+    semantic_manual_batch_size: int
     lan_admin_token: str
 
     @property
@@ -199,6 +228,21 @@ def load_settings() -> AppSettings:
         semantic_embedding_version=_env("PHOTOMINE_SEMANTIC_EMBEDDING_VERSION", "embedding-v1"),
         semantic_auto_tag_version=_env("PHOTOMINE_SEMANTIC_AUTO_TAG_VERSION", "auto-v1"),
         semantic_search_version=_env("PHOTOMINE_SEMANTIC_SEARCH_VERSION", "search-v4"),
-        asset_processing_workers=max(1, min(4, _env_int("PHOTOMINE_ASSET_PROCESSING_WORKERS", 1))),
+        asset_processing_workers=_clamp(_env_int("PHOTOMINE_ASSET_PROCESSING_WORKERS", 1), 1, asset_worker_cap()),
+        torch_threads=(
+            _clamp(torch_threads, 1, torch_thread_cap())
+            if (torch_threads := _env_optional_int("PHOTOMINE_TORCH_THREADS")) is not None
+            else None
+        ),
+        semantic_maintenance_batch_size=_clamp(
+            _env_int("PHOTOMINE_SEMANTIC_MAINTENANCE_BATCH_SIZE", 500),
+            50,
+            5000,
+        ),
+        semantic_manual_batch_size=_clamp(
+            _env_int("PHOTOMINE_SEMANTIC_MANUAL_BATCH_SIZE", 1000),
+            50,
+            5000,
+        ),
         lan_admin_token=_env("PHOTOME_LAN_ADMIN_TOKEN", ""),
     )

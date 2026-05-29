@@ -26,14 +26,13 @@
 - `4591ab1` — AI backlog 진행 중 표시 (이미 적용됨) ✅
 - `3ded092` — bounded asset workers (이미 적용됨) ✅
 
-### S0.2 추가 백포팅 후보 — `status: TODO`
+### S0.2 추가 백포팅 후보
 
-- `698139f` Add dashboard resource controls — Mac 앱은 env를 직접 주입하므로 `.env` 쓰기 경로를
-  `PHOTOME_ENV_FILE` 환경변수 우회로 처리해야 함. 백엔드 env 생성기에서 path 지정 필요.
-  파일들: `app/api/performance_settings.py` (신규), `app/api/router.py`, `app/core/settings.py`,
-  `app/scheduler/service.py`, `app/services/processing/pipeline.py`, dashboard CSS/HTML/JS.
-- `f00dbde + 7404a19` 배경 이미지 AI 상태 표시 — 일부 이미 반영된 듯, diff 확인 필요.
-- `553eb09` OCR heuristics + delta scan cache 수정 — 정확성 패치.
+- `f00dbde + 7404a19` 배경 이미지 AI 상태 표시 — 확인 결과 이미 적용됨 ✅ `status: DONE`
+- `553eb09` OCR heuristics + delta scan cache — 확인 결과 이미 적용됨 ✅ `status: DONE`
+- **`698139f` Dashboard resource controls** — 분할 진행:
+  - **S0.2a** 백엔드 infra + performance API + Mac env path 적응 — `status: DONE`
+  - **S0.2b** 대시보드 UI (CSS/HTML/JS) — `status: TODO`
 
 ### S0.3 photomeformac 자체 테스트 검증 — `status: DONE`
 
@@ -176,5 +175,6 @@ PHOTOME_NOTARY_PROFILE=photome-notary scripts/notarize_mac_app.sh
 
 ## 진행 기록 (가장 최근부터)
 
+- 2026-05-29: S0.2a 완료 — performance settings API + 백엔드 infra. Mac shell은 `PHOTOME_ENV_FILE`를 앱 데이터 폴더의 `photome.env`로 주입함. 188 tests pass.
 - 2026-05-29: S0.1 백포팅 완료 (alias + people UI + preview cache, 184 tests pass).
 - 2026-05-29: 플랜 문서 생성.

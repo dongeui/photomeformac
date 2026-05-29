@@ -62,6 +62,7 @@ def build_backend_env(
         "PHOTOME_CLIP_ENABLED": "1" if clip_enabled else "0",
         "PHOTOME_SCHEDULER_ENABLED": "0",
         "PHOTOME_SEMANTIC_SCHEDULER_ENABLED": "1" if clip_enabled else "0",
+        "PHOTOME_ENV_FILE": str(root / "photome.env"),
     }
 
     if source_roots:

@@ -21,6 +21,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.contracts import DerivedAssetKind, MediaFaceInput, MediaKind, MediaTagInput, ProcessingJobKind, ProcessingJobState
+from app.core.settings import asset_worker_cap
 from app.models.face import Face
 from app.models.job import ProcessingJob
 from app.models.media import MediaFile
@@ -149,6 +150,8 @@ class ProcessingPipeline:
         geocoding_provider: GeocodingProvider | None = None,
         geocoding_enabled: bool = False,
         asset_processing_workers: int = 1,
+        semantic_maintenance_batch_size: int = SEMANTIC_MAINTENANCE_BATCH_SIZE,
+        semantic_manual_batch_size: int = SEMANTIC_MANUAL_BATCH_SIZE,
     ) -> None:
         self._session_factory = session_factory
         self._scanner = scanner
@@ -173,7 +176,9 @@ class ProcessingPipeline:
         self._caption_provider: CaptionProvider | None = caption_provider if caption_provider is not None else get_caption_provider()
         self._geocoding_enabled = geocoding_enabled
         self._geocoding_provider: GeocodingProvider = geocoding_provider or NominatimProvider()
-        self._asset_processing_workers = max(1, min(4, int(asset_processing_workers or 1)))
+        self._asset_processing_workers = max(1, min(asset_worker_cap(), int(asset_processing_workers or 1)))
+        self._semantic_maintenance_batch_size = max(50, min(5000, int(semantic_maintenance_batch_size or SEMANTIC_MAINTENANCE_BATCH_SIZE)))
+        self._semantic_manual_batch_size = max(50, min(5000, int(semantic_manual_batch_size or SEMANTIC_MANUAL_BATCH_SIZE)))
         self._semantic_maintenance_lock = Lock()
         self._library_submit_lock = Lock()
 
@@ -285,11 +290,12 @@ class ProcessingPipeline:
     def submit_semantic_maintenance_job(
         self,
         *,
-        batch_size: int = SEMANTIC_MANUAL_BATCH_SIZE,
+        batch_size: int | None = None,
         run_now: bool = True,
         trigger: str = "manual",
     ) -> PipelineSummary:
-        payload: dict[str, Any] = {"batch_size": batch_size, "trigger": trigger}
+        resolved_batch_size = int(batch_size or self._semantic_manual_batch_size)
+        payload: dict[str, Any] = {"batch_size": resolved_batch_size, "trigger": trigger}
         with self._library_submit_lock:
             with self._session_factory() as session:
                 self._ensure_no_active_library_job(session)
@@ -304,7 +310,7 @@ class ProcessingPipeline:
 
                 if run_now:
                     try:
-                        self._run_semantic_job(session, job, batch_size=batch_size, mode="maintenance")
+                        self._run_semantic_job(session, job, batch_size=resolved_batch_size, mode="maintenance")
                     except Exception:
                         session.commit()
                         return self._to_summary(job)
@@ -318,7 +324,7 @@ class ProcessingPipeline:
             if job is None:
                 raise ValueError(f"Unknown job_id: {job_id}")
             payload = job.payload_json or {}
-            batch_size = int(payload.get("batch_size") or SEMANTIC_MANUAL_BATCH_SIZE)
+            batch_size = int(payload.get("batch_size") or self._semantic_manual_batch_size)
             if job.job_kind == ProcessingJobKind.SEMANTIC_BACKFILL.value:
                 mode = "backfill"
             elif job.job_kind == ProcessingJobKind.SEMANTIC_MAINTENANCE.value:
@@ -407,7 +413,7 @@ class ProcessingPipeline:
     def run_semantic_backfill(
         self,
         *,
-        batch_size: int = SEMANTIC_MAINTENANCE_BATCH_SIZE,
+        batch_size: int | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         """Alias for run_semantic_maintenance — single unified Phase 2 pass."""
@@ -416,7 +422,7 @@ class ProcessingPipeline:
     def run_semantic_maintenance(
         self,
         *,
-        batch_size: int = SEMANTIC_MAINTENANCE_BATCH_SIZE,
+        batch_size: int | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         """Refresh Phase 2 search documents only for media that need it.
@@ -427,6 +433,8 @@ class ProcessingPipeline:
         if not self._semantic_maintenance_lock.acquire(blocking=False):
             return {"skipped": True, "reason": "already_running", "pending": 0, "succeeded": 0, "failed": 0}
 
+        resolved_batch_size = int(batch_size or self._semantic_maintenance_batch_size)
+        batch_size = resolved_batch_size
         try:
             with self._session_factory() as session:
                 semantic_catalog = SemanticCatalog(session)
@@ -717,7 +725,26 @@ class ProcessingPipeline:
                     **job_counts,
                     "active_library_job": active_job,
                 },
+                "runtime": {
+                    "asset_processing_workers": self._asset_processing_workers,
+                    "semantic_maintenance_batch_size": self._semantic_maintenance_batch_size,
+                    "semantic_manual_batch_size": self._semantic_manual_batch_size,
+                },
             }
+
+    def update_resource_settings(
+        self,
+        *,
+        asset_processing_workers: int | None = None,
+        semantic_maintenance_batch_size: int | None = None,
+        semantic_manual_batch_size: int | None = None,
+    ) -> None:
+        if asset_processing_workers is not None:
+            self._asset_processing_workers = max(1, min(asset_worker_cap(), int(asset_processing_workers)))
+        if semantic_maintenance_batch_size is not None:
+            self._semantic_maintenance_batch_size = max(50, min(5000, int(semantic_maintenance_batch_size)))
+        if semantic_manual_batch_size is not None:
+            self._semantic_manual_batch_size = max(50, min(5000, int(semantic_manual_batch_size)))
 
     def has_active_library_job(self) -> bool:
         with self._session_factory() as session:
@@ -859,7 +886,7 @@ class ProcessingPipeline:
                     },
                 )
                 session.commit()
-                semantic_summary = self._run_scan_semantic_followup(session, job, batch_size=SEMANTIC_MAINTENANCE_BATCH_SIZE)
+                semantic_summary = self._run_scan_semantic_followup(session, job, batch_size=self._semantic_maintenance_batch_size)
         except Exception as exc:
             logger.exception("scan job failed", extra={"job_id": job.id})
             job.status = ProcessingJobState.FAILED.value
