@@ -9,13 +9,14 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import bindparam, delete, func, select, text, update
 
 from app.api.deps import require_state
 from app.models.asset import DerivedAsset
 from app.models.face import Face
 from app.models.media import MediaFile
 from app.models.person import Person
+from app.models.semantic import SearchDocument
 from app.models.tag import Tag
 from app.services.image_decode import ensure_heif_support
 from app.services.semantic import SemanticCatalog
@@ -178,18 +179,23 @@ def rename_person(
 ) -> PersonResponse:
     """Update the display name for a person (face cluster)."""
     database = require_state(request, "database")
-    new_name = body.display_name.strip()
+    requested_name = body.display_name.strip()
+    aliases = _normalize_aliases(_validate_user_aliases(body.aliases or []))
+    new_name = requested_name
+    if (not new_name or _INTERNAL_PERSON_ID_RE.match(new_name)) and aliases:
+        new_name = aliases[0]
+        aliases = [alias for alias in aliases if alias.casefold() != new_name.casefold()]
     if not new_name:
         raise HTTPException(status_code=422, detail="display_name must not be empty")
     if _INTERNAL_PERSON_ID_RE.match(new_name):
-        raise HTTPException(status_code=422, detail="display_name cannot be an internal cluster ID")
+        raise HTTPException(status_code=422, detail="Set a real name or add at least one alias")
     with database.session_factory() as session:
         person = session.get(Person, person_id)
         if person is None:
             raise HTTPException(status_code=404, detail="Person not found")
         old_labels = _person_labels(person)
         person.display_name = new_name
-        person.aliases_json = _normalize_aliases(_validate_user_aliases(body.aliases or []))
+        person.aliases_json = aliases
         _sync_person_search_labels(
             session,
             person,
@@ -495,11 +501,23 @@ def _sync_person_search_labels(session, person: Person, *, old_labels: set[str],
     for file_id in affected_file_ids:
         for label in labels:
             session.add(Tag(file_id=file_id, tag_type="person", tag_value=label))
+    _invalidate_search_documents(session, affected_file_ids)
 
-    semantic = SemanticCatalog(session)
-    media_files = session.scalars(select(MediaFile).where(MediaFile.file_id.in_(affected_file_ids))).all()
-    for media_file in media_files:
-        semantic.upsert_search_document(media_file, version=search_version)
+
+def _invalidate_search_documents(session, file_ids: list[str]) -> None:
+    if not file_ids:
+        return
+    session.execute(delete(SearchDocument).where(SearchDocument.file_id.in_(file_ids)))
+    for table_name in ("search_documents_fts", "search_documents_fts_ko"):
+        try:
+            session.execute(
+                text(f"DELETE FROM {table_name} WHERE file_id IN :file_ids").bindparams(
+                    bindparam("file_ids", expanding=True)
+                ),
+                {"file_ids": list(file_ids)},
+            )
+        except Exception:
+            continue
 
 
 def _resolve_derived_path(derived_root: Path, derived_path: str) -> Path:

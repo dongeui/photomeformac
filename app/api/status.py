@@ -497,13 +497,14 @@ def _render_people_manager(people: list[dict[str, Any]]) -> str:
         </div>
         """
     rows = []
-    for person in people[:80]:
+    for person in people:
         alias_list = [str(a) for a in person.get("aliases", []) if a]
         aliases_csv = ", ".join(alias_list)
         has_aliases = bool(alias_list)
+        display_name = str(person.get("display_name") or "")
         search_text = " ".join(
             [
-                str(person.get("display_name") or ""),
+                display_name,
                 aliases_csv,
                 f"person-{int(person['id']):06d}",
             ]
@@ -511,17 +512,30 @@ def _render_people_manager(people: list[dict[str, Any]]) -> str:
         face_samples = "".join(
             f"""
             <button class="face-sample person-preview-trigger" type="button" data-person-id="{int(person['id'])}" data-person-label="{escape(str(person['display_name']))}" title="{escape(str(sample.get('filename') or 'sample'))}">
-              <img src="/people/faces/{int(sample['face_id'])}/crop" alt="{escape(str(person['display_name']))} face sample" loading="lazy" decoding="async">
+              <img class="face-sample-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-src="/people/faces/{int(sample['face_id'])}/crop" alt="{escape(str(person['display_name']))} face sample" loading="lazy" decoding="async" fetchpriority="low">
             </button>
             """
-            for sample in person.get("sample_faces", [])
+            for sample in person.get("sample_faces", [])[:1]
             if sample.get("face_id") is not None
         ) or '<span class="face-empty">No face preview</span>'
         alias_chips = "".join(
             f'<span class="alias-chip">{escape(a)}<button type="button" class="alias-remove" data-alias="{escape(a)}" title="{escape(a)} 제거">×</button></span>'
             for a in alias_list
         ) or '<span class="alias-chips-empty-hint">병합 시 여기에 표시</span>'
-        is_unnamed = str(person.get("display_name") or "").startswith("person-") and not has_aliases
+        is_unnamed = display_name.startswith("person-") and not has_aliases
+        row_title = "이름 없음" if is_unnamed else display_name
+        row_hint = (
+            "대표 이름을 비워 두고 애칭만 적으면 첫 애칭이 대표 이름으로 저장됩니다."
+            if is_unnamed
+            else "검색에 쓸 이름과 애칭을 함께 관리합니다."
+        )
+        name_placeholder = "대표 이름 입력" if is_unnamed else "이름 입력"
+        save_label = "이름 저장" if is_unnamed else "저장"
+        status_badge = (
+            '<span class="person-status-badge unnamed">이름 필요</span>'
+            if is_unnamed
+            else '<span class="person-status-badge named">이름 있음</span>'
+        )
         rows.append(
             f"""
             <form class="person-row{'  has-aliases' if has_aliases else ''}{'  unnamed' if is_unnamed else ''}" data-person-id="{int(person['id'])}" data-person-label="{escape(str(person['display_name']))}" data-person-search="{escape(search_text)}" data-media-count="{int(person.get('media_count') or 0)}" data-face-count="{int(person.get('face_count') or 0)}" data-named="{0 if is_unnamed else 1}">
@@ -529,17 +543,25 @@ def _render_people_manager(people: list[dict[str, Any]]) -> str:
                 <input type="checkbox" class="person-merge-checkbox" aria-label="Select {escape(str(person['display_name']))} for merge">
               </label>
               <div class="face-samples">{face_samples}</div>
-              <div>
-                <span class="person-photo-count">{int(person.get('media_count') or 0)}장</span>
-                <small class="person-id-hint" title="내부 ID">#{int(person['id'])}</small>
+              <div class="person-meta">
+                <div class="person-title-row">
+                  <strong class="person-title">{escape(row_title)}</strong>
+                  {status_badge}
+                </div>
+                <div class="person-metrics">
+                  <span class="person-photo-count">{int(person.get('media_count') or 0)}장</span>
+                  <span class="person-face-count">얼굴 {int(person.get('face_count') or 0)}회</span>
+                  <small class="person-id-hint" title="내부 ID">person-{int(person['id']):06d}</small>
+                </div>
+                <small class="person-row-hint">{escape(row_hint)}</small>
               </div>
-              <input name="display_name" value="{escape(str(person['display_name']))}" placeholder="이름 입력">
+              <input name="display_name" value="{escape('' if is_unnamed else display_name)}" placeholder="{name_placeholder}">
               <div class="alias-editor">
                 <input class="person-alias-input" name="aliases" value="{escape(aliases_csv)}" placeholder="애칭 입력, 쉼표로 구분">
                 <div class="alias-chips-container{' empty' if not has_aliases else ''}" title="저장된 애칭/병합된 다른 이름들">{alias_chips}</div>
               </div>
               <button class="btn-copy person-preview-trigger" type="button" data-person-id="{int(person['id'])}" data-person-label="{escape(str(person['display_name']))}">사진 보기</button>
-              <button class="btn-sm" type="submit">저장</button>
+              <button class="btn-sm" type="submit">{save_label}</button>
               <small class="person-save-state" aria-live="polite"></small>
             </form>
             """
@@ -547,13 +569,9 @@ def _render_people_manager(people: list[dict[str, Any]]) -> str:
     return "".join(rows)
 
 
-def _people_manager_summary(people: list[dict[str, Any]]) -> str:
-    count = len(people)
-    named = sum(
-        1
-        for person in people
-        if not str(person.get("display_name") or "").startswith("person-") or bool(person.get("aliases"))
-    )
+def _people_manager_summary(total_count: int, named_count: int) -> str:
+    count = total_count
+    named = named_count
     if count == 0:
         return "5회 이상 0명"
     return f"{count}명 · 이름 지정 {named}명"
@@ -727,8 +745,12 @@ async def dashboard(request: Request) -> HTMLResponse:
     ai_pack_pretrained = ai_pack["config"].get("pretrained", settings.semantic_clip_pretrained)
     online_ai_cmd, offline_ai_cmd, activate_ai_cmd = _clip_runtime_commands(settings)
     people = payload.get("people", [])
+    people_stats = payload.get("people_stats") or {}
     people_manager_html = _render_people_manager(people)
-    people_manager_summary = _people_manager_summary(people)
+    people_manager_summary = _people_manager_summary(
+        int(people_stats.get("total") or len(people)),
+        int(people_stats.get("named") or 0),
+    )
     people_json = json.dumps([{"id": p["id"], "display_name": p["display_name"]} for p in people])
 
     html = f"""<!doctype html>
@@ -1447,6 +1469,50 @@ async def dashboard(request: Request) -> HTMLResponse:
       align-items: center;
       margin: 12px 0 10px;
     }}
+    .people-queue-summary {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0 0;
+    }}
+    .people-queue-pill {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.7);
+      font-size: .8rem;
+      color: var(--muted);
+    }}
+    .people-mode-switch {{
+      display: inline-flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin: 8px 0 2px;
+    }}
+    .people-mode-btn {{
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.8);
+      color: var(--text);
+      font: .82rem "Inter", "Helvetica Neue", sans-serif;
+      cursor: pointer;
+    }}
+    .people-mode-btn.active {{
+      border-color: rgba(204,95,50,0.4);
+      background: rgba(204,95,50,0.12);
+      color: var(--accent);
+      font-weight: 800;
+    }}
+    .people-more-row {{
+      display: flex;
+      justify-content: center;
+      margin-top: 12px;
+    }}
     .people-tools input,
     .people-tools select,
     .person-preview-tools input {{
@@ -1466,7 +1532,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     .person-list {{ display: grid; gap: 8px; margin-top: 14px; }}
     .person-row {{
       display: grid;
-      grid-template-columns: auto minmax(150px, .75fr) minmax(150px, .75fr) minmax(160px, 1fr) minmax(220px, 1.4fr) auto auto minmax(72px, .35fr);
+      grid-template-columns: auto minmax(150px, .72fr) minmax(200px, 1.1fr) minmax(170px, .85fr) minmax(220px, 1.35fr) auto auto minmax(72px, .35fr);
       gap: 8px;
       align-items: start;
       padding: 8px;
@@ -1476,6 +1542,61 @@ async def dashboard(request: Request) -> HTMLResponse:
     }}
     .person-row.has-aliases {{
       border-left: 3px solid rgba(59,130,246,0.45);
+    }}
+    .person-row.unnamed {{
+      border-left: 3px solid rgba(204,95,50,0.45);
+      background: rgba(255,250,246,0.86);
+    }}
+    .person-meta {{
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }}
+    .person-title-row {{
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }}
+    .person-title {{
+      font-size: .92rem;
+      line-height: 1.2;
+    }}
+    .person-status-badge {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: .73rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }}
+    .person-status-badge.unnamed {{
+      color: var(--accent);
+      background: rgba(204,95,50,0.12);
+      border-color: rgba(204,95,50,0.22);
+    }}
+    .person-status-badge.named {{
+      color: var(--ok);
+      background: rgba(47,143,91,0.10);
+      border-color: rgba(47,143,91,0.18);
+    }}
+    .person-metrics {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: .78rem;
+    }}
+    .person-face-count {{
+      font-weight: 600;
+    }}
+    .person-row-hint {{
+      color: var(--muted);
+      line-height: 1.35;
     }}
     .alias-editor {{
       display: grid;
@@ -1964,12 +2085,22 @@ async def dashboard(request: Request) -> HTMLResponse:
         <summary>
           <div>
             <h2>사람 이름</h2>
-            <p class="sub">5회 이상 반복 감지된 얼굴에 이름이나 애칭을 붙이면 사진첩에서 바로 검색됩니다.</p>
+            <p class="sub">이름이 필요한 얼굴부터 빠르게 정리하고, 저장한 이름과 애칭은 바로 검색에 반영됩니다.</p>
           </div>
           <span class="disclosure-pill">{escape(people_manager_summary)} · 열기</span>
         </summary>
         <div class="manager-body">
-          <p class=”sub”>5회 이상 감지된 얼굴 그룹, 또는 이름을 붙인 인물이 표시됩니다. 예: “윤겸”, “아기”, “동이”처럼 부르는 이름을 저장하면 검색에 반영됩니다.</p>
+          <p class="sub">반복해서 나온 얼굴만 올리고, 이름이 비어 있으면 첫 애칭을 대표 이름으로 바로 승격합니다.</p>
+          <div class="people-queue-summary">
+            <span class="people-queue-pill">전체 <strong id="people-total-count">{int(people_stats.get("total") or len(people))}명</strong></span>
+            <span class="people-queue-pill">이름 필요 <strong id="people-unnamed-count">{int(people_stats.get("unnamed") or 0)}명</strong></span>
+            <span class="people-queue-pill">이름 있음 <strong id="people-named-count">{int(people_stats.get("named") or 0)}명</strong></span>
+          </div>
+          <div class="people-mode-switch" id="people-mode-switch">
+            <button type="button" class="people-mode-btn active" data-mode="unnamed">이름 필요만</button>
+            <button type="button" class="people-mode-btn" data-mode="named">이름 있는 사람</button>
+            <button type="button" class="people-mode-btn" data-mode="all">전체</button>
+          </div>
           <div class="people-tools">
             <input id="people-filter" type="search" placeholder="이름, 애칭, person id로 찾기">
             <select id="people-sort" aria-label="Sort people">
@@ -1979,7 +2110,7 @@ async def dashboard(request: Request) -> HTMLResponse:
               <option value="unnamed">이름 없음 먼저</option>
               <option value="name">이름순</option>
             </select>
-            <small id="people-visible-count">{len(people[:80])}명</small>
+            <small id="people-visible-count">0명</small>
           </div>
           <div class="people-merge-bar" id="people-merge-bar" hidden>
             <span id="people-merge-count">0개 선택</span>
@@ -1989,6 +2120,9 @@ async def dashboard(request: Request) -> HTMLResponse:
           </div>
           <div class="person-list" id="people-manager">
             {people_manager_html}
+          </div>
+          <div class="people-more-row">
+            <button type="button" class="btn-copy" id="people-load-more" hidden>더 보기</button>
           </div>
         </div>
       </details>
@@ -2009,7 +2143,7 @@ async def dashboard(request: Request) -> HTMLResponse:
 
       <article class="card full" id="ai-pack-card">
         <h2>이미지 AI 검색</h2>
-        <p class="sub">“바다에서 찍은 사진”, “baby beach”, “여자 셀카”처럼 자연어로 찾기 위한 로컬 AI 상태입니다.</p>
+        <p class="sub">"바다에서 찍은 사진", "baby beach", "여자 셀카"처럼 자연어로 찾기 위한 로컬 AI 상태입니다.</p>
         <div class="ai-steps" id="ai-pack-steps">
 
           <!-- Step 1: packages -->
@@ -2162,6 +2296,8 @@ async def dashboard(request: Request) -> HTMLResponse:
     const phase1SourceRootsStorageKey = "photome.dashboard.phase1.source_roots";
     const peopleManagerOpenStorageKey = "photome.dashboard.people_manager.open";
     let isPeopleMergeInProgress = false;
+    let isPeopleSaveInProgress = false;
+    const faceSamplePlaceholder = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
     let activeLibraryJob = {active_library_job_json};
     let schedulerSnapshot = {json.dumps(scheduler, default=str)};
     let performanceSnapshot = {json.dumps(performance, default=str)};
@@ -2411,21 +2547,97 @@ async def dashboard(request: Request) -> HTMLResponse:
     const peopleFilter = document.getElementById("people-filter");
     const peopleSort = document.getElementById("people-sort");
     const peopleVisibleCount = document.getElementById("people-visible-count");
+    const peopleTotalCount = document.getElementById("people-total-count");
+    const peopleUnnamedCount = document.getElementById("people-unnamed-count");
+    const peopleNamedCount = document.getElementById("people-named-count");
+    const peopleModeSwitch = document.getElementById("people-mode-switch");
+    const peopleLoadMore = document.getElementById("people-load-more");
+    const peopleStats = {json.dumps(people_stats)};
+    let peopleMode = "unnamed";
+    let peopleVisibleLimit = 24;
     if (peopleManagerCard) {{
       peopleManagerCard.open = localStorage.getItem(peopleManagerOpenStorageKey) === "true";
       peopleManagerCard.addEventListener("toggle", () => {{
         localStorage.setItem(peopleManagerOpenStorageKey, peopleManagerCard.open ? "true" : "false");
+        if (peopleManagerCard.open) queueFaceSampleLoading();
       }});
     }}
     function personRows() {{
       return Array.from(document.querySelectorAll(".person-row"));
+    }}
+    let faceSampleLoadTimer = null;
+    let faceSampleActiveLoads = 0;
+    function visiblePersonRows() {{
+      return personRows().filter((row) => !row.hidden && row.style.display !== "none");
+    }}
+    function queueFaceSampleLoading() {{
+      if (isPeopleSaveInProgress) return;
+      if (!peopleManagerCard?.open) return;
+      if (faceSampleLoadTimer) return;
+      faceSampleLoadTimer = window.setTimeout(() => {{
+        faceSampleLoadTimer = null;
+        loadVisibleFaceSamples();
+      }}, 120);
+    }}
+    function pauseFaceSampleLoading() {{
+      if (faceSampleLoadTimer) {{
+        window.clearTimeout(faceSampleLoadTimer);
+        faceSampleLoadTimer = null;
+      }}
+      document.querySelectorAll(".face-sample-img[data-loading='1']").forEach((image) => {{
+        image.removeAttribute("data-loading");
+        if (image.dataset.src) image.src = faceSamplePlaceholder;
+      }});
+      faceSampleActiveLoads = 0;
+    }}
+    function loadVisibleFaceSamples() {{
+      if (isPeopleSaveInProgress) return;
+      if (!peopleManagerCard?.open) return;
+      const pending = visiblePersonRows()
+        .flatMap((row) => Array.from(row.querySelectorAll(".face-sample-img[data-src]:not([data-loading='1'])")));
+      const availableSlots = Math.max(0, 2 - faceSampleActiveLoads);
+      pending.slice(0, availableSlots).forEach((image) => {{
+        const source = image.dataset.src;
+        if (!source) return;
+        image.dataset.loading = "1";
+        faceSampleActiveLoads += 1;
+        const done = () => {{
+          faceSampleActiveLoads = Math.max(0, faceSampleActiveLoads - 1);
+          image.removeAttribute("data-loading");
+          if (image.src.endsWith(source) || image.currentSrc.endsWith(source)) image.removeAttribute("data-src");
+          queueFaceSampleLoading();
+        }};
+        image.addEventListener("load", done, {{ once: true }});
+        image.addEventListener("error", done, {{ once: true }});
+        image.src = source;
+      }});
+    }}
+    function updatePeopleModeButtons() {{
+      peopleModeSwitch?.querySelectorAll(".people-mode-btn").forEach((button) => {{
+        button.classList.toggle("active", button.dataset.mode === peopleMode);
+      }});
+    }}
+    function refreshPeopleCounts() {{
+      const rows = personRows();
+      const named = rows.filter((row) => Number(row.dataset.named || 0) === 1).length;
+      const unnamed = rows.filter((row) => Number(row.dataset.named || 0) === 0).length;
+      const total = rows.length;
+      peopleStats.total = total;
+      peopleStats.named = named;
+      peopleStats.unnamed = unnamed;
+      if (peopleTotalCount) peopleTotalCount.textContent = `${{total}}명`;
+      if (peopleNamedCount) peopleNamedCount.textContent = `${{named}}명`;
+      if (peopleUnnamedCount) peopleUnnamedCount.textContent = `${{unnamed}}명`;
     }}
     function applyPeopleFilterAndSort() {{
       const query = (peopleFilter?.value || "").trim().toLowerCase();
       const sortMode = peopleSort?.value || "photos";
       const rows = personRows();
       rows.forEach((row) => {{
-        row.hidden = !!query && !(row.dataset.personSearch || "").includes(query);
+        const matchesQuery = !query || (row.dataset.personSearch || "").includes(query);
+        const isNamed = Number(row.dataset.named || 0) === 1;
+        const matchesMode = peopleMode === "all" || (peopleMode === "named" ? isNamed : !isNamed);
+        row.hidden = !(matchesQuery && matchesMode);
       }});
       rows.sort((a, b) => {{
         if (sortMode === "faces") return Number(b.dataset.faceCount || 0) - Number(a.dataset.faceCount || 0);
@@ -2436,12 +2648,26 @@ async def dashboard(request: Request) -> HTMLResponse:
       }});
       const list = document.getElementById("people-manager");
       rows.forEach((row) => list?.appendChild(row));
-      const visible = rows.filter((row) => !row.hidden).length;
-      if (peopleVisibleCount) peopleVisibleCount.textContent = `${{visible}} / ${{rows.length}}명`;
+      const matched = rows.filter((row) => !row.hidden);
+      matched.forEach((row, index) => {{
+        const withinLimit = index < peopleVisibleLimit;
+        row.style.display = withinLimit ? "" : "none";
+      }});
+      const visible = matched.slice(0, peopleVisibleLimit).length;
+      if (peopleVisibleCount) {{
+        const total = Number(peopleStats?.total || rows.length);
+        peopleVisibleCount.textContent = `${{visible}} / ${{matched.length}}명 표시 · 전체 ${{total}}명`;
+      }}
+      if (peopleLoadMore) {{
+        peopleLoadMore.hidden = matched.length <= peopleVisibleLimit;
+        peopleLoadMore.textContent = `더 보기 (${{Math.max(0, matched.length - peopleVisibleLimit)}}명 남음)`;
+      }}
+      updatePeopleModeButtons();
       updatePeopleMergeBar();
+      queueFaceSampleLoading();
     }}
     function selectedPersonRows() {{
-      return personRows().filter((row) => !row.hidden && row.querySelector(".person-merge-checkbox")?.checked);
+      return personRows().filter((row) => !row.hidden && row.style.display !== "none" && row.querySelector(".person-merge-checkbox")?.checked);
     }}
     function setPeopleMergeBusy(isBusy) {{
       isPeopleMergeInProgress = isBusy;
@@ -2484,8 +2710,20 @@ async def dashboard(request: Request) -> HTMLResponse:
     document.querySelectorAll(".person-merge-checkbox").forEach((checkbox) => {{
       checkbox.addEventListener("change", updatePeopleMergeBar);
     }});
+    peopleModeSwitch?.querySelectorAll(".people-mode-btn").forEach((button) => {{
+      button.addEventListener("click", () => {{
+        peopleMode = button.dataset.mode || "all";
+        peopleVisibleLimit = 24;
+        applyPeopleFilterAndSort();
+      }});
+    }});
+    peopleLoadMore?.addEventListener("click", () => {{
+      peopleVisibleLimit += 24;
+      applyPeopleFilterAndSort();
+    }});
     peopleFilter?.addEventListener("input", applyPeopleFilterAndSort);
     peopleSort?.addEventListener("change", applyPeopleFilterAndSort);
+    refreshPeopleCounts();
     applyPeopleFilterAndSort();
     peopleMergeButton?.addEventListener("click", async () => {{
       const rows = selectedPersonRows();
@@ -2518,6 +2756,19 @@ async def dashboard(request: Request) -> HTMLResponse:
       return input.value.split(",").map((v) => v.trim()).filter(Boolean);
     }}
     document.querySelectorAll(".person-row").forEach((form) => {{
+      function extractErrorMessage(raw) {{
+        if (!raw) return "오류";
+        try {{
+          const payload = JSON.parse(raw);
+          if (typeof payload?.detail === "string" && payload.detail.trim()) return payload.detail.trim();
+          if (Array.isArray(payload?.detail) && payload.detail.length) {{
+            const first = payload.detail[0];
+            if (typeof first?.msg === "string" && first.msg.trim()) return first.msg.trim();
+          }}
+        }} catch (_error) {{}}
+        const text = String(raw).trim();
+        return text || "오류";
+      }}
       form.addEventListener("submit", async (event) => {{
         event.preventDefault();
         const personId = form.dataset.personId;
@@ -2525,25 +2776,69 @@ async def dashboard(request: Request) -> HTMLResponse:
         const button = form.querySelector("button[type='submit']");
         const displayName = form.querySelector("input[name='display_name']").value.trim();
         const aliases = getAliasesFromForm(form);
-        if (!displayName) {{
+        if (!displayName && aliases.length === 0) {{
           if (state) state.textContent = "이름 필요";
           return;
         }}
         if (state) state.textContent = "저장 중";
         if (button) button.disabled = true;
+        isPeopleSaveInProgress = true;
+        pauseFaceSampleLoading();
         try {{
           const response = await fetch(`/people/${{personId}}`, {{
             method: "PATCH",
             headers: {{"content-type": "application/json"}},
             body: JSON.stringify({{display_name: displayName, aliases}}),
           }});
-          if (!response.ok) throw new Error(await response.text());
+          if (!response.ok) throw new Error(extractErrorMessage(await response.text()));
           if (state) state.textContent = "저장됨";
-          // Update form's data-person-label with new display name
-          form.dataset.personLabel = displayName;
+          const payload = await response.json();
+          const savedName = String(payload?.display_name || displayName).trim();
+          const savedAliases = Array.isArray(payload?.aliases) ? payload.aliases.map((value) => String(value).trim()).filter(Boolean) : [];
+          const isNamed = !!savedName && !savedName.startsWith("person-");
+          form.dataset.personLabel = savedName;
+          form.dataset.named = isNamed ? "1" : "0";
+          form.dataset.personSearch = [savedName, savedAliases.join(", "), `person-${{String(personId).padStart(6, "0")}}`].join(" ").toLowerCase();
+          form.querySelectorAll(".person-preview-trigger").forEach((previewButton) => {{
+            previewButton.dataset.personLabel = savedName;
+          }});
+          const displayNameInput = form.querySelector("input[name='display_name']");
+          if (displayNameInput) {{
+            displayNameInput.value = isNamed ? savedName : "";
+            displayNameInput.placeholder = isNamed ? "이름 입력" : "대표 이름 입력";
+          }}
+          const aliasInput = form.querySelector("input[name='aliases']");
+          if (aliasInput) {{
+            aliasInput.value = savedAliases.join(", ");
+          }}
+          const title = form.querySelector(".person-title");
+          if (title) title.textContent = isNamed ? savedName : "이름 없음";
+          const titleBadge = form.querySelector(".person-status-badge");
+          if (titleBadge) {{
+            titleBadge.textContent = isNamed ? "이름 있음" : "이름 필요";
+            titleBadge.classList.toggle("named", isNamed);
+            titleBadge.classList.toggle("unnamed", !isNamed);
+          }}
+          const helper = form.querySelector(".person-row-hint");
+          if (helper) helper.textContent = isNamed ? "검색에 쓸 이름과 애칭을 함께 관리합니다." : "대표 이름을 비워 두고 애칭만 적으면 첫 애칭이 대표 이름으로 저장됩니다.";
+          const aliasChipsContainer = form.querySelector(".alias-chips-container");
+          if (aliasChipsContainer) {{
+            aliasChipsContainer.innerHTML = savedAliases.length
+              ? savedAliases.map((alias) => `<span class="alias-chip">${{escapeHtml(alias)}}<button type="button" class="alias-remove" data-alias="${{escapeHtml(alias)}}" title="${{escapeHtml(alias)}} 제거">×</button></span>`).join("")
+              : '<span class="alias-chips-empty-hint">병합 시 여기에 표시</span>';
+            aliasChipsContainer.classList.toggle("empty", savedAliases.length === 0);
+          }}
+          form.classList.toggle("has-aliases", savedAliases.length > 0);
+          form.classList.toggle("unnamed", !isNamed);
+          if (button) button.textContent = isNamed ? "저장" : "이름 저장";
+          refreshPeopleCounts();
+          peopleVisibleLimit = Math.max(peopleVisibleLimit, 24);
+          applyPeopleFilterAndSort();
         }} catch (error) {{
-          if (state) state.textContent = "오류";
+          if (state) state.textContent = error instanceof Error ? error.message : "오류";
         }} finally {{
+          isPeopleSaveInProgress = false;
+          queueFaceSampleLoading();
           if (button) button.disabled = false;
         }}
       }});
@@ -2557,12 +2852,10 @@ async def dashboard(request: Request) -> HTMLResponse:
         if (!chip) return;
         const alias = removeBtn.dataset.alias || "";
         chip.remove();
-        // Update hidden input
         if (aliasInput) {{
           const updated = aliasInput.value.split(",").map((v) => v.trim()).filter((v) => v && v !== alias);
           aliasInput.value = updated.join(", ");
         }}
-        // If no chips remain, show hint
         if (container && container.querySelectorAll(".alias-chip").length === 0) {{
           container.classList.add("empty");
           container.innerHTML = '<span class="alias-chips-empty-hint">병합 시 여기에 표시</span>';
@@ -2833,7 +3126,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     }}
     // ─────────────────────────────────────────────────────────────────────
     async function refreshDashboardStatus() {{
-      if (isPeopleMergeInProgress) return;
+      if (isPeopleMergeInProgress || isPeopleSaveInProgress) return;
       try {{
         const response = await fetch("/status", {{ cache: "no-store" }});
         const payload = await response.json();
