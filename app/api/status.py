@@ -2310,6 +2310,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     const personPreviewSubtitle = document.getElementById("person-preview-subtitle");
     const personPreviewGrid = document.getElementById("person-preview-grid");
     const personPreviewClose = document.getElementById("person-preview-close");
+    const personPreviewCache = new Map();
     const previewBulkBar = document.getElementById("preview-bulk-bar");
     const previewBulkCount = document.getElementById("preview-bulk-count");
     const previewBulkTarget = document.getElementById("preview-bulk-target");
@@ -2368,6 +2369,15 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (personPreviewGrid) personPreviewGrid.innerHTML = "";
       if (previewBulkBar) previewBulkBar.hidden = true;
       document.body.style.overflow = "";
+    }}
+    function renderPersonPreview(payload, fallbackLabel, fallbackId) {{
+      const items = payload?.items || [];
+      if (personPreviewTitle) personPreviewTitle.textContent = payload?.person?.display_name || fallbackLabel || `person-${{fallbackId}}`;
+      if (personPreviewSubtitle) personPreviewSubtitle.textContent = `${{items.length}}개 사진`;
+      personPreviewGrid.innerHTML = items.length
+        ? items.map(personPreviewCard).join("")
+        : '<div class="person-preview-empty">No active photos for this person.</div>';
+      refreshReassignSelects();
     }}
     function selectedPreviewCards() {{
       return Array.from(personPreviewGrid?.querySelectorAll(".person-preview-card") || [])
@@ -2512,17 +2522,17 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (personPreviewTitle) personPreviewTitle.textContent = label || `person-${{personId}}`;
       if (personPreviewSubtitle) personPreviewSubtitle.textContent = "불러오는 중";
       personPreviewGrid.innerHTML = '<div class="person-preview-empty">Loading</div>';
+      const cached = personPreviewCache.get(String(personId));
+      if (cached) {{
+        renderPersonPreview(cached, label, personId);
+        return;
+      }}
       try {{
         const response = await fetch(`/people/${{personId}}/preview?limit=30`);
         if (!response.ok) throw new Error(await response.text());
         const payload = await response.json();
-        const items = payload.items || [];
-        if (personPreviewTitle) personPreviewTitle.textContent = payload.person?.display_name || label || `person-${{personId}}`;
-        if (personPreviewSubtitle) personPreviewSubtitle.textContent = `${{items.length}}개 사진`;
-        personPreviewGrid.innerHTML = items.length
-          ? items.map(personPreviewCard).join("")
-          : '<div class="person-preview-empty">No active photos for this person.</div>';
-        refreshReassignSelects();
+        personPreviewCache.set(String(personId), payload);
+        renderPersonPreview(payload, label, personId);
       }} catch (error) {{
         if (personPreviewSubtitle) personPreviewSubtitle.textContent = "오류";
         personPreviewGrid.innerHTML = '<div class="person-preview-empty">Failed to load preview.</div>';
@@ -2536,7 +2546,11 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (event.key === "Escape" && personPreviewModal && !personPreviewModal.hidden) closePersonPreview();
     }});
     document.querySelectorAll(".person-preview-trigger").forEach((button) => {{
-      button.addEventListener("click", () => openPersonPreview(button.dataset.personId, button.dataset.personLabel));
+      button.addEventListener("click", (event) => {{
+        event.preventDefault();
+        event.stopPropagation();
+        openPersonPreview(button.dataset.personId, button.dataset.personLabel);
+      }});
     }});
     const peopleMergeBar = document.getElementById("people-merge-bar");
     const peopleMergeCount = document.getElementById("people-merge-count");
