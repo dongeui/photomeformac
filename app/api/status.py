@@ -4105,6 +4105,39 @@ async def status(request: Request) -> dict[str, Any]:
             )
             or 0
         )
+        people_candidate_filter = or_(
+            func.count(Face.id).filter(active_media_status) >= 5,
+            Person.display_name.not_like("person-%"),
+        )
+        people_total_count = int(
+            session.scalar(
+                select(func.count())
+                .select_from(
+                    select(Person.id)
+                    .outerjoin(Face, Face.person_id == Person.id)
+                    .outerjoin(MediaFile, MediaFile.file_id == Face.file_id)
+                    .group_by(Person.id)
+                    .having(people_candidate_filter)
+                    .subquery()
+                )
+            )
+            or 0
+        )
+        people_named_count = int(
+            session.scalar(
+                select(func.count())
+                .select_from(
+                    select(Person.id)
+                    .outerjoin(Face, Face.person_id == Person.id)
+                    .outerjoin(MediaFile, MediaFile.file_id == Face.file_id)
+                    .group_by(Person.id)
+                    .having(people_candidate_filter, Person.display_name.not_like("person-%"))
+                    .subquery()
+                )
+            )
+            or 0
+        )
+        people_loaded_limit = 1000
         people_rows = session.execute(
             select(
                 Person,
@@ -4114,14 +4147,9 @@ async def status(request: Request) -> dict[str, Any]:
             .outerjoin(Face, Face.person_id == Person.id)
             .outerjoin(MediaFile, MediaFile.file_id == Face.file_id)
             .group_by(Person.id)
-            .having(
-                or_(
-                    func.count(Face.id).filter(active_media_status) >= 5,
-                    Person.display_name.not_like("person-%"),
-                )
-            )
+            .having(people_candidate_filter)
             .order_by(func.count(Face.id).filter(active_media_status).desc(), Person.id.asc())
-            .limit(80)
+            .limit(people_loaded_limit)
         ).all()
         people_payload = []
         for person, face_count, media_count in people_rows:
@@ -4228,6 +4256,13 @@ async def status(request: Request) -> dict[str, Any]:
                 "breakdown": catalog_breakdown,
             },
             "people": people_payload,
+            "people_stats": {
+                "total": people_total_count,
+                "named": people_named_count,
+                "unnamed": max(0, people_total_count - people_named_count),
+                "loaded": len(people_payload),
+                "load_limit": people_loaded_limit,
+            },
             "jobs": {
                 **pipeline_snapshot["jobs"],
                 "recent": [

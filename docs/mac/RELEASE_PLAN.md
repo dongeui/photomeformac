@@ -175,6 +175,7 @@ PHOTOME_NOTARY_PROFILE=photome-notary scripts/notarize_mac_app.sh
 
 ## 진행 기록 (가장 최근부터)
 
+- 2026-05-30: people_stats + 1000명 cap으로 확장. 실데이터(1.14GB DB, 26,787장/176명) 기준 UI/UX 통합 점검: /healthz 200, /status 200, /dashboard 346KB+95 새 컴포넌트, /search?q=동이 적중, /people/40/preview 3장, POST /settings/performance 정상 저장 (워커 2/스레드 8, profile "절약"/"보통"), alias 승격(빈 이름+alias "테스트동이" → display_name "테스트동이") 확인 후 SQL 원복. 184 tests 회귀 없음.
 - 2026-05-30: S2.2/2.3/2.4 완료 — build 스크립트가 iconset filter, Finder DMG layout(osascript), .venv311/.venv 자동 탐색 + GitHub Actions workflow에 bundle_python input 추가.
 - 2026-05-30: S0.2b 완료 — 대시보드에 리소스 설정 카드 추가 (CPU 슬라이더, AI threads, batch sizes). 184 tests pass.
 - 2026-05-30: S1.1-1.4 + S3.4 완료 — drag&drop, notifications, dock badge, quit confirmation, crash recovery. swift build OK.
