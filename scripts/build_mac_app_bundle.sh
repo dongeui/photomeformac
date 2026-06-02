@@ -13,7 +13,10 @@ DMG_STAGING="$DIST_DIR/dmg-staging"
 DMG_PATH="$DIST_DIR/$APP_NAME.dmg"
 SIGN_IDENTITY="${PHOTOME_MAC_SIGN_IDENTITY:--}"
 BUNDLE_BACKEND="${PHOTOME_BUNDLE_BACKEND:-1}"
-BUNDLE_PYTHON="${PHOTOME_BUNDLE_PYTHON:-0}"
+# CLIP은 정식 배포에서 항상 켜진 상태로 가는 정책이므로 Python venv도 기본 번들.
+BUNDLE_PYTHON="${PHOTOME_BUNDLE_PYTHON:-1}"
+# CLIP 모델 weights도 기본 번들 (사용자가 첫 실행 시 인터넷 다운로드 안 해도 됨).
+BUNDLE_WEIGHTS="${PHOTOME_BUNDLE_WEIGHTS:-1}"
 VERSION="${PHOTOME_MAC_VERSION:-0.1.0}"
 BUILD_NUMBER="${PHOTOME_MAC_BUILD:-1}"
 BUNDLE_ID="${PHOTOME_MAC_BUNDLE_ID:-com.photome.mac}"
@@ -117,19 +120,75 @@ if [[ "$BUNDLE_PYTHON" == "1" ]]; then
     PY_SRC="$PHOTOME_PYTHON_BUNDLE_SRC"
   else
     PY_SRC=""
-    for candidate in "$ROOT_DIR/.venv311" "$ROOT_DIR/.venv" "$ROOT_DIR/venv"; do
+    for candidate in \
+      "$ROOT_DIR/.venv311" \
+      "$ROOT_DIR/.venv" \
+      "$ROOT_DIR/venv" \
+      "$HOME/Desktop/code/photome/.venv311" \
+      "$HOME/Desktop/code/photome/.venv"; do
       if [[ -d "$candidate" && -x "$candidate/bin/python3" ]]; then
-        PY_SRC="$candidate"
-        break
+        # ensure CLIP deps actually installed in this venv
+        if "$candidate/bin/python3" -c "import open_clip, torch" >/dev/null 2>&1; then
+          PY_SRC="$candidate"
+          break
+        fi
       fi
     done
   fi
   if [[ -z "$PY_SRC" || ! -d "$PY_SRC" ]]; then
-    echo "PHOTOME_BUNDLE_PYTHON=1 이지만 Python runtime source를 찾을 수 없습니다 (PHOTOME_PYTHON_BUNDLE_SRC 또는 ./.venv311/./.venv 필요)" >&2
+    echo "PHOTOME_BUNDLE_PYTHON=1 이지만 CLIP까지 설치된 venv를 찾지 못했습니다." >&2
+    echo "  방법 1: 'python3.11 -m venv .venv311 && .venv311/bin/pip install -e .[clip]' 후 재실행" >&2
+    echo "  방법 2: PHOTOME_PYTHON_BUNDLE_SRC=/path/to/venv 환경변수 지정" >&2
     exit 2
   fi
   rsync -a --delete "$PY_SRC/" "$RESOURCES_DIR/python-runtime/"
+  # venv는 시스템 Python framework로 향하는 절대 경로 symlink를 자주 포함한다.
+  # 번들 안에 들어가면 대상이 깨지므로 codesign이 거부한다. broken symlink는 제거하고
+  # bin/ 안 인터프리터는 실제 파일 사본으로 교체한다.
+  find "$RESOURCES_DIR/python-runtime" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+  for link in "$RESOURCES_DIR/python-runtime/bin"/python*; do
+    [[ -L "$link" ]] || continue
+    target="$(readlink "$link")"
+    if [[ "$target" != /* ]]; then
+      target="$RESOURCES_DIR/python-runtime/bin/$target"
+    fi
+    if [[ -f "$target" ]]; then
+      rm -f "$link"
+      cp "$target" "$link"
+    fi
+  done
   echo "bundled python runtime from: $PY_SRC"
+fi
+
+if [[ "$BUNDLE_WEIGHTS" == "1" ]]; then
+  WEIGHTS_DST="$RESOURCES_DIR/preinstalled-models/huggingface/hub"
+  if [[ -n "${PHOTOME_WEIGHTS_SRC:-}" ]]; then
+    WEIGHTS_SRC_CANDIDATES=("$PHOTOME_WEIGHTS_SRC")
+  else
+    WEIGHTS_SRC_CANDIDATES=(
+      "$HOME/.cache/huggingface/hub"
+      "$HOME/Desktop/code/photome/data/models/hf/hub"
+      "$HOME/Desktop/code/photome/model_cache/hf/hub"
+    )
+  fi
+  COPIED=0
+  for src in "${WEIGHTS_SRC_CANDIDATES[@]}"; do
+    if [[ -d "$src" ]]; then
+      MODEL_DIR=$(find "$src" -maxdepth 1 -type d -name "models--timm--vit_base_patch32_clip_224.openai" -print -quit)
+      if [[ -n "$MODEL_DIR" ]]; then
+        mkdir -p "$WEIGHTS_DST"
+        rsync -a "$MODEL_DIR" "$WEIGHTS_DST/"
+        echo "bundled CLIP weights from: $MODEL_DIR"
+        COPIED=1
+        break
+      fi
+    fi
+  done
+  if [[ "$COPIED" != "1" ]]; then
+    echo "warning: CLIP ViT-B-32 weights not found in default cache paths;" >&2
+    echo "         앱 첫 실행 시 사용자가 모델 다운로드 버튼을 눌러야 합니다." >&2
+    echo "         번들에 미리 넣으려면 PHOTOME_WEIGHTS_SRC=/path/to/huggingface/hub 환경변수 지정." >&2
+  fi
 fi
 
 codesign --force --deep --options runtime --sign "$SIGN_IDENTITY" "$APP_BUNDLE"

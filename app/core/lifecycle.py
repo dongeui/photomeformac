@@ -19,7 +19,7 @@ from app.services.metadata.service import MetadataService
 from app.services.processing.pipeline import ProcessingPipeline
 from app.services.search.hybrid import clear_query_cache
 from app.services.search.vector import invalidate_global_vector_index
-from app.services.scanner.service import ScannerConfig, ScannerService
+from app.services.scanner.service import DirMtimeCache, ScannerConfig, ScannerService
 from app.services.thumbnail.service import ThumbnailConfig, ThumbnailService
 from app.services.video.service import VideoKeyframeConfig, VideoKeyframeService
 from app.scheduler.service import SchedulerService
@@ -84,6 +84,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if settings.offline_mode
         else ChainedGeocodingProvider((local_geocoder, NominatimProvider()))
     )
+    dir_mtime_cache = DirMtimeCache()
+    dir_mtime_cache.attach_persistence(settings.data_root / "scan_cache.json")
     pipeline = ProcessingPipeline(
         database.session_factory,
         scanner,
@@ -109,6 +111,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         asset_processing_workers=settings.asset_processing_workers,
         semantic_maintenance_batch_size=settings.semantic_maintenance_batch_size,
         semantic_manual_batch_size=settings.semantic_manual_batch_size,
+        dir_mtime_cache=dir_mtime_cache,
     )
     recovery = pipeline.recover_interrupted_library_jobs()
     scheduler = SchedulerService(settings, pipeline, database.session_factory)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 import errno
+import json
 import logging
 import os
 from pathlib import Path
@@ -52,8 +53,13 @@ class DirMtimeCache:
     Maps absolute directory path → mtime_ns from the last completed scan.
     When a directory's mtime is unchanged the caller can skip re-walking it
     and use the previously-recorded file list instead.
+
+    Persisted to JSON on disk so that the next backend boot can skip rewalking
+    unchanged directories — without this, every fresh process treats the whole
+    library as if it were never scanned.
     """
     _mtimes: dict[str, int] = field(default_factory=dict)
+    _persist_path: Path | None = None
 
     def is_changed(self, dir_path: Path, current_mtime_ns: int) -> bool:
         key = str(dir_path)
@@ -67,6 +73,40 @@ class DirMtimeCache:
 
     def clear(self) -> None:
         self._mtimes.clear()
+
+    def __len__(self) -> int:
+        return len(self._mtimes)
+
+    def attach_persistence(self, path: Path) -> None:
+        """Bind this cache to a JSON file. Loads existing entries if present."""
+        self._persist_path = path
+        if not path.is_file():
+            return
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("scan cache load failed", extra={"path": str(path), "error": str(exc)})
+            return
+        if not isinstance(payload, dict):
+            return
+        loaded: dict[str, int] = {}
+        for key, value in payload.items():
+            try:
+                loaded[str(key)] = int(value)
+            except (TypeError, ValueError):
+                continue
+        self._mtimes = loaded
+
+    def save(self) -> None:
+        if self._persist_path is None:
+            return
+        try:
+            self._persist_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = self._persist_path.with_suffix(self._persist_path.suffix + ".tmp")
+            tmp_path.write_text(json.dumps(self._mtimes, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp_path, self._persist_path)
+        except OSError as exc:
+            logger.warning("scan cache save failed", extra={"path": str(self._persist_path), "error": str(exc)})
 
 
 class ScannerService:

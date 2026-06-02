@@ -118,12 +118,9 @@ final class BackendSupervisor: ObservableObject {
             UserDefaults.standard.set(lanEnabled, forKey: Self.lanEnabledDefaultsKey)
         }
     }
-    @Published var clipEnabled: Bool {
-        didSet {
-            guard clipEnabled != oldValue else { return }
-            UserDefaults.standard.set(clipEnabled, forKey: Self.clipEnabledDefaultsKey)
-        }
-    }
+    /// CLIP 이미지 AI는 정식 배포에서 항상 켜진 상태로 동작한다 (DMG에 PyTorch +
+    /// weights 동봉). 사용자에게 토글을 노출하지 않는다.
+    let clipEnabled: Bool = true
     @Published var offlineMode: Bool {
         didSet {
             guard offlineMode != oldValue else { return }
@@ -143,7 +140,6 @@ final class BackendSupervisor: ObservableObject {
 
     private static let sourceRootsDefaultsKey = "PhotomeSourceRoots"
     private static let lanEnabledDefaultsKey = "PhotomeLANEnabled"
-    private static let clipEnabledDefaultsKey = "PhotomeClipEnabled"
     private static let offlineModeDefaultsKey = "PhotomeOfflineMode"
     private static let maxCrashRestartAttempts: Int = 1
 
@@ -151,11 +147,6 @@ final class BackendSupervisor: ObservableObject {
         self.port = port
         self.sourceRoots = UserDefaults.standard.stringArray(forKey: Self.sourceRootsDefaultsKey) ?? []
         self.lanEnabled = UserDefaults.standard.bool(forKey: Self.lanEnabledDefaultsKey)
-        if UserDefaults.standard.object(forKey: Self.clipEnabledDefaultsKey) == nil {
-            self.clipEnabled = true
-        } else {
-            self.clipEnabled = UserDefaults.standard.bool(forKey: Self.clipEnabledDefaultsKey)
-        }
         if UserDefaults.standard.object(forKey: Self.offlineModeDefaultsKey) == nil {
             self.offlineMode = true
         } else {
@@ -246,6 +237,7 @@ final class BackendSupervisor: ObservableObject {
             let python = try Self.findPythonExecutable(repoRoot: repoRoot)
             let appDataRoot = Self.defaultAppDataRoot()
             try FileManager.default.createDirectory(at: appDataRoot, withIntermediateDirectories: true)
+            Self.seedPreinstalledModels(appDataRoot: appDataRoot)
             let logFileURL = try Self.prepareLogFile(appDataRoot: appDataRoot)
             self.logFileURL = logFileURL
 
@@ -431,15 +423,6 @@ final class BackendSupervisor: ObservableObject {
 
     func toggleLAN() {
         lanEnabled.toggle()
-        if process != nil {
-            restart()
-        }
-    }
-
-    func toggleClipEnabled() {
-        clipEnabled.toggle()
-        aiPackStatus = nil
-        statusMessage = clipEnabled ? "이미지 AI를 켰습니다." : "이미지 AI를 껐습니다."
         if process != nil {
             restart()
         }
@@ -843,6 +826,34 @@ final class BackendSupervisor: ObservableObject {
     private static func defaultAppDataRoot() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         return base.appendingPathComponent("Photome", isDirectory: true)
+    }
+
+    /// 번들에 들어있는 CLIP weights를 사용자 데이터 폴더로 한 번 복사한다.
+    /// 두 번째 실행부터는 이미 들어있어 빠르게 skip. 번들이 없거나 이미 캐시가 있으면 noop.
+    private static func seedPreinstalledModels(appDataRoot: URL) {
+        let userHub = appDataRoot
+            .appendingPathComponent("models", isDirectory: true)
+            .appendingPathComponent("huggingface", isDirectory: true)
+            .appendingPathComponent("hub", isDirectory: true)
+        let bundled = Bundle.main.resourceURL?
+            .appendingPathComponent("preinstalled-models", isDirectory: true)
+            .appendingPathComponent("huggingface", isDirectory: true)
+            .appendingPathComponent("hub", isDirectory: true)
+        guard let bundledHub = bundled,
+              FileManager.default.fileExists(atPath: bundledHub.path) else { return }
+        do {
+            try FileManager.default.createDirectory(at: userHub, withIntermediateDirectories: true)
+            let entries = try FileManager.default.contentsOfDirectory(at: bundledHub,
+                                                                      includingPropertiesForKeys: nil)
+            for entry in entries {
+                let dest = userHub.appendingPathComponent(entry.lastPathComponent)
+                if FileManager.default.fileExists(atPath: dest.path) { continue }
+                try FileManager.default.copyItem(at: entry, to: dest)
+            }
+        } catch {
+            // 복사 실패는 치명적이지 않다. 사용자가 첫 검색 시 다운로드 fallback 가능.
+            NSLog("seedPreinstalledModels failed: \(error)")
+        }
     }
 
     private static func createDiagnosticsBundle(

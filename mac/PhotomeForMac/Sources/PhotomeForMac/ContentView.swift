@@ -131,10 +131,6 @@ struct ContentView: View {
                 backend.toggleOfflineMode()
             }
 
-            Button(backend.clipEnabled ? "이미지 AI 켜짐" : "이미지 AI 꺼짐") {
-                backend.toggleClipEnabled()
-            }
-
             Button("모델 폴더") {
                 backend.openModelCache()
             }

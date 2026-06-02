@@ -20,6 +20,24 @@ from app.services.scanner.service import DirMtimeCache, ScannerService, _path_ex
 logger = logging.getLogger(__name__)
 
 
+def _scan_progress_message(total: int, current: int, created: int, updated: int) -> str:
+    """Human-friendly Korean copy that distinguishes 'checked' vs 'actually changed'.
+
+    The pipeline iterates every scan record (potentially every photo seen on the
+    NAS) just to compare fingerprints, so the legacy "{total}개 처리 중" message
+    misled users into thinking the whole library was being reprocessed.
+    """
+    if total == 0:
+        return "변경된 사진이 없습니다."
+    changed = created + updated
+    if changed:
+        return (
+            f"{total}장 검사 중 ({current}/{total}) · "
+            f"신규 {created}장, 갱신 {updated}장 처리 중"
+        )
+    return f"{total}장 검사 중 ({current}/{total}) · 변경 없음"
+
+
 @dataclass(frozen=True)
 class IncrementalScanSummary:
     scanned: int = 0
@@ -36,12 +54,15 @@ class IncrementalScanService:
         scanner: ScannerService,
         fingerprint_service: FingerprintService,
         metadata_service: MetadataService,
+        *,
+        dir_mtime_cache: DirMtimeCache | None = None,
     ) -> None:
         self._scanner = scanner
         self._fingerprint_service = fingerprint_service
         self._metadata_service = metadata_service
-        # Persists across scan invocations to enable delta scanning
-        self._dir_mtime_cache = DirMtimeCache()
+        # Persists across scan invocations (and across backend restarts when
+        # attach_persistence has been set on the cache) to enable delta scanning.
+        self._dir_mtime_cache = dir_mtime_cache or DirMtimeCache()
 
     def run(self, session: Session, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> IncrementalScanSummary:
         catalog = MediaCatalog(session)
@@ -123,7 +144,7 @@ class IncrementalScanService:
             progress_callback(
                 {
                     "stage": "processing_scan_records",
-                    "message": f"{total}개의 파일을 찾았습니다. 사진 정보를 갱신 중입니다 (0/{total}).",
+                    "message": _scan_progress_message(total, 0, 0, 0),
                     "files_found": total,
                     "scan": {"current": 0, "total": total, "succeeded": 0, "failed": 0},
                 }
@@ -155,7 +176,7 @@ class IncrementalScanService:
                     progress_callback(
                         {
                             "stage": "processing_scan_records",
-                            "message": f"{total}개의 파일을 찾았습니다. 사진 정보를 갱신 중입니다 ({index}/{total}).",
+                            "message": _scan_progress_message(total, index, created, updated),
                             "files_found": total,
                             "current_path": str(scan_record.path),
                             "scan": {
@@ -205,7 +226,7 @@ class IncrementalScanService:
                 progress_callback(
                     {
                         "stage": "processing_scan_records",
-                        "message": f"{total}개의 파일을 찾았습니다. 사진 정보를 갱신 중입니다 ({index}/{total}).",
+                        "message": _scan_progress_message(total, index, created, updated),
                         "files_found": total,
                         "current_path": str(scan_record.path),
                         "scan": {
@@ -235,6 +256,9 @@ class IncrementalScanService:
         else:
             missing = catalog.mark_missing_except(seen_paths, active_source_roots)
         session.commit()
+        # Persist directory mtime cache so the next backend boot skips unchanged
+        # directories instead of treating the whole library as new.
+        self._dir_mtime_cache.save()
         return IncrementalScanSummary(
             scanned=scanned,
             created=created,

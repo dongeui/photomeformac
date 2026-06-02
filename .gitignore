@@ -38,3 +38,12 @@ photos/
 derived_root/*
 !derived_root/.gitkeep
 !data/.gitkeep
+
+# Local derived / cache assets — never commit these
+data/derived/
+data/scan_cache.json
+data/*.sqlite*
+data/photome*.bak
+data/recovery/
+data/models/
+data/*.txt

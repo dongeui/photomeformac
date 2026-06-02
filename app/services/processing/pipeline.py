@@ -42,7 +42,7 @@ from app.services.metadata.service import MetadataService
 from app.services.ocr import OCRResult, extract as extract_ocr
 from app.services.processing.incremental import IncrementalScanService, IncrementalScanSummary
 from app.services.processing.registry import MediaCatalog, build_derived_asset_location
-from app.services.scanner.service import ScannerService
+from app.services.scanner.service import DirMtimeCache, ScannerService
 from app.services.semantic import SemanticCatalog
 from app.services.thumbnail.service import ThumbnailService
 from app.services.video.service import VideoKeyframeService
@@ -152,6 +152,7 @@ class ProcessingPipeline:
         asset_processing_workers: int = 1,
         semantic_maintenance_batch_size: int = SEMANTIC_MAINTENANCE_BATCH_SIZE,
         semantic_manual_batch_size: int = SEMANTIC_MANUAL_BATCH_SIZE,
+        dir_mtime_cache: DirMtimeCache | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._scanner = scanner
@@ -179,6 +180,7 @@ class ProcessingPipeline:
         self._asset_processing_workers = max(1, min(asset_worker_cap(), int(asset_processing_workers or 1)))
         self._semantic_maintenance_batch_size = max(50, min(5000, int(semantic_maintenance_batch_size or SEMANTIC_MAINTENANCE_BATCH_SIZE)))
         self._semantic_manual_batch_size = max(50, min(5000, int(semantic_manual_batch_size or SEMANTIC_MANUAL_BATCH_SIZE)))
+        self._dir_mtime_cache = dir_mtime_cache or DirMtimeCache()
         self._semantic_maintenance_lock = Lock()
         self._library_submit_lock = Lock()
 
@@ -845,6 +847,7 @@ class ProcessingPipeline:
                     scanner,
                     self._fingerprint_service,
                     self._metadata_service,
+                    dir_mtime_cache=self._dir_mtime_cache,
                 ).run(session, progress_callback=scan_progress)
             self._set_job_progress(
                 session,
