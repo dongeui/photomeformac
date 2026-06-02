@@ -53,9 +53,10 @@ def test_content_view_shows_selected_source_roots_ai_pack_and_quick_actions() ->
         "mac/PhotomeForMac/Sources/PhotomeForMac/ContentView.swift"
     ).read_text(encoding="utf-8")
 
-    assert 'if !backend.sourceRoots.isEmpty {' in content
+    assert 'let hasFolders = !backend.sourceRoots.isEmpty' in content
     assert 'Text("선택된 폴더")' in content
     assert 'ForEach(backend.sourceRoots, id: \\.self)' in content
+    assert 'backend.removeSourceRoot(path)' in content
     assert 'private var aiPackPanel: some View {' in content
     assert 'private var quickActionsPanel: some View {' in content
     assert 'Button("전체 동기화 시작")' in content

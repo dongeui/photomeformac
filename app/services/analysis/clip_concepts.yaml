@@ -243,6 +243,625 @@ concepts:
       - a music concert stage
     threshold: 0.245
     tag_type: auto_event
+  # ==== Fashion / accessories ====
+  - tag: hat
+    prompts:
+      - a person wearing a hat
+      - a baseball cap close up
+      - a hat on a table
+    threshold: 0.246
+    tag_type: auto_object
+  - tag: glasses
+    prompts:
+      - a person wearing glasses
+      - eyeglasses close up
+      - sunglasses on a face
+    threshold: 0.246
+    tag_type: auto_object
+  - tag: bag
+    prompts:
+      - a handbag or backpack
+      - a person carrying a bag
+      - a tote bag close up
+    threshold: 0.244
+    tag_type: auto_object
+  - tag: shoes
+    prompts:
+      - a pair of shoes
+      - sneakers on the floor
+      - shoes worn by a person
+    threshold: 0.246
+    tag_type: auto_object
+  - tag: umbrella
+    prompts:
+      - a person holding an umbrella
+      - an open umbrella in the rain
+      - colorful umbrellas
+    threshold: 0.25
+    tag_type: auto_object
+  - tag: watch
+    prompts:
+      - a wristwatch on a wrist
+      - a watch close up
+      - a luxury wristwatch
+    threshold: 0.25
+    tag_type: auto_object
+  - tag: mask
+    prompts:
+      - a person wearing a face mask
+      - a surgical mask close up
+      - someone wearing a covid mask
+    threshold: 0.248
+    tag_type: auto_object
+  - tag: scarf
+    prompts:
+      - a person wearing a scarf
+      - a winter scarf around the neck
+      - a colorful scarf
+    threshold: 0.252
+    tag_type: auto_object
+  - tag: jewelry
+    prompts:
+      - a piece of jewelry
+      - a necklace or earrings
+      - a ring on a finger
+    threshold: 0.25
+    tag_type: auto_object
+  - tag: suit
+    prompts:
+      - a person in a formal suit
+      - a man wearing a business suit
+      - a suit and tie
+    threshold: 0.246
+    tag_type: auto_object
+  # ==== Electronics ====
+  - tag: phone
+    prompts:
+      - a smartphone close up
+      - a person holding a phone
+      - a mobile phone on a table
+    threshold: 0.246
+    tag_type: auto_object
+  - tag: computer
+    prompts:
+      - a laptop computer
+      - a desktop computer with monitor
+      - a person using a laptop
+    threshold: 0.244
+    tag_type: auto_object
+  - tag: camera
+    prompts:
+      - a dslr camera
+      - a person holding a camera
+      - a camera close up
+    threshold: 0.248
+    tag_type: auto_object
+  - tag: tv
+    prompts:
+      - a flat screen tv
+      - a television in a living room
+      - a tv on a wall
+    threshold: 0.246
+    tag_type: auto_object
+  - tag: headphone
+    prompts:
+      - a pair of headphones
+      - earphones close up
+      - someone wearing headphones
+    threshold: 0.246
+    tag_type: auto_object
+  - tag: speaker
+    prompts:
+      - a bluetooth speaker
+      - audio speakers on a table
+      - a music speaker close up
+    threshold: 0.25
+    tag_type: auto_object
+  - tag: microwave
+    prompts:
+      - a microwave oven
+      - a kitchen microwave appliance
+      - a microwave on a counter
+    threshold: 0.252
+    tag_type: auto_object
+  - tag: fan
+    prompts:
+      - an electric fan
+      - a desk fan blowing air
+      - a ceiling fan
+    threshold: 0.252
+    tag_type: auto_object
+  # ==== Animal sub-categories ====
+  - tag: dog
+    prompts:
+      - a photo of a dog
+      - a puppy close up
+      - a dog on a leash
+    threshold: 0.244
+    tag_type: auto_object
+  - tag: cat
+    prompts:
+      - a photo of a cat
+      - a kitten close up
+      - a cat sleeping
+    threshold: 0.244
+    tag_type: auto_object
+  - tag: bird
+    prompts:
+      - a bird in nature
+      - a small bird close up
+      - a bird flying or perched
+    threshold: 0.246
+    tag_type: auto_object
+  - tag: fish
+    prompts:
+      - fish swimming in water
+      - tropical fish in an aquarium
+      - a fish close up
+    threshold: 0.248
+    tag_type: auto_object
+  - tag: horse
+    prompts:
+      - a horse standing
+      - a horse running outdoors
+      - a horse in a field
+    threshold: 0.25
+    tag_type: auto_object
+  - tag: cow
+    prompts:
+      - a cow grazing in a field
+      - a dairy cow close up
+      - cattle on a farm
+    threshold: 0.252
+    tag_type: auto_object
+  - tag: sheep
+    prompts:
+      - sheep in a meadow
+      - a flock of sheep
+      - a sheep close up
+    threshold: 0.252
+    tag_type: auto_object
+  - tag: butterfly
+    prompts:
+      - a butterfly on a flower
+      - a colorful butterfly
+      - a butterfly with open wings
+    threshold: 0.252
+    tag_type: auto_object
+  # ==== Food sub-categories ====
+  - tag: ramen
+    prompts:
+      - a bowl of ramen noodles
+      - japanese ramen with broth
+      - a noodle soup with toppings
+    threshold: 0.252
+    tag_type: auto_object
+  - tag: pizza
+    prompts:
+      - a pizza on a plate
+      - a slice of pizza
+      - a pepperoni pizza
+    threshold: 0.252
+    tag_type: auto_object
+  - tag: sushi
+    prompts:
+      - a plate of sushi
+      - sushi rolls and rice
+      - nigiri sushi close up
+    threshold: 0.252
+    tag_type: auto_object
+  - tag: sandwich
+    prompts:
+      - a sandwich on a plate
+      - a club sandwich
+      - a burger sandwich
+    threshold: 0.25
+    tag_type: auto_object
+  - tag: salad
+    prompts:
+      - a bowl of salad
+      - a green vegetable salad
+      - a fresh salad with dressing
+    threshold: 0.25
+    tag_type: auto_object
+  - tag: bread
+    prompts:
+      - a loaf of bread
+      - sliced bread on a board
+      - bread or toast on a plate
+    threshold: 0.248
+    tag_type: auto_object
+  - tag: fruit
+    prompts:
+      - a bowl of fruit
+      - apples or oranges close up
+      - fresh fruit on a table
+    threshold: 0.246
+    tag_type: auto_object
+  - tag: vegetable
+    prompts:
+      - fresh vegetables on a table
+      - a basket of vegetables
+      - cut vegetables for cooking
+    threshold: 0.246
+    tag_type: auto_object
+  - tag: dessert
+    prompts:
+      - a sweet dessert plate
+      - chocolate dessert close up
+      - a fancy dessert
+    threshold: 0.246
+    tag_type: auto_object
+  - tag: ice_cream
+    prompts:
+      - an ice cream cone
+      - a scoop of ice cream
+      - a soft serve ice cream
+    threshold: 0.25
+    tag_type: auto_object
+  - tag: chocolate
+    prompts:
+      - a chocolate bar
+      - chocolates on a plate
+      - melting chocolate close up
+    threshold: 0.252
+    tag_type: auto_object
+  - tag: wine
+    prompts:
+      - a glass of wine
+      - a bottle of red wine
+      - wine in a wine glass
+    threshold: 0.25
+    tag_type: auto_object
+  - tag: beer
+    prompts:
+      - a glass of beer
+      - a beer bottle close up
+      - beer in a pub
+    threshold: 0.25
+    tag_type: auto_object
+  - tag: tea
+    prompts:
+      - a cup of tea
+      - tea in a teapot
+      - a hot tea drink
+    threshold: 0.252
+    tag_type: auto_object
+  - tag: soup
+    prompts:
+      - a bowl of soup
+      - hot soup with vegetables
+      - a soup served in a bowl
+    threshold: 0.25
+    tag_type: auto_object
+  # ==== Indoor rooms ====
+  - tag: kitchen
+    prompts:
+      - a kitchen interior
+      - a person cooking in a kitchen
+      - kitchen counters and appliances
+    threshold: 0.242
+    tag_type: auto_scene
+  - tag: bedroom
+    prompts:
+      - a bedroom interior
+      - a bed with pillows in a room
+      - a bedroom with furniture
+    threshold: 0.244
+    tag_type: auto_scene
+  - tag: bathroom
+    prompts:
+      - a bathroom interior
+      - a sink and mirror in a bathroom
+      - a shower and toilet bathroom
+    threshold: 0.246
+    tag_type: auto_scene
+  - tag: living_room
+    prompts:
+      - a living room interior
+      - a sofa in a living room
+      - a cozy living room space
+    threshold: 0.242
+    tag_type: auto_scene
+  - tag: office
+    prompts:
+      - an office workspace
+      - a person at a desk in an office
+      - an office room with computers
+    threshold: 0.244
+    tag_type: auto_scene
+  - tag: garage
+    prompts:
+      - a garage interior
+      - cars parked in a garage
+      - a workshop in a garage
+    threshold: 0.252
+    tag_type: auto_scene
+  - tag: gym
+    prompts:
+      - a gym interior with weights
+      - a person exercising in a gym
+      - a fitness gym scene
+    threshold: 0.246
+    tag_type: auto_scene
+  - tag: stairs
+    prompts:
+      - a staircase
+      - stairs in a building
+      - a person on stairs
+    threshold: 0.244
+    tag_type: auto_scene
+  # ==== Outdoor places ====
+  - tag: park
+    prompts:
+      - a park with trees and grass
+      - a path in a park
+      - a city park scene
+    threshold: 0.242
+    tag_type: auto_scene
+  - tag: cafe
+    prompts:
+      - a cafe interior
+      - people sitting in a coffee shop
+      - a cozy cafe scene
+    threshold: 0.244
+    tag_type: auto_scene
+  - tag: restaurant
+    prompts:
+      - a restaurant interior
+      - a restaurant dining room
+      - tables and chairs in a restaurant
+    threshold: 0.244
+    tag_type: auto_scene
+  - tag: market
+    prompts:
+      - a street market
+      - a farmers market with produce
+      - a busy market scene
+    threshold: 0.246
+    tag_type: auto_scene
+  - tag: station
+    prompts:
+      - a train station platform
+      - a subway station
+      - a railway station scene
+    threshold: 0.246
+    tag_type: auto_scene
+  - tag: airport
+    prompts:
+      - an airport terminal
+      - airplanes at an airport
+      - an airport gate scene
+    threshold: 0.248
+    tag_type: auto_scene
+  - tag: museum
+    prompts:
+      - a museum interior
+      - art on display in a museum
+      - a gallery or exhibition scene
+    threshold: 0.248
+    tag_type: auto_scene
+  - tag: garden
+    prompts:
+      - a garden with flowers
+      - a backyard garden
+      - a botanical garden scene
+    threshold: 0.246
+    tag_type: auto_scene
+  - tag: playground
+    prompts:
+      - a children playground
+      - playground equipment
+      - kids playing in a playground
+    threshold: 0.246
+    tag_type: auto_scene
+  - tag: bridge
+    prompts:
+      - a bridge over a river
+      - a large suspension bridge
+      - a bridge scene at sunset
+    threshold: 0.246
+    tag_type: auto_scene
+  # ==== Activities / sports ====
+  - tag: running
+    prompts:
+      - a person running outdoors
+      - a runner on a path
+      - jogging in a park
+    threshold: 0.246
+    tag_type: auto_event
+  - tag: hiking
+    prompts:
+      - a person hiking on a trail
+      - hiking in the mountains
+      - a hiker with a backpack
+    threshold: 0.246
+    tag_type: auto_event
+  - tag: swimming
+    prompts:
+      - a person swimming
+      - swimmers in a pool
+      - swimming at the beach
+    threshold: 0.246
+    tag_type: auto_event
+  - tag: dancing
+    prompts:
+      - people dancing together
+      - a person dancing on stage
+      - a dance performance
+    threshold: 0.246
+    tag_type: auto_event
+  - tag: golf
+    prompts:
+      - a person playing golf
+      - a golf course scene
+      - a golfer swinging a club
+    threshold: 0.252
+    tag_type: auto_event
+  - tag: fishing
+    prompts:
+      - a person fishing
+      - someone with a fishing rod
+      - fishing by a lake or river
+    threshold: 0.25
+    tag_type: auto_event
+  - tag: ski
+    prompts:
+      - a person skiing on snow
+      - skiers on a slope
+      - snowboarding on a mountain
+    threshold: 0.246
+    tag_type: auto_event
+  - tag: surfing
+    prompts:
+      - a person surfing on waves
+      - a surfer riding a wave
+      - surfing at the beach
+    threshold: 0.25
+    tag_type: auto_event
+  - tag: camping
+    prompts:
+      - a camping tent outdoors
+      - people camping in nature
+      - a campsite with a tent
+    threshold: 0.246
+    tag_type: auto_event
+  - tag: picnic
+    prompts:
+      - a picnic in a park
+      - a picnic blanket with food
+      - people having a picnic
+    threshold: 0.248
+    tag_type: auto_event
+  # ==== Nature sub-categories ====
+  - tag: river
+    prompts:
+      - a river flowing through nature
+      - a calm river scene
+      - a river with green trees
+    threshold: 0.246
+    tag_type: auto_scene
+  - tag: lake
+    prompts:
+      - a calm lake landscape
+      - a lake surrounded by mountains
+      - reflections on a lake
+    threshold: 0.246
+    tag_type: auto_scene
+  - tag: forest
+    prompts:
+      - a forest of green trees
+      - a dense woodland forest
+      - a forest path
+    threshold: 0.244
+    tag_type: auto_scene
+  - tag: autumn_leaves
+    prompts:
+      - red and yellow autumn leaves
+      - colorful fall foliage
+      - autumn trees in a park
+    threshold: 0.246
+    tag_type: auto_scene
+  - tag: cherry_blossom
+    prompts:
+      - cherry blossom trees in bloom
+      - pink cherry blossoms
+      - sakura flowers in spring
+    threshold: 0.246
+    tag_type: auto_scene
+  - tag: sunflower
+    prompts:
+      - sunflowers in a field
+      - a sunflower close up
+      - yellow sunflowers blooming
+    threshold: 0.252
+    tag_type: auto_object
+  - tag: starry_sky
+    prompts:
+      - a starry night sky
+      - milky way over a landscape
+      - stars in the night sky
+    threshold: 0.252
+    tag_type: auto_scene
+  - tag: fog
+    prompts:
+      - a foggy landscape
+      - mist over a forest
+      - fog in the early morning
+    threshold: 0.248
+    tag_type: auto_scene
+  # ==== Transport (besides bicycle/vehicle) ====
+  - tag: motorcycle
+    prompts:
+      - a motorcycle close up
+      - a person on a motorcycle
+      - a parked motorbike
+    threshold: 0.246
+    tag_type: auto_object
+  - tag: bus
+    prompts:
+      - a public city bus
+      - a bus on the street
+      - a bus stop with a bus
+    threshold: 0.248
+    tag_type: auto_object
+  - tag: train
+    prompts:
+      - a train on tracks
+      - a passenger train at a station
+      - a high speed train
+    threshold: 0.248
+    tag_type: auto_object
+  - tag: airplane
+    prompts:
+      - an airplane in the sky
+      - a jet plane on the runway
+      - airplane wing through window
+    threshold: 0.248
+    tag_type: auto_object
+  - tag: boat
+    prompts:
+      - a boat on the water
+      - a sailing boat on the sea
+      - a ferry or ship
+    threshold: 0.246
+    tag_type: auto_object
+  # ==== Events ====
+  - tag: graduation
+    prompts:
+      - a graduation ceremony
+      - students in graduation gowns
+      - a graduation cap and diploma
+    threshold: 0.25
+    tag_type: auto_event
+  - tag: christmas
+    prompts:
+      - a christmas tree with decorations
+      - christmas presents under a tree
+      - christmas lights decoration
+    threshold: 0.248
+    tag_type: auto_event
+  - tag: halloween
+    prompts:
+      - a halloween pumpkin
+      - halloween costume scene
+      - jack o lantern decoration
+    threshold: 0.25
+    tag_type: auto_event
+  - tag: fireworks
+    prompts:
+      - fireworks in the night sky
+      - a fireworks display
+      - colorful fireworks
+    threshold: 0.248
+    tag_type: auto_event
+  - tag: presentation
+    prompts:
+      - a person giving a presentation
+      - a speaker on stage with slides
+      - a business presentation indoors
+    threshold: 0.248
+    tag_type: auto_event
 
 concept_aliases:
   person:
@@ -429,3 +1048,354 @@ concept_aliases:
     - screen
     - 화면
     - 스크린샷
+  hat:
+    - hat
+    - cap
+    - 모자
+  glasses:
+    - glasses
+    - sunglasses
+    - 안경
+    - 선글라스
+  bag:
+    - bag
+    - backpack
+    - handbag
+    - 가방
+    - 백팩
+  shoes:
+    - shoes
+    - sneakers
+    - 신발
+    - 운동화
+  umbrella:
+    - umbrella
+    - 우산
+  watch:
+    - watch
+    - wristwatch
+    - 시계
+    - 손목시계
+  mask:
+    - mask
+    - face mask
+    - 마스크
+  scarf:
+    - scarf
+    - 목도리
+    - 스카프
+  jewelry:
+    - jewelry
+    - necklace
+    - ring
+    - 보석
+    - 목걸이
+    - 반지
+  suit:
+    - suit
+    - 정장
+    - 양복
+  phone:
+    - phone
+    - smartphone
+    - 휴대폰
+    - 폰
+    - 핸드폰
+  computer:
+    - computer
+    - laptop
+    - pc
+    - 컴퓨터
+    - 노트북
+  camera:
+    - camera
+    - dslr
+    - 카메라
+  tv:
+    - tv
+    - television
+    - 텔레비전
+  headphone:
+    - headphone
+    - earphone
+    - 헤드폰
+    - 이어폰
+  speaker:
+    - speaker
+    - 스피커
+  microwave:
+    - microwave
+    - 전자레인지
+  fan:
+    - fan
+    - 선풍기
+  dog:
+    - dog
+    - puppy
+    - 강아지
+    - 개
+  cat:
+    - cat
+    - kitten
+    - 고양이
+    - 야옹이
+  bird:
+    - bird
+    - 새
+    - 조류
+  fish:
+    - fish
+    - 물고기
+    - 어류
+  horse:
+    - horse
+    - 말
+  cow:
+    - cow
+    - cattle
+    - 소
+  sheep:
+    - sheep
+    - 양
+  butterfly:
+    - butterfly
+    - 나비
+  ramen:
+    - ramen
+    - noodle
+    - 라면
+    - 면
+  pizza:
+    - pizza
+    - 피자
+  sushi:
+    - sushi
+    - 초밥
+    - 스시
+  sandwich:
+    - sandwich
+    - burger
+    - 샌드위치
+    - 햄버거
+  salad:
+    - salad
+    - 샐러드
+  bread:
+    - bread
+    - toast
+    - 빵
+    - 토스트
+  fruit:
+    - fruit
+    - 과일
+  vegetable:
+    - vegetable
+    - 채소
+    - 야채
+  dessert:
+    - dessert
+    - sweet
+    - 디저트
+  ice_cream:
+    - ice cream
+    - icecream
+    - 아이스크림
+  chocolate:
+    - chocolate
+    - 초콜릿
+    - 초콜렛
+  wine:
+    - wine
+    - 와인
+    - 포도주
+  beer:
+    - beer
+    - 맥주
+  tea:
+    - tea
+    - 차
+  soup:
+    - soup
+    - 수프
+    - 국
+  kitchen:
+    - kitchen
+    - 주방
+    - 부엌
+  bedroom:
+    - bedroom
+    - 침실
+    - 방
+  bathroom:
+    - bathroom
+    - restroom
+    - 욕실
+    - 화장실
+  living_room:
+    - living room
+    - 거실
+  office:
+    - office
+    - workspace
+    - 사무실
+  garage:
+    - garage
+    - 차고
+  gym:
+    - gym
+    - fitness
+    - 헬스장
+    - 체육관
+  stairs:
+    - stairs
+    - 계단
+  park:
+    - park
+    - 공원
+  cafe:
+    - cafe
+    - coffee shop
+    - 카페
+  restaurant:
+    - restaurant
+    - dining
+    - 식당
+    - 레스토랑
+  market:
+    - market
+    - 시장
+    - 마켓
+  station:
+    - station
+    - 역
+  airport:
+    - airport
+    - 공항
+  museum:
+    - museum
+    - gallery
+    - 박물관
+    - 미술관
+  garden:
+    - garden
+    - 정원
+    - 화원
+  playground:
+    - playground
+    - 놀이터
+  bridge:
+    - bridge
+    - 다리
+  running:
+    - running
+    - jogging
+    - 달리기
+    - 조깅
+  hiking:
+    - hiking
+    - 등산
+    - 하이킹
+  swimming:
+    - swimming
+    - 수영
+  dancing:
+    - dancing
+    - dance
+    - 춤
+    - 댄스
+  golf:
+    - golf
+    - 골프
+  fishing:
+    - fishing
+    - 낚시
+  ski:
+    - ski
+    - skiing
+    - 스키
+  surfing:
+    - surfing
+    - 서핑
+  camping:
+    - camping
+    - 캠핑
+    - 야영
+  picnic:
+    - picnic
+    - 피크닉
+    - 소풍
+  river:
+    - river
+    - stream
+    - 강
+  lake:
+    - lake
+    - 호수
+  forest:
+    - forest
+    - woods
+    - 숲
+  autumn_leaves:
+    - autumn leaves
+    - autumn
+    - foliage
+    - 단풍
+    - 가을
+  cherry_blossom:
+    - cherry blossom
+    - sakura
+    - 벚꽃
+  sunflower:
+    - sunflower
+    - 해바라기
+  starry_sky:
+    - starry sky
+    - stars
+    - milky way
+    - 별
+    - 별하늘
+    - 은하수
+  fog:
+    - fog
+    - mist
+    - 안개
+  motorcycle:
+    - motorcycle
+    - motorbike
+    - 오토바이
+  bus:
+    - bus
+    - 버스
+  train:
+    - train
+    - 기차
+    - 열차
+  airplane:
+    - airplane
+    - plane
+    - 비행기
+  boat:
+    - boat
+    - ship
+    - 배
+    - 선박
+  graduation:
+    - graduation
+    - 졸업
+    - 졸업식
+  christmas:
+    - christmas
+    - xmas
+    - 크리스마스
+    - 성탄절
+  halloween:
+    - halloween
+    - 할로윈
+  fireworks:
+    - fireworks
+    - 불꽃놀이
+    - 폭죽
+  presentation:
+    - presentation
+    - 발표
+    - 프레젠테이션

@@ -123,3 +123,43 @@ def test_auto_tag_state_records_version(tmp_path: Path) -> None:
         assert reloaded.version == "auto-v2"
         assert reloaded.tags_json == [{"type": "auto_screen", "value": "screenshot"}]
         assert state.file_id == "sample-file-id"
+
+
+def test_clip_concept_catalog_has_full_coverage_v2() -> None:
+    from app.services.analysis.clip_lexicon import (
+        load_clip_concepts,
+        load_concept_aliases,
+    )
+
+    concepts = load_clip_concepts()
+    aliases = load_concept_aliases()
+    concept_tags = {c.tag for c in concepts}
+
+    # v2 catalog targets 121 concepts (34 v1 + 87 added).
+    assert len(concepts) == 121, f"expected 121 concepts, got {len(concepts)}"
+    assert concept_tags == set(aliases.keys()), (
+        "every concept must have an alias mapping (and vice versa)"
+    )
+
+    allowed_types = {"auto_person", "auto_screen", "auto_scene", "auto_object", "auto_event"}
+    for c in concepts:
+        assert c.tag_type in allowed_types, f"{c.tag} has unknown tag_type {c.tag_type}"
+        assert 0.22 <= c.threshold <= 0.27, f"{c.tag} threshold {c.threshold} outside safe band"
+        assert len(c.prompts) >= 2, f"{c.tag} needs at least 2 prompts"
+
+    # Spot-check critical Korean aliases survived.
+    expected_korean_for = {
+        "hat": "모자",
+        "phone": "휴대폰",
+        "dog": "강아지",
+        "pizza": "피자",
+        "kitchen": "주방",
+        "park": "공원",
+        "running": "달리기",
+        "cherry_blossom": "벚꽃",
+        "airplane": "비행기",
+        "christmas": "크리스마스",
+    }
+    for tag, korean in expected_korean_for.items():
+        bucket = aliases.get(tag) or ()
+        assert korean in bucket, f"alias for {tag} missing Korean term {korean!r}, got {bucket}"
