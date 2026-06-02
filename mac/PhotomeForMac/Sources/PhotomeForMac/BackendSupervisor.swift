@@ -364,6 +364,62 @@ final class BackendSupervisor: ObservableObject {
         }
     }
 
+    func removeSourceRoot(_ path: String) {
+        guard sourceRoots.contains(path) else { return }
+        sourceRoots.removeAll { $0 == path }
+        UserDefaults.standard.set(sourceRoots, forKey: Self.sourceRootsDefaultsKey)
+        statusMessage = sourceRoots.isEmpty
+            ? "원본 폴더 목록이 비었습니다."
+            : "원본 폴더에서 제거했습니다."
+        if process != nil {
+            restart()
+        }
+    }
+
+    enum StartupHint: Equatable {
+        case portConflict(Int)
+        case pythonMissing
+        case permissionIssue
+        case generic(String)
+
+        var title: String {
+            switch self {
+            case .portConflict(let port): return "포트 \(port) 충돌"
+            case .pythonMissing: return "Python 런타임을 찾을 수 없음"
+            case .permissionIssue: return "권한 문제"
+            case .generic: return "시작 실패"
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .portConflict(let port):
+                return "다른 프로세스가 \(port) 포트를 사용 중입니다. 터미널에서 `lsof -tiTCP:\(port) -sTCP:LISTEN`로 확인하고 종료하세요."
+            case .pythonMissing:
+                return "앱이 실행할 Python을 찾지 못했습니다. 개발 모드라면 .venv가 있는지, 정식 빌드라면 bundled runtime이 들어있는지 확인하세요."
+            case .permissionIssue:
+                return "선택한 폴더에 macOS 권한이 없습니다. 시스템 설정 → 개인정보 보호 및 보안에서 권한을 확인하세요."
+            case .generic(let message):
+                return message
+            }
+        }
+    }
+
+    var startupHint: StartupHint? {
+        guard let error = lastError, !error.isEmpty else { return nil }
+        let lower = error.lowercased()
+        if lower.contains("address already in use") || lower.contains("port") && lower.contains("use") {
+            return .portConflict(port)
+        }
+        if lower.contains("python") && (lower.contains("not found") || lower.contains("찾을 수 없")) {
+            return .pythonMissing
+        }
+        if lower.contains("permission") || lower.contains("권한") {
+            return .permissionIssue
+        }
+        return .generic(error)
+    }
+
     func restart() {
         stop()
         start()

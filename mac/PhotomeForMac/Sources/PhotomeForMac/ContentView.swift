@@ -163,7 +163,9 @@ struct ContentView: View {
     }
 
     private var landing: some View {
-        VStack(spacing: 18) {
+        let hasFolders = !backend.sourceRoots.isEmpty
+
+        return VStack(spacing: 18) {
             Image(systemName: "photo.on.rectangle.angled")
                 .font(.system(size: 52))
                 .foregroundStyle(.secondary)
@@ -171,15 +173,27 @@ struct ContentView: View {
             Text("Photome for Mac")
                 .font(.largeTitle.bold())
 
-            Text("Docker 없이 기존 Photome 웹 UI와 백엔드를 Mac 앱 안에서 실행합니다.")
+            Text(hasFolders
+                 ? "선택해둔 사진 폴더로 백엔드를 바로 시작할 수 있습니다."
+                 : "사진 폴더를 선택하면 백엔드가 자동으로 스캔을 시작합니다.")
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
-            if let error = backend.lastError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-                    .textSelection(.enabled)
+            if let hint = backend.startupHint {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(hint.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.red)
+                    Text(hint.detail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .multilineTextAlignment(.leading)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.red.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
 
             if let libraryJobStatus = backend.libraryJobStatus, backend.hasActiveLibraryJob {
@@ -189,49 +203,84 @@ struct ContentView: View {
                     .multilineTextAlignment(.center)
             }
 
-            if !backend.sourceRoots.isEmpty {
-                VStack(spacing: 6) {
-                    Text("선택된 폴더")
-                        .font(.caption.weight(.semibold))
-                    ForEach(backend.sourceRoots, id: \.self) { path in
-                        Text(path)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                            .lineLimit(2)
-                    }
-                }
-                .frame(maxWidth: .infinity)
+            if hasFolders {
+                selectedFoldersPanel
             }
 
             aiPackPanel
             quickActionsPanel
 
-            HStack {
-                Button("백엔드 시작") {
-                    backend.start()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(backend.isBusy)
-
-                Button("사진 폴더 선택") {
-                    backend.choosePhotoFolder()
-                }
-
-                Button("로그 보기") {
-                    backend.showLogs()
-                }
-
-                Button("진단 내보내기") {
-                    backend.exportDiagnosticsBundle()
+            HStack(spacing: 10) {
+                if hasFolders {
+                    Button("백엔드 시작") { backend.start() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .disabled(backend.isBusy)
+                    Button("폴더 추가") { backend.choosePhotoFolder() }
+                        .controlSize(.large)
+                } else {
+                    Button("사진 폴더 선택") { backend.choosePhotoFolder() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
                 }
             }
+
+            Text("로그 보기·진단 내보내기는 메뉴바 아이콘에서 사용할 수 있습니다.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(32)
         .frame(maxWidth: 700)
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(radius: 20)
+    }
+
+    private var selectedFoldersPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("선택된 폴더")
+                    .font(.subheadline.weight(.semibold))
+                Text("\(backend.sourceRoots.count)개")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("드래그·드롭 또는 ‘폴더 추가’로 더 넣을 수 있습니다")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            VStack(spacing: 4) {
+                ForEach(backend.sourceRoots, id: \.self) { path in
+                    HStack(spacing: 8) {
+                        Image(systemName: "folder.fill")
+                            .foregroundStyle(.secondary)
+                            .imageScale(.small)
+                        Text(path)
+                            .font(.caption)
+                            .textSelection(.enabled)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button {
+                            backend.removeSourceRoot(path)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("이 폴더 제거")
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .background(Color.gray.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.gray.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var quickActionsPanel: some View {
