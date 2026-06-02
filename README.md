@@ -1,8 +1,6 @@
 # Photome for Mac
 
-Photome for Mac은 Docker 설치 없이 실행되는 macOS 앱형 Photome 배포를 목표로 하는 작업 공간이다. 기존 Photome의 FastAPI 백엔드, 갤러리/대시보드, 사진 스캔, SQLite, CLIP 이미지 AI 기능을 Mac 앱 내부 런타임으로 통합한다.
-
-현재 repo는 Mac 앱 전환 작업용이며, Docker는 서버/NAS/Linux/Windows/개발/CI용 보조 배포 경로로 유지한다.
+Docker 없이 실행되는 macOS 앱형 Photome. 기존 FastAPI 백엔드, 갤러리/대시보드, 사진 스캔, SQLite, CLIP 이미지 AI를 Mac 앱 내부 런타임으로 통합한다. Docker는 서버/NAS/Linux/Windows/CI용 보조 배포 경로로 유지한다.
 
 ## 기능 요약
 
@@ -15,7 +13,21 @@ Photome for Mac은 Docker 설치 없이 실행되는 macOS 앱형 Photome 배포
 
 ## 시작하기
 
-### Docker
+### Mac 앱 (권장)
+
+```bash
+# 개발: Xcode에서 직접 실행
+open mac/PhotomeForMac/Package.swift
+
+# 또는 DMG 빌드 (ad-hoc 서명)
+scripts/build_mac_app_bundle.sh
+# → dist/mac/PhotomeForMac.app, dist/mac/PhotomeForMac.dmg
+```
+
+자세한 Xcode 실행 가이드는 [docs/mac/XCODE_RUN.md](docs/mac/XCODE_RUN.md).
+Developer ID 서명·notarization·릴리스 절차는 [docs/mac/RELEASE_CHECKLIST.md](docs/mac/RELEASE_CHECKLIST.md).
+
+### Docker (서버/Linux/Windows)
 
 ```bash
 cp .env.docker.example .env
@@ -26,7 +38,7 @@ docker compose up -d --build photome
 - 갤러리: <http://127.0.0.1:8002/gallery>
 - 대시보드: <http://127.0.0.1:8002/dashboard>
 
-Docker 구성은 macOS Finder 경로를 그대로 쓸 수 있도록 `/Volumes`와 `/Users`를 읽기 전용으로 컨테이너에 마운트한다. 대시보드에서 NAS, 외장하드, USB, Desktop/Pictures 폴더를 선택할 때 사용자가 별도 Docker 경로를 신경 쓰지 않아도 된다.
+Docker 구성은 macOS Finder 경로를 그대로 쓸 수 있도록 `/Volumes`와 `/Users`를 읽기 전용으로 컨테이너에 마운트한다.
 
 ### 로컬 Python
 
@@ -44,11 +56,15 @@ photome
 | `POST /scan/async` | 라이브러리 동기화 (비동기) |
 | `POST /scan/semantic-maintenance/async` | AI 분석·검색 문서 갱신 |
 | `POST /scan/repair-metadata` | GPS 누락 이미지 재추출 |
+| `POST /settings/performance` | 워커/배치 사이즈 런타임 조절 |
 | `GET /search?q=...` | 검색 API |
 | `GET /media/{file_id}/download` | 원본 파일 다운로드 |
 
 ## 문서
 
+- [docs/mac/XCODE_RUN.md](docs/mac/XCODE_RUN.md) — Mac 앱 Xcode 개발 환경
+- [docs/mac/RELEASE_CHECKLIST.md](docs/mac/RELEASE_CHECKLIST.md) — Mac 앱 서명·notarization·릴리스
+- [docs/mac/RUNTIME_CONTRACT.md](docs/mac/RUNTIME_CONTRACT.md) — Mac shell ↔ 백엔드 계약
+- [docs/engineering/ARCHITECTURE.md](docs/engineering/ARCHITECTURE.md) — 구조 개요
 - [docs/ops/DOCKER.md](docs/ops/DOCKER.md) — Docker 실행 및 볼륨 설정
 - [docs/ops/RUNBOOK.md](docs/ops/RUNBOOK.md) — 운영 규칙·장애 처리
-- [docs/engineering/ARCHITECTURE.md](docs/engineering/ARCHITECTURE.md) — 구조 개요

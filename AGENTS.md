@@ -76,8 +76,14 @@
 - `README.md`
 - `docs/README.md`
 - `docs/engineering/ARCHITECTURE.md`
+- `docs/mac/RUNTIME_CONTRACT.md`
+- `docs/mac/RELEASE_CHECKLIST.md`
+- `docs/mac/RELEASE_PLAN.md` (단위 진행 트래커)
+- `docs/mac/XCODE_RUN.md`
+- `docs/mac/UI_SHELL_DECISION.md`
 - `docs/ops/DOCKER.md`
 - `docs/ops/RUNBOOK.md`
+- `docs/ops/DEPLOYMENT_STRATEGY.md`
 - `.codex/context/ALL_TASKS.md`
 
 삭제된 문서 경로를 다시 참조하지 않는다.

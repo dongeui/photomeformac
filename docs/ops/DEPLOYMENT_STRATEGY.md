@@ -129,91 +129,22 @@ Mac 앱은 단순 WebView 껍데기가 아니라 Photome 런타임 통합 앱으
 
 Mac 앱은 사용 편의성이 중심이고, Docker는 운영 환경 유연성이 중심이다.
 
-## 레포 전략
+## 레포 구성
 
-Mac 앱은 별도 레포로 분리하는 것을 권장한다.
+현재 `photomeformac` 레포가 Mac 앱 shell + 백엔드 + Docker 배포를 모두 포함한다.
 
-권장 이유:
+- `app/` — FastAPI 백엔드 (Mac 앱과 Docker가 공유)
+- `mac/PhotomeForMac/` — Swift Package (Mac shell)
+- `scripts/` — Mac 빌드/번들/notarization, env 생성기
+- `docker/`, `Dockerfile`, `docker-compose.yml` — Docker 경로
+- `tests/` — Python 테스트 (Mac shell 테스트 포함)
 
-1. 기술 스택이 다르다.
-   - 현재 Photome: Python/FastAPI/backend/web UI
-   - Mac 앱: Swift/Tauri/Electron, packaging, signing, notarization, updater
-
-2. 배포 산출물이 다르다.
-   - Photome core: Python package, Docker image
-   - Mac app: `.app`, `.dmg`, updater metadata, signing artifacts
-
-3. 릴리즈 사이클이 다르다.
-   - core 기능 업데이트와 앱 패키징/서명/업데이트 이슈를 분리할 수 있다.
-
-4. 저장소가 덜 복잡해진다.
-   - 현재 repo는 core/runtime/backend 중심으로 유지
-   - Mac app repo는 shell, installer, embedded runtime, updater 중심으로 유지
-
-5. Windows/Linux Docker 배포와 Mac 앱 배포를 분리 관리하기 쉽다.
-
-단, core 코드는 중복하지 않는다.
-
-권장 구조:
-
-1. `photome`
-   - 현재 레포
-   - core backend
-   - web UI
-   - scanner/pipeline
-   - Docker 배포
-   - Python package
-
-2. `photome-mac`
-   - 새 레포
-   - macOS 앱 shell
-   - bundled runtime packaging
-   - model manager UI
-   - launch/update/sign/notarize
-   - 현재 `photome`를 git submodule, package dependency, release artifact 중 하나로 포함
-
-## 브랜치 분리보다 별도 레포가 나은 경우
-
-별도 레포가 적합한 조건:
-
-1. 앱 패키징 파일이 많아진다.
-2. Swift/Tauri/Electron 프로젝트가 생긴다.
-3. 코드서명/notarization/DMG/updater 설정이 필요하다.
-4. 앱 릴리즈와 core 릴리즈를 독립적으로 관리하고 싶다.
-5. Windows는 Docker로, Mac은 앱으로 가져가고 싶다.
-
-현재 방향은 이 조건에 해당하므로 별도 레포를 권장한다.
-
-## 단일 레포가 나은 경우
-
-단일 레포가 나은 경우도 있다.
-
-1. 앱이 아주 얇은 wrapper일 뿐이다.
-2. 별도 앱 코드가 거의 없다.
-3. 릴리즈를 항상 core와 동시에 한다.
-4. CI/CD를 단순하게 유지하고 싶다.
-
-하지만 현재 목표는 “Docker 기능을 Mac 앱 안에 통합”하는 것이므로 단일 레포는 장기적으로 복잡해질 가능성이 높다.
-
-## 권장 진행 순서
-
-1. 현재 Photome repo에서 core/runtime boundary 정리
-2. Mac 앱 repo 생성
-3. Mac 앱에서 Photome backend를 로컬 프로세스로 실행하는 최소 MVP 구현
-4. 앱 설정에서 data/derived/model/source root 지정
-5. WebView 또는 브라우저로 dashboard 열기
-6. 모델 다운로드/캐시 UI 추가
-7. LAN 공유 토글 추가
-8. signing/notarization/DMG 배포 구성
-9. Docker 배포는 서버/Windows/Linux 경로로 유지
-
-## 결정 사항 초안
+## 결정 사항
 
 1. 공식 메인 배포: Mac 앱
 2. 일반 사용자에게 Docker 설치 요구하지 않음
 3. Mac 앱은 Docker판과 같은 기능을 앱 내부 런타임으로 제공
 4. Local-only와 LAN까지 공식 지원
-5. Public internet은 공식 지원 보류
+5. Public internet은 공식 지원 보류 (auth/권한 분리 검토 후 가능)
 6. Windows는 추후 Docker 기반으로 우선 제공
-7. Mac 앱 개발은 별도 레포 권장
-8. 현재 repo는 Photome core/runtime/Docker 배포의 기준 repo로 유지
+7. 단일 레포로 운영하며 core/Mac/Docker가 같은 백엔드 코드를 공유

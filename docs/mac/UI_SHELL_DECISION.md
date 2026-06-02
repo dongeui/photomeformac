@@ -1,15 +1,34 @@
-# Mac 앱 UI shell 결정
+# Mac 앱 shell 결정
 
 ## 결론
 
-Photome for Mac은 기본 UI를 기존 웹 대시보드/갤러리 WebView로 통합한다. 단, 앱 shell은 메뉴바 아이콘을 항상 제공해서 시작/중지/상태/대시보드 열기/폴더 선택 같은 Mac-native 제어를 맡긴다.
+Photome for Mac은 Swift/SwiftUI shell + 기존 웹 대시보드 WebView + 메뉴바 아이콘 조합으로 간다.
 
-즉 선택지는 둘 중 하나가 아니라:
+1. 기술 스택: Swift/SwiftUI (Tauri/Electron 대비 macOS 권한·서명·앱 크기 측면에서 유리)
+2. 메인 화면: 기존 웹 UI를 WebView로 표시
+3. 메뉴바 아이콘: 런타임 제어/상태/빠른 액션
 
-1. 메인 화면: 기존 웹 UI를 WebView로 표시
-2. 우측 상단 메뉴바 아이콘: 런타임 제어/상태/빠른 액션
+## 기술 선택 비교
 
-조합으로 간다.
+| 항목 | Swift/SwiftUI | Tauri | Electron |
+|---|---|---|---|
+| macOS 권한/폴더 UX | 좋음 | 보통 | 보통 |
+| 메뉴바/설정/알림 | 좋음 | 보통 | 좋음 |
+| 앱 크기 | 작음 | 작음~보통 | 큼 |
+| 웹 UI 재사용 | 가능 (WebView) | 좋음 | 좋음 |
+| Python 백엔드 프로세스 관리 | 가능 | 가능 | 가능 |
+| 서명/notarization | 표준 | 가능 | 가능하지만 무거움 |
+| 개발 속도 | 보통 | 빠름 | 빠름 |
+
+Swift/SwiftUI 채택 이유:
+
+1. macOS 폴더 선택과 권한 UX가 가장 자연스럽다.
+2. 메뉴바, 상태 표시, 자동 시작, 알림, 설정 화면 구현이 쉽다.
+3. 코드서명, notarization, DMG 배포 경로가 표준적이다.
+4. Electron보다 앱 크기와 런타임 부담이 작다.
+5. 기존 Photome web UI는 WebView로 그대로 재사용한다.
+
+Tauri는 빠른 웹 wrapper 실험이 필요할 때 후보로 남긴다. Electron은 런타임 크기 때문에 마지막 후보로 둔다.
 
 ## 이유
 
@@ -61,24 +80,18 @@ Photome for Mac은 기본 UI를 기존 웹 대시보드/갤러리 WebView로 통
 8. 백엔드 재시작
 9. 종료
 
-MVP에서는 먼저 다음만 구현한다:
+현재 구현 완료된 메뉴/제어:
 
-1. Photome 열기
-2. 대시보드 열기
-3. 백엔드 시작/중지 placeholder
-4. 종료
+1. 대시보드 열기 (앱 내 / 브라우저)
+2. 백엔드 시작/중지/재시작
+3. 전체 동기화, 이미지 AI 이어서 분석
+4. 사진 폴더 선택 (NSOpenPanel + Finder Drag&Drop)
+5. LAN 공유 토글 (admin token 자동 발급)
+6. 이미지 AI on/off, offline/online 토글, 모델 캐시 폴더 열기
+7. 로그인 시 자동 시작
+8. 로그 보기, 진단 내보내기
+9. 업데이트 확인 (GitHub Releases 폴링)
 
 ## 하지 않을 것
 
-초기에는 전체 웹 UI를 SwiftUI로 재작성하지 않는다. 그 방식은 개발량이 크고 Docker/서버판과 UI가 갈라진다.
-
-초기에는 메뉴바만으로 모든 기능을 넣지 않는다. 메뉴바는 빠른 제어용이고, 실제 사진 탐색/검색/사람 관리는 WebView 메인 UI가 담당한다.
-
-## 향후 개선
-
-1. WebView 내 dashboard의 Mac app mode CSS/레이아웃 정리
-2. 메뉴바 상태를 `/status` API와 연동
-3. 폴더 선택은 NSOpenPanel로 받고 백엔드 settings/source-root API에 전달
-4. LAN 공유 토글은 백엔드 bind/restart 계약 확정 후 구현
-5. 모델 다운로드/AI 상태는 메뉴바와 WebView 양쪽에서 표시
-6. 창 닫힘 시 백엔드는 계속 실행할지, 앱 종료와 함께 죽일지 설정 제공
+전체 웹 UI를 SwiftUI로 재작성하지 않는다. Docker/서버판과 UI가 갈라지기 때문이다. 메뉴바는 빠른 제어 전용이며, 사진 탐색/검색/사람 관리는 WebView 메인 UI가 담당한다.
