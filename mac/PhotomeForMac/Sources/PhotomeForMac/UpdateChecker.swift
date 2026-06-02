@@ -114,6 +114,8 @@ final class UpdateChecker: ObservableObject {
         let lastSeen = defaults.string(forKey: Self.lastSeenVersionKey) ?? ""
         guard release.version != lastSeen else { return }
         defaults.set(release.version, forKey: Self.lastSeenVersionKey)
+        guard Bundle.main.bundleURL.pathExtension == "app",
+              Bundle.main.bundleIdentifier != nil else { return }
         let content = UNMutableNotificationContent()
         content.title = "Photome \(release.version) 사용 가능"
         content.body = "현재 \(currentVersion) → 새 버전 \(release.version)이 릴리스됐습니다. ‘업데이트 확인’ 메뉴에서 다운로드하세요."

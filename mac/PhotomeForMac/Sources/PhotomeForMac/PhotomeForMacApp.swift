@@ -6,8 +6,20 @@ import ServiceManagement
 struct PhotomeForMacApp: App {
     @StateObject private var backend = BackendSupervisor()
     @StateObject private var updateChecker = UpdateChecker()
-    @State private var launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+    @State private var launchAtLoginEnabled = PhotomeForMacApp.currentLaunchAtLoginEnabled()
     @NSApplicationDelegateAdaptor(PhotomeAppDelegate.self) private var appDelegate
+
+    /// SwiftPM의 bare executable로 실행하면 mainBundle이 .app이 아니어서
+    /// `SMAppService.mainApp` 호출이 NSException(bundleProxyForCurrentProcess nil)을 던진다.
+    /// Xcode ⌘R / `swift run` 같은 비-번들 실행에서도 앱이 죽지 않도록 가드한다.
+    static func isLaunchAtLoginAvailable() -> Bool {
+        Bundle.main.bundleURL.pathExtension == "app"
+    }
+
+    static func currentLaunchAtLoginEnabled() -> Bool {
+        guard isLaunchAtLoginAvailable() else { return false }
+        return SMAppService.mainApp.status == .enabled
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -128,6 +140,8 @@ struct PhotomeForMacApp: App {
             Button(launchAtLoginEnabled ? "로그인 시 자동 시작 끄기" : "로그인 시 자동 시작 켜기") {
                 toggleLaunchAtLogin()
             }
+            .disabled(!Self.isLaunchAtLoginAvailable())
+            .help(Self.isLaunchAtLoginAvailable() ? "" : "이 옵션은 정식 .app 번들로 실행해야 사용 가능합니다.")
 
             Button("로그 보기") {
                 backend.showLogs()
@@ -179,6 +193,10 @@ struct PhotomeForMacApp: App {
     }
 
     private func toggleLaunchAtLogin() {
+        guard Self.isLaunchAtLoginAvailable() else {
+            backend.updateStatusMessage("자동 시작은 .app 번들로 실행할 때만 사용 가능합니다.")
+            return
+        }
         do {
             if SMAppService.mainApp.status == .enabled {
                 try SMAppService.mainApp.unregister()
@@ -190,7 +208,7 @@ struct PhotomeForMacApp: App {
                 backend.updateStatusMessage("로그인 시 자동 시작을 켰습니다.")
             }
         } catch {
-            launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+            launchAtLoginEnabled = Self.currentLaunchAtLoginEnabled()
             backend.updateStatusMessage("로그인 자동 시작 변경 실패: \(error.localizedDescription)")
         }
     }

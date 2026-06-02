@@ -692,11 +692,17 @@ final class BackendSupervisor: ObservableObject {
         NSApp.dockTile.badgeLabel = badge.isEmpty ? nil : badge
     }
 
+    private static func notificationsAvailable() -> Bool {
+        Bundle.main.bundleURL.pathExtension == "app" && Bundle.main.bundleIdentifier != nil
+    }
+
     func requestNotificationAuthorization() {
+        guard Self.notificationsAvailable() else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
     private func scheduleNotification(title: String, body: String) {
+        guard Self.notificationsAvailable() else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
