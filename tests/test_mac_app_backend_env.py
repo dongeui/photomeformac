@@ -16,6 +16,8 @@ def test_mac_app_env_uses_app_data_paths(tmp_path: Path) -> None:
     assert env["PHOTOME_GEODATA_ROOT"] == str(tmp_path / "models" / "geodata")
     assert env["PHOTOME_DATABASE_PATH"] == str(tmp_path / "data" / "photome.sqlite3")
     assert env["PHOTOME_ENV_FILE"] == str(tmp_path / "photome.env")
+    assert env["HF_HOME"] == str(tmp_path / "models" / "huggingface")
+    assert env["TORCH_HOME"] == str(tmp_path / "models" / "torch")
     assert env["PHOTOME_OFFLINE_MODE"] == "1"
 
 

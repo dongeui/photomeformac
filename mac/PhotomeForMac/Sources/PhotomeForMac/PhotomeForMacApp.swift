@@ -5,6 +5,7 @@ import ServiceManagement
 @main
 struct PhotomeForMacApp: App {
     @StateObject private var backend = BackendSupervisor()
+    @StateObject private var updateChecker = UpdateChecker()
     @State private var launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
     @NSApplicationDelegateAdaptor(PhotomeAppDelegate.self) private var appDelegate
 
@@ -12,9 +13,11 @@ struct PhotomeForMacApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(backend)
+                .environmentObject(updateChecker)
                 .onAppear {
                     appDelegate.backend = backend
                     backend.requestNotificationAuthorization()
+                    updateChecker.startPolling()
                 }
         }
         .commands {
@@ -133,6 +136,19 @@ struct PhotomeForMacApp: App {
             Button("진단 내보내기") {
                 backend.exportDiagnosticsBundle()
             }
+
+            Divider()
+
+            if updateChecker.hasNewerRelease, let release = updateChecker.latestRelease {
+                Button("새 버전 \(release.version) 다운로드…") {
+                    updateChecker.openReleasePage()
+                }
+            }
+
+            Button(updateChecker.isChecking ? "업데이트 확인 중..." : "업데이트 확인") {
+                Task { await updateChecker.checkOnce() }
+            }
+            .disabled(updateChecker.isChecking)
 
             Divider()
 

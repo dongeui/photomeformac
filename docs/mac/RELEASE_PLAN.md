@@ -73,7 +73,7 @@ SwiftUI `onDrop(of: [.fileURL])` 사용.
 
 **파일:** `PhotomeForMacApp.swift` AppDelegate adapter 또는 `applicationShouldTerminate`.
 
-### S1.5 모델 다운로드 progress UI — `status: TODO`
+### S1.5 모델 다운로드 progress UI — `status: DONE`
 
 현재 텍스트만 표시. 진행률 (다운로드 byte / total) → SwiftUI ProgressView.
 
@@ -84,7 +84,7 @@ SwiftUI `onDrop(of: [.fileURL])` 사용.
 
 ## Stage 2. 배포 인프라
 
-### S2.1 자동 업데이트 — `status: TODO`
+### S2.1 자동 업데이트 — `status: DONE`
 
 옵션:
 1. **Sparkle 2** — macOS 표준, edDSA 서명, appcast.xml 호스팅 필요.
@@ -175,6 +175,7 @@ PHOTOME_NOTARY_PROFILE=photome-notary scripts/notarize_mac_app.sh
 
 ## 진행 기록 (가장 최근부터)
 
+- 2026-06-02: S1.5 + S2.1 완료. /ai-pack/* progress(bytes_downloaded/bytes_estimated/fraction) 노출 + Mac shell summary에 MB 표시. mac_app_backend_env가 HF_HOME/TORCH_HOME을 model_root 하위로 라우팅. UpdateChecker가 6시간 주기로 GitHub Releases /releases/latest 폴링, 새 버전 발견 시 UNNotification + 메뉴에 "새 버전 다운로드…" 항목. swift build OK, 185 tests pass.
 - 2026-05-30: people_stats + 1000명 cap으로 확장. 실데이터(1.14GB DB, 26,787장/176명) 기준 UI/UX 통합 점검: /healthz 200, /status 200, /dashboard 346KB+95 새 컴포넌트, /search?q=동이 적중, /people/40/preview 3장, POST /settings/performance 정상 저장 (워커 2/스레드 8, profile "절약"/"보통"), alias 승격(빈 이름+alias "테스트동이" → display_name "테스트동이") 확인 후 SQL 원복. 184 tests 회귀 없음.
 - 2026-05-30: S2.2/2.3/2.4 완료 — build 스크립트가 iconset filter, Finder DMG layout(osascript), .venv311/.venv 자동 탐색 + GitHub Actions workflow에 bundle_python input 추가.
 - 2026-05-30: S0.2b 완료 — 대시보드에 리소스 설정 카드 추가 (CPU 슬라이더, AI threads, batch sizes). 184 tests pass.

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
@@ -18,6 +20,63 @@ router = APIRouter(prefix="/ai-pack", tags=["ai-pack"])
 _lock = threading.Lock()
 _prepare_thread: threading.Thread | None = None
 _prepare_error: str | None = None
+
+# Approximate compressed download size by CLIP variant.
+_EXPECTED_BYTES_BY_MODEL: dict[str, int] = {
+    "ViT-B-32": 340 * 1024 * 1024,
+    "ViT-B-16": 350 * 1024 * 1024,
+    "ViT-L-14": 900 * 1024 * 1024,
+    "ViT-L-14-336": 900 * 1024 * 1024,
+    "ViT-H-14": 3_900 * 1024 * 1024,
+}
+
+
+def _dir_size_bytes(path: Path) -> int:
+    if not path.exists():
+        return 0
+    total = 0
+    try:
+        for entry in path.rglob("*"):
+            try:
+                if entry.is_file():
+                    total += entry.stat().st_size
+            except OSError:
+                continue
+    except OSError:
+        return total
+    return total
+
+
+def _model_cache_progress(config: dict[str, Any]) -> dict[str, Any]:
+    candidates: list[Path] = []
+    for var in ("HF_HOME", "TORCH_HOME"):
+        value = os.environ.get(var)
+        if value:
+            candidates.append(Path(value).expanduser())
+    model_root = os.environ.get("PHOTOME_MODEL_ROOT") or os.environ.get("PHOTOMINE_MODEL_ROOT")
+    if model_root:
+        candidates.append(Path(model_root).expanduser())
+    seen: set[str] = set()
+    total = 0
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        key = str(resolved)
+        if key in seen:
+            continue
+        seen.add(key)
+        total += _dir_size_bytes(resolved)
+    model_name = str((config or {}).get("model_name") or "").strip()
+    estimated = _EXPECTED_BYTES_BY_MODEL.get(model_name)
+    progress: dict[str, Any] = {
+        "bytes_downloaded": int(total),
+        "bytes_estimated": int(estimated) if estimated else None,
+    }
+    if estimated:
+        progress["fraction"] = max(0.0, min(1.0, total / float(estimated)))
+    return progress
 
 
 def get_ai_pack_state() -> dict[str, Any]:
@@ -49,6 +108,7 @@ def get_ai_pack_state() -> dict[str, Any]:
         "model_error": error or clip_status.get("model_error"),
         "dependencies": deps,
         "config": clip_status.get("config") or {},
+        "progress": _model_cache_progress(clip_status.get("config") or {}),
     }
 
 

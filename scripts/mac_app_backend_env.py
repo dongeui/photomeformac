@@ -63,6 +63,8 @@ def build_backend_env(
         "PHOTOME_SCHEDULER_ENABLED": "0",
         "PHOTOME_SEMANTIC_SCHEDULER_ENABLED": "1" if clip_enabled else "0",
         "PHOTOME_ENV_FILE": str(root / "photome.env"),
+        "HF_HOME": str(model_root / "huggingface"),
+        "TORCH_HOME": str(model_root / "torch"),
     }
 
     if source_roots:

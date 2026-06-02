@@ -12,6 +12,32 @@ final class BackendSupervisor: ObservableObject {
         case error = "오류"
     }
 
+    struct AIPackProgress: Decodable {
+        let bytesDownloaded: Int?
+        let bytesEstimated: Int?
+        let fraction: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case bytesDownloaded = "bytes_downloaded"
+            case bytesEstimated = "bytes_estimated"
+            case fraction
+        }
+
+        private static func formatMB(_ bytes: Int) -> String {
+            let mb = Double(bytes) / (1024.0 * 1024.0)
+            return mb >= 100 ? String(format: "%.0fMB", mb) : String(format: "%.1fMB", mb)
+        }
+
+        var label: String? {
+            guard let downloaded = bytesDownloaded, downloaded > 0 else { return nil }
+            if let estimated = bytesEstimated, estimated > 0 {
+                let percent = Int(min(100, max(0, (fraction ?? Double(downloaded) / Double(estimated)) * 100.0)))
+                return "\(Self.formatMB(downloaded)) / ~\(Self.formatMB(estimated)) · \(percent)%"
+            }
+            return Self.formatMB(downloaded)
+        }
+    }
+
     struct AIPackStatus: Decodable {
         let stage: String
         let depsReady: Bool
@@ -19,6 +45,7 @@ final class BackendSupervisor: ObservableObject {
         let modelLoading: Bool
         let modelError: String?
         let config: [String: String]
+        let progress: AIPackProgress?
 
         enum CodingKeys: String, CodingKey {
             case stage
@@ -27,6 +54,7 @@ final class BackendSupervisor: ObservableObject {
             case modelLoading = "model_loading"
             case modelError = "model_error"
             case config
+            case progress
         }
 
         var summary: String {
@@ -34,6 +62,9 @@ final class BackendSupervisor: ObservableObject {
             case "ready":
                 return "모델 준비 완료"
             case "downloading":
+                if let detail = progress?.label {
+                    return "모델 다운로드 중 (\(detail))"
+                }
                 return "모델 준비 중"
             case "needs_download":
                 return "모델 다운로드 필요"
