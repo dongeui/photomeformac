@@ -528,6 +528,51 @@ final class BackendSupervisor: ObservableObject {
         }
     }
 
+    /// Apple Photos 라이브러리 패키지의 `originals` 디렉토리. 시스템 사용자의
+    /// 대다수가 여기에 사진을 저장하므로 자동 감지해서 onboarding에서 우선 추천한다.
+    /// 패키지 자체는 read-only 권장이며, photome scanner는 일반 폴더와 동일하게 walk.
+    static func detectedPhotosLibraryURL() -> URL? {
+        guard let pictures = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let candidate = pictures
+            .appendingPathComponent("Photos Library.photoslibrary", isDirectory: true)
+            .appendingPathComponent("originals", isDirectory: true)
+        return FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
+    }
+
+    var detectedPhotosLibrary: URL? {
+        guard sourceRoots.allSatisfy({ !$0.contains("Photos Library.photoslibrary") }) else {
+            return nil
+        }
+        return Self.detectedPhotosLibraryURL()
+    }
+
+    /// Apple Photos `originals`를 source root로 즉시 추가한다. NSOpenPanel을 띄워
+    /// 사용자가 [열기] 한 번 누르면 user-selected 권한이 부여되고 bookmark까지 저장.
+    func addApplePhotosLibrary() {
+        guard let originals = Self.detectedPhotosLibraryURL() else {
+            statusMessage = "Apple Photos 라이브러리를 찾지 못했습니다."
+            return
+        }
+        let panel = NSOpenPanel()
+        panel.title = "Apple Photos 라이브러리 추가"
+        panel.message = "감지된 'Photos Library.photoslibrary/originals' 폴더를 read-only로 추가합니다."
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = false
+        panel.treatsFilePackagesAsDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = originals.deletingLastPathComponent()
+        panel.nameFieldStringValue = "originals"
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { @MainActor in
+                self?.appendSourceRoots([url])
+            }
+        }
+    }
+
     func choosePhotoFolder() {
         let panel = NSOpenPanel()
         panel.title = "Photome 사진 폴더 선택"

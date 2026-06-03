@@ -200,6 +200,8 @@ struct ContentView: View {
 
             if hasFolders {
                 selectedFoldersPanel
+            } else if backend.detectedPhotosLibrary != nil {
+                applePhotosSuggestion
             }
 
             aiPackPanel
@@ -212,6 +214,10 @@ struct ContentView: View {
                         .controlSize(.large)
                         .disabled(backend.isBusy)
                     Button("폴더 추가") { backend.choosePhotoFolder() }
+                        .controlSize(.large)
+                } else if backend.detectedPhotosLibrary != nil {
+                    // Apple Photos suggestion 카드가 위에 떴으니 main row는 secondary로.
+                    Button("다른 폴더만 직접 선택") { backend.choosePhotoFolder() }
                         .controlSize(.large)
                 } else {
                     Button("사진 폴더 선택") { backend.choosePhotoFolder() }
@@ -234,6 +240,33 @@ struct ContentView: View {
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(radius: 20)
+    }
+
+    private var applePhotosSuggestion: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "photo.stack.fill")
+                    .foregroundStyle(.tint)
+                Text("Apple Photos 라이브러리를 찾았습니다")
+                    .font(.subheadline.weight(.semibold))
+            }
+            Text("시스템 사진앱이 저장한 'Photos Library.photoslibrary' 안의 사진들을 추가할 수 있습니다. 추가해도 사진앱 데이터는 수정되지 않습니다 (read-only 스캔).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                Button("Apple Photos 추가") {
+                    backend.addApplePhotosLibrary()
+                }
+                .buttonStyle(.borderedProminent)
+                Button("다른 폴더 선택") {
+                    backend.choosePhotoFolder()
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var selectedFoldersPanel: some View {
