@@ -175,6 +175,9 @@ PHOTOME_NOTARY_PROFILE=photome-notary scripts/notarize_mac_app.sh
 
 ## 진행 기록 (가장 최근부터)
 
+- 2026-06-03: Notarization 준비 — `.entitlements` 추가 (allow-jit, allow-unsigned-executable-memory, disable-library-validation, network.client/server, files.user-selected.read-only). build 스크립트가 Developer ID 서명 시 `--timestamp` + entitlements 자동 적용. DMG 자체도 codesign + stapler staple. notarize 스크립트가 .app까지 staple. GitHub Actions workflow에 시크릿 기반 인증서 import 단계 + 정식 빌드 + notarize 자동화 추가.
+- 2026-06-03: 사용자 컨펌으로 정식 외부 배포 방향 결정 — Developer ID + Notarization. App Store 미경유, GitHub Release 단독 배포.
+- 2026-06-03: First-run UX 폴리시 — 폴더 선택/Drag&Drop 시 자동 시작, source root 폴더명+경로 2줄 표시, 메뉴 라벨 동사화, AI Mode 토글 제거(offlineMode 상수화), 표준 About panel, landing 첫 분석 시간 안내.
 - 2026-06-02: Xcode toolchain 빌드/테스트 검증 완료 — `xcodebuild build` SUCCEEDED, `xcodebuild test` 5/5 passed (webViewReload, jobSummary 등). swift test는 CLT 한정 `Testing` 모듈 부재 이슈로 Xcode toolchain 권장.
 - 2026-06-02: landing UX 개선 — 폴더 있을 때 [백엔드 시작] prominent, [로그/진단] landing에서 제거 → 메뉴바에만 유지. startupHint로 포트 충돌 등 원인별 안내.
 - 2026-06-02: S1.5 + S2.1 완료. /ai-pack/* progress(bytes_downloaded/bytes_estimated/fraction) 노출 + Mac shell summary에 MB 표시. mac_app_backend_env가 HF_HOME/TORCH_HOME을 model_root 하위로 라우팅. UpdateChecker가 6시간 주기로 GitHub Releases /releases/latest 폴링, 새 버전 발견 시 UNNotification + 메뉴에 "새 버전 다운로드…" 항목. swift build OK, 185 tests pass.

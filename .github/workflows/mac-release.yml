@@ -62,10 +62,41 @@ jobs:
           .venv311/bin/pip install --upgrade pip wheel setuptools
           .venv311/bin/pip install -e ".[clip]"
 
-      - name: Build ad-hoc signed app and DMG
+      - name: Import Developer ID certificate
+        if: env.MAC_DEVELOPER_ID_CERT_BASE64 != '' && env.MAC_DEVELOPER_ID_CERT_PASSWORD != ''
+        env:
+          MAC_DEVELOPER_ID_CERT_BASE64: ${{ secrets.MAC_DEVELOPER_ID_CERT_BASE64 }}
+          MAC_DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.MAC_DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASS="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          echo "$MAC_DEVELOPER_ID_CERT_BASE64" | base64 --decode > /tmp/cert.p12
+          security import /tmp/cert.p12 -k "$KEYCHAIN_PATH" -P "$MAC_DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+          rm -f /tmp/cert.p12
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Build app and DMG
         env:
           PHOTOME_BUNDLE_PYTHON: ${{ inputs.bundle_python && '1' || '0' }}
+          PHOTOME_MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY || '-' }}
         run: scripts/build_mac_app_bundle.sh
+
+      - name: Notarize DMG
+        if: env.MAC_NOTARY_APPLE_ID != '' && env.MAC_NOTARY_TEAM_ID != '' && env.MAC_NOTARY_PASSWORD != ''
+        env:
+          MAC_NOTARY_APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
+          MAC_NOTARY_TEAM_ID: ${{ secrets.MAC_NOTARY_TEAM_ID }}
+          MAC_NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
+          PHOTOME_NOTARY_APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
+          PHOTOME_NOTARY_TEAM_ID: ${{ secrets.MAC_NOTARY_TEAM_ID }}
+          PHOTOME_NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
+        run: scripts/notarize_mac_app.sh
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4

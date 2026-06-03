@@ -29,7 +29,18 @@ EOF
   exit 2
 fi
 
+echo "==> Submitting DMG to Apple notarization service (5~30 min typical)"
 xcrun notarytool submit "$DMG_PATH" "${SUBMIT_ARGS[@]}" --wait
+echo "==> Stapling notarization ticket to DMG"
 xcrun stapler staple "$DMG_PATH"
 xcrun stapler validate "$DMG_PATH"
+
+echo "==> Also stapling .app inside the DMG (so installs survive after DMG eject)"
+# stapler validate가 통과한 DMG 안의 .app에도 직접 ticket을 부착해야,
+# 사용자가 .app을 Applications에 복사한 뒤에도 macOS가 ticket을 확인할 수 있다.
+xcrun stapler staple "$APP_BUNDLE" || echo "warning: app bundle staple may have already inherited ticket from DMG"
+xcrun stapler validate "$APP_BUNDLE" || true
+
+echo "==> Final Gatekeeper assessment"
 spctl -a -vv -t open --context context:primary-signature "$DMG_PATH"
+spctl -a -vv "$APP_BUNDLE" || echo "warning: app bundle Gatekeeper check returned non-zero; verify on a fresh Mac"

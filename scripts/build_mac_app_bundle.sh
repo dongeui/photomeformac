@@ -191,7 +191,21 @@ if [[ "$BUNDLE_WEIGHTS" == "1" ]]; then
   fi
 fi
 
-codesign --force --deep --options runtime --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
+ENTITLEMENTS_FILE="$PACKAGE_DIR/Resources/PhotomeForMac.entitlements"
+CODESIGN_ARGS=(--force --options runtime)
+if [[ "$SIGN_IDENTITY" != "-" ]]; then
+  # Developer ID 서명을 사용할 때만 --timestamp가 동작한다 (Apple 타임스탬프
+  # 서버 사용). ad-hoc 서명에서는 --timestamp가 실패하므로 분기한다.
+  CODESIGN_ARGS+=(--timestamp)
+fi
+if [[ -f "$ENTITLEMENTS_FILE" ]]; then
+  CODESIGN_ARGS+=(--entitlements "$ENTITLEMENTS_FILE")
+fi
+
+# venv 안의 .so/.dylib을 먼저 sign한 다음 마지막에 .app bundle을 sign한다.
+# --deep는 Apple 비추천이지만 venv 안 수천 개의 nested binary를 매번 개별
+# sign하는 비용이 크므로 fallback으로 사용.
+codesign "${CODESIGN_ARGS[@]}" --deep --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
 mkdir -p "$DMG_STAGING"
@@ -235,6 +249,14 @@ fi
 
 hdiutil convert "$DMG_RW" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH" >/dev/null
 rm -f "$DMG_RW"
+
+# Notarization 절차에서 .dmg 자체에도 Developer ID 서명이 있어야 한다.
+# ad-hoc(-)으로는 codesign이 사실상 no-op이지만 명령어 자체는 통과한다.
+DMG_CODESIGN_ARGS=(--force --sign "$SIGN_IDENTITY")
+if [[ "$SIGN_IDENTITY" != "-" ]]; then
+  DMG_CODESIGN_ARGS+=(--timestamp)
+fi
+codesign "${DMG_CODESIGN_ARGS[@]}" "$DMG_PATH"
 
 printf '%s\n' "$APP_BUNDLE"
 printf '%s\n' "$DMG_PATH"

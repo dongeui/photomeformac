@@ -1,20 +1,35 @@
 # Photome for Mac Release Checklist
 
-이 문서는 `1~10 남은 작업`의 실제 진행 기준이다. 비밀값은 저장소에 넣지 않고 로컬 Keychain/환경변수만 사용한다.
+정식 외부 배포(GitHub Release 등)를 위해서는 **Apple Developer Program 가입 + Developer ID 인증서 + Notarization** 이 필요하다. App Store에 올리지 않더라도 macOS Sequoia(15) 이후 외부 사용자가 더블클릭으로 실행하려면 둘 다 있어야 한다.
 
-## 1. Developer ID 인증서/Team ID
+비밀값은 저장소에 넣지 않고 로컬 Keychain/환경변수만 사용한다.
 
-필수 로컬 준비:
+## 0. 사전 준비 (한 번만)
+
+1. **Apple Developer Program** 가입 — $99/년. [developer.apple.com](https://developer.apple.com)
+2. **Developer ID Application 인증서** 발급
+   - developer.apple.com → Certificates → "+" → Developer ID Application 선택
+   - CSR 생성 (Keychain Access → 인증서 도우미 → 인증 기관에 인증서 요청)
+   - 발급된 .cer 다운로드 → 더블클릭으로 Keychain에 설치
+3. **App-Specific Password** 생성 — appleid.apple.com → Sign-In and Security → App-Specific Passwords
+4. **notarytool keychain profile** 저장 (재사용 가능):
+
+   ```bash
+   xcrun notarytool store-credentials photome-notary \
+     --apple-id <apple-id-email> \
+     --team-id <TEAMID> \
+     --password <app-specific-password>
+   ```
+
+## 1. Developer ID 환경변수
 
 ```bash
-security find-identity -v -p codesigning
+security find-identity -v -p codesigning        # 인증서 확인
 export PHOTOME_MAC_SIGN_IDENTITY="Developer ID Application: <NAME> (<TEAMID>)"
 export PHOTOME_MAC_BUNDLE_ID="com.photome.mac"
 export PHOTOME_MAC_VERSION="0.1.0"
 export PHOTOME_MAC_BUILD="1"
 ```
-
-Team ID와 인증서 이름은 Apple Developer 계정/Keychain에서 확인한다. 저장소에는 실제 비밀값을 커밋하지 않는다.
 
 ## 2. notarization
 
