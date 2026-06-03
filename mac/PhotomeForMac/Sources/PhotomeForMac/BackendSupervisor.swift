@@ -141,6 +141,9 @@ final class BackendSupervisor: ObservableObject {
     /// URLs that we have `startAccessingSecurityScopedResource()`-ed; we balance
     /// these with `stopAccessing...` on stop()/deinit so OS-side counters stay sane.
     private var activeSecurityURLs: [URL] = []
+    /// NAS/외장 마운트가 살아있는지 직전 polling 결과. 변경 감지에 사용.
+    private var lastSourceRootAvailability: [String: Bool] = [:]
+    @Published private(set) var unavailableSourceRoots: [String] = []
 
     private static let sourceRootsDefaultsKey = "PhotomeSourceRoots"
     private static let sourceRootBookmarksKey = "PhotomeSourceRootBookmarks"
@@ -247,6 +250,34 @@ final class BackendSupervisor: ObservableObject {
         } catch {
             NSLog("storeBookmark failed for \(url.path): \(error)")
         }
+    }
+
+    /// NAS/외장 폴더가 마운트 해제되면 사용자에게 알린다. 백엔드는 graceful하게
+    /// degrade하지만 사용자는 왜 검색 결과가 줄어드는지 알 길이 없다.
+    private func checkSourceRootAvailability() {
+        let fm = FileManager.default
+        var unavailable: [String] = []
+        var newAvail: [String: Bool] = [:]
+        for path in sourceRoots {
+            var isDir: ObjCBool = false
+            let exists = fm.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
+            newAvail[path] = exists
+            if !exists { unavailable.append(path) }
+            let previous = lastSourceRootAvailability[path]
+            if previous == true && !exists {
+                scheduleNotification(
+                    title: "Photome — 폴더 접근 불가",
+                    body: "'\((path as NSString).lastPathComponent)' 폴더에 접근할 수 없습니다. NAS 마운트가 해제됐는지 확인하세요."
+                )
+            } else if previous == false && exists {
+                scheduleNotification(
+                    title: "Photome — 폴더 복구됨",
+                    body: "'\((path as NSString).lastPathComponent)' 폴더에 다시 접근할 수 있습니다."
+                )
+            }
+        }
+        lastSourceRootAvailability = newAvail
+        unavailableSourceRoots = unavailable
     }
 
     private func dropBookmark(for path: String) {
@@ -733,6 +764,7 @@ final class BackendSupervisor: ObservableObject {
                     }
                     await self.refreshAIPackStatus()
                     await self.refreshLibraryJobStatus()
+                    await MainActor.run { self.checkSourceRootAvailability() }
                 } else if firstSuccess {
                     await MainActor.run {
                         self.state = .error
@@ -1093,14 +1125,41 @@ final class BackendSupervisor: ObservableObject {
         return bundleURL
     }
 
+    private static let logMaxBytes: UInt64 = 10 * 1024 * 1024  // 10 MB
+    private static let logKeepRotations: Int = 3                // .log.1 ~ .log.3
+
     private static func prepareLogFile(appDataRoot: URL) throws -> URL {
         let logsDirectory = appDataRoot.appendingPathComponent("logs", isDirectory: true)
         try FileManager.default.createDirectory(at: logsDirectory, withIntermediateDirectories: true)
         let logFileURL = logsDirectory.appendingPathComponent("photome-backend.log")
+        rotateLogIfNeeded(at: logFileURL)
         if !FileManager.default.fileExists(atPath: logFileURL.path) {
             FileManager.default.createFile(atPath: logFileURL.path, contents: Data())
         }
         return logFileURL
+    }
+
+    /// 10MB 넘으면 .log → .log.1, .log.1 → .log.2 ... 식으로 회전. 가장 오래된 것은 삭제.
+    /// 백엔드가 며칠씩 켜져 있어도 로그 파일이 무한 누적되지 않도록 한다.
+    private static func rotateLogIfNeeded(at url: URL) {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: url.path) else { return }
+        let attrs = try? fm.attributesOfItem(atPath: url.path)
+        let size = (attrs?[.size] as? NSNumber)?.uint64Value ?? 0
+        guard size >= logMaxBytes else { return }
+        // 가장 오래된 .log.N부터 삭제
+        let oldest = url.appendingPathExtension("\(logKeepRotations)")
+        try? fm.removeItem(at: oldest)
+        // .log.(N-1) → .log.N 으로 이동
+        for i in stride(from: logKeepRotations - 1, through: 1, by: -1) {
+            let from = url.appendingPathExtension("\(i)")
+            let to = url.appendingPathExtension("\(i + 1)")
+            guard fm.fileExists(atPath: from.path) else { continue }
+            try? fm.moveItem(at: from, to: to)
+        }
+        // 현재 .log → .log.1
+        let firstRotation = url.appendingPathExtension("1")
+        try? fm.moveItem(at: url, to: firstRotation)
     }
 
     private static func appendLogBanner(to handle: FileHandle, port: Int, lanEnabled: Bool) throws {

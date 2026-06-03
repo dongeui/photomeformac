@@ -174,6 +174,24 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
+            if !backend.unavailableSourceRoots.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("⚠️ 마운트 해제된 폴더가 있습니다")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                    ForEach(backend.unavailableSourceRoots, id: \.self) { path in
+                        Text((path as NSString).lastPathComponent)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .help(path)
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+
             if let hint = backend.startupHint {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(hint.title)
