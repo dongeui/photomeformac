@@ -134,8 +134,16 @@ final class BackendSupervisor: ObservableObject {
     private var logHandle: FileHandle?
     private var crashRestartAttempts: Int = 0
     private var lastNotifiedJobID: String?
+    /// Path → security-scoped bookmark data. Persisted so the user does not have
+    /// to re-pick the same folders after each app restart (NSOpenPanel hands out
+    /// transient permission; bookmarks make it durable across launches).
+    private var sourceRootBookmarks: [String: Data] = [:]
+    /// URLs that we have `startAccessingSecurityScopedResource()`-ed; we balance
+    /// these with `stopAccessing...` on stop()/deinit so OS-side counters stay sane.
+    private var activeSecurityURLs: [URL] = []
 
     private static let sourceRootsDefaultsKey = "PhotomeSourceRoots"
+    private static let sourceRootBookmarksKey = "PhotomeSourceRootBookmarks"
     private static let lanEnabledDefaultsKey = "PhotomeLANEnabled"
     private static let maxCrashRestartAttempts: Int = 1
 
@@ -143,6 +151,8 @@ final class BackendSupervisor: ObservableObject {
         self.port = port
         self.sourceRoots = UserDefaults.standard.stringArray(forKey: Self.sourceRootsDefaultsKey) ?? []
         self.lanEnabled = UserDefaults.standard.bool(forKey: Self.lanEnabledDefaultsKey)
+        self.sourceRootBookmarks = Self.loadBookmarks()
+        self.resolveAndAccessBookmarks()
     }
 
     deinit {
@@ -151,6 +161,101 @@ final class BackendSupervisor: ObservableObject {
         process?.terminate()
         healthTask?.cancel()
         actionTask?.cancel()
+        for url in activeSecurityURLs {
+            url.stopAccessingSecurityScopedResource()
+        }
+    }
+
+    private static func loadBookmarks() -> [String: Data] {
+        guard let dict = UserDefaults.standard.dictionary(forKey: Self.sourceRootBookmarksKey) else {
+            return [:]
+        }
+        var out: [String: Data] = [:]
+        for (key, value) in dict {
+            if let data = value as? Data {
+                out[key] = data
+            }
+        }
+        return out
+    }
+
+    private func persistBookmarks() {
+        UserDefaults.standard.set(sourceRootBookmarks, forKey: Self.sourceRootBookmarksKey)
+    }
+
+    private func resolveAndAccessBookmarks() {
+        // Resolve stored bookmarks, claim security-scoped access so the Python
+        // backend (spawned as a child process) inherits read access to the user's
+        // chosen folders even after Mac app updates or first launches under
+        // hardened runtime + sandbox-style permissions.
+        var refreshedRoots: [String] = []
+        var refreshedBookmarks: [String: Data] = [:]
+        for path in sourceRoots {
+            guard let data = sourceRootBookmarks[path] else {
+                refreshedRoots.append(path)
+                continue
+            }
+            var isStale = false
+            do {
+                let url = try URL(
+                    resolvingBookmarkData: data,
+                    options: [.withSecurityScope],
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                )
+                if url.startAccessingSecurityScopedResource() {
+                    activeSecurityURLs.append(url)
+                    refreshedRoots.append(url.path)
+                    if isStale,
+                       let renewed = try? url.bookmarkData(
+                            options: [.withSecurityScope],
+                            includingResourceValuesForKeys: nil,
+                            relativeTo: nil
+                       ) {
+                        refreshedBookmarks[url.path] = renewed
+                    } else {
+                        refreshedBookmarks[url.path] = data
+                    }
+                } else {
+                    refreshedRoots.append(path)
+                    refreshedBookmarks[path] = data
+                }
+            } catch {
+                refreshedRoots.append(path)
+            }
+        }
+        sourceRoots = refreshedRoots
+        sourceRootBookmarks = refreshedBookmarks
+        if refreshedRoots != UserDefaults.standard.stringArray(forKey: Self.sourceRootsDefaultsKey) {
+            UserDefaults.standard.set(refreshedRoots, forKey: Self.sourceRootsDefaultsKey)
+        }
+        persistBookmarks()
+    }
+
+    private func storeBookmark(for url: URL) {
+        do {
+            let data = try url.bookmarkData(
+                options: [.withSecurityScope],
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            sourceRootBookmarks[url.path] = data
+            if url.startAccessingSecurityScopedResource() {
+                activeSecurityURLs.append(url)
+            }
+            persistBookmarks()
+        } catch {
+            NSLog("storeBookmark failed for \(url.path): \(error)")
+        }
+    }
+
+    private func dropBookmark(for path: String) {
+        sourceRootBookmarks.removeValue(forKey: path)
+        if let idx = activeSecurityURLs.firstIndex(where: { $0.path == path }) {
+            activeSecurityURLs[idx].stopAccessingSecurityScopedResource()
+            activeSecurityURLs.remove(at: idx)
+        }
+        persistBookmarks()
     }
 
     var isRunning: Bool {
@@ -329,16 +434,18 @@ final class BackendSupervisor: ObservableObject {
     }
 
     func appendSourceRoots(_ urls: [URL]) {
-        let normalized = urls.compactMap { url -> String? in
+        let existingPaths = Set(sourceRoots)
+        var newPaths: [String] = []
+        for url in urls {
             let path = url.path
-            return path.isEmpty ? nil : path
+            guard !path.isEmpty, !existingPaths.contains(path) else { continue }
+            storeBookmark(for: url)
+            newPaths.append(path)
         }
-        let existing = Set(sourceRoots)
-        let merged = sourceRoots + normalized.filter { !existing.contains($0) }
-        guard merged.count != sourceRoots.count else { return }
-        sourceRoots = merged
+        guard !newPaths.isEmpty else { return }
+        sourceRoots = sourceRoots + newPaths
         UserDefaults.standard.set(sourceRoots, forKey: Self.sourceRootsDefaultsKey)
-        statusMessage = "원본 폴더 \(normalized.count)개를 추가했습니다."
+        statusMessage = "원본 폴더 \(newPaths.count)개를 추가했습니다."
         if process != nil {
             restart()
         } else if state == .stopped {
@@ -352,6 +459,7 @@ final class BackendSupervisor: ObservableObject {
         guard sourceRoots.contains(path) else { return }
         sourceRoots.removeAll { $0 == path }
         UserDefaults.standard.set(sourceRoots, forKey: Self.sourceRootsDefaultsKey)
+        dropBookmark(for: path)
         statusMessage = sourceRoots.isEmpty
             ? "원본 폴더 목록이 비었습니다."
             : "원본 폴더에서 제거했습니다."
@@ -429,9 +537,20 @@ final class BackendSupervisor: ObservableObject {
         panel.allowsMultipleSelection = true
         panel.begin { [weak self] response in
             guard response == .OK else { return }
-            let paths = panel.urls.map { $0.path }
+            let urls = panel.urls
             Task { @MainActor in
                 guard let self else { return }
+                // Replace mode: drop existing bookmarks before claiming new ones.
+                for existing in self.activeSecurityURLs {
+                    existing.stopAccessingSecurityScopedResource()
+                }
+                self.activeSecurityURLs.removeAll()
+                self.sourceRootBookmarks.removeAll()
+                var paths: [String] = []
+                for url in urls {
+                    self.storeBookmark(for: url)
+                    paths.append(url.path)
+                }
                 self.sourceRoots = paths
                 self.statusMessage = "선택한 폴더: \(paths.joined(separator: ", "))"
                 UserDefaults.standard.set(paths, forKey: Self.sourceRootsDefaultsKey)

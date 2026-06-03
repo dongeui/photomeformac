@@ -22,5 +22,9 @@
     <!-- NSOpenPanel/Drag&Drop으로 사용자가 명시 선택한 폴더 read-only 접근. -->
     <key>com.apple.security.files.user-selected.read-only</key>
     <true/>
+    <!-- security-scoped bookmark를 사용해 사용자가 한 번 선택한 폴더에 대한 권한을
+         앱 재시작·OS 업데이트 이후에도 유지한다. -->
+    <key>com.apple.security.files.bookmarks.app-scope</key>
+    <true/>
 </dict>
 </plist>
