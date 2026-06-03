@@ -85,12 +85,18 @@ Tauri는 빠른 웹 wrapper 실험이 필요할 때 후보로 남긴다. Electro
 1. 대시보드 열기 (앱 내 / 브라우저)
 2. 백엔드 시작/중지/재시작
 3. 전체 동기화, 이미지 AI 이어서 분석
-4. 사진 폴더 선택 (NSOpenPanel + Finder Drag&Drop)
+4. 사진 폴더 선택 (NSOpenPanel + Finder Drag&Drop, 첫 선택 시 백엔드 자동 시작)
 5. LAN 공유 토글 (admin token 자동 발급)
-6. 이미지 AI on/off, offline/online 토글, 모델 캐시 폴더 열기
+6. 모델 준비/재로드, 모델 캐시 폴더 열기
 7. 로그인 시 자동 시작
 8. 로그 보기, 진단 내보내기
 9. 업데이트 확인 (GitHub Releases 폴링)
+10. 표준 macOS About panel (버전·빌드·GitHub 링크)
+
+정식 배포 정책상 노출하지 않는 항목:
+
+- CLIP 켜기/끄기 토글 — 항상 켜진 상태 (DMG에 PyTorch + weights 동봉)
+- AI Offline/Online 토글 — 항상 offline 고정 (외부 다운로드 차단)
 
 ## 하지 않을 것
 

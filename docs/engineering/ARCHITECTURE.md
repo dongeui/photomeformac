@@ -22,7 +22,7 @@ source root
       └─ HEIC: pillow-heif로 GPS EXIF 추출
   → thumbnail (Phase 1)
   → OCR / CLIP embedding / signals
-  → auto-tag (CLIP zero-shot: 34 concepts, semantic_auto_tag_version)
+  → auto-tag (CLIP zero-shot: 121 concepts, semantic_auto_tag_version=auto-v2)
   → geocoding (GPS → 장소 태그: geo, geo_detail, place)
   → face detection / clustering → person tags
   → search document (FTS + semantic)
@@ -50,13 +50,21 @@ semantic maintenance 사이클마다 GPS 누락 이미지를 자동 재추출(`_
 
 ## 자동 태그
 
-- `app/services/analysis/clip_concepts.yaml`: 34개 concept, 각 한국어 alias 포함
-- `semantic_auto_tag_version` 변경 시 전체 파일 재태깅
+- `app/services/analysis/clip_concepts.yaml`: 121개 concept (auto-v2), 각 영문 alias + 한국어 alias 포함
+- 카테고리: 사람(6) · 화면(3) · 장면(39) · 사물(55) · 이벤트(18)
+- `semantic_auto_tag_version` 변경 시 전체 파일 재태깅 (CLIP 임베딩 캐시 재사용, 분 단위 소요)
 - `max_aliases_per_concept: 8`로 alias 수 제한
+
+## 증분 스캔 캐시
+
+- `DirMtimeCache` (`app/services/scanner/service.py`): 디렉토리 mtime을 기억해 변경 없는 폴더의 walk를 skip
+- `data_root/scan_cache.json`에 디스크 persist — 백엔드 재시작 후에도 캐시 유지
+- 첫 boot: 캐시 비어 있어 전체 walk → 완료 시 save
+- 두 번째 boot부터: load → 변경된 디렉토리만 walk → 신규/갱신 카운트만 메시지에 노출
 
 ## 주요 경계
 
-- `app/services/scanner`: 파일 탐색, 안정화 대기
+- `app/services/scanner`: 파일 탐색, 안정화 대기, dir mtime 캐시
 - `app/services/processing`: 라이브러리 동기화, 자산 생성, 상태 전이, GPS 재추출
 - `app/services/metadata`: EXIF/GPS 추출 (pillow-heif 포함)
 - `app/services/geocoding`: GPS → 장소명 (로컬 GeoNames)

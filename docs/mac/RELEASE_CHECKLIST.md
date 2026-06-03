@@ -76,21 +76,40 @@ scripts/notarize_mac_app.sh
 
 아이콘 원본은 `mac/PhotomeForMac/Resources/Assets.xcassets/AppIcon.appiconset/`에 있다.
 
-## 5. Python runtime / backend bundling
+## 5. Python runtime / backend bundling / Entitlements
 
-기본 패키징은 backend source를 앱 리소스에 복사한다.
-
-```bash
-PHOTOME_BUNDLE_BACKEND=1 scripts/build_mac_app_bundle.sh
-```
-
-Python runtime까지 넣으려면 로컬 venv를 지정한다.
+**기본 동작 (정식 배포):**
 
 ```bash
-PHOTOME_BUNDLE_PYTHON=1 \
-PHOTOME_PYTHON_BUNDLE_SRC=/absolute/path/to/.venv \
 scripts/build_mac_app_bundle.sh
 ```
+
+- `PHOTOME_BUNDLE_BACKEND=1` (기본) — `app/` Python 소스를 Resources/photome-backend/ 에 복사
+- `PHOTOME_BUNDLE_PYTHON=1` (기본) — venv 자동 탐색해서 Resources/python-runtime/ 에 복사
+- `PHOTOME_BUNDLE_WEIGHTS=1` (기본) — `~/.cache/huggingface/hub`에서 ViT-B-32 가중치를 Resources/preinstalled-models/huggingface/hub/ 에 복사
+
+옵트아웃하려면 `PHOTOME_BUNDLE_PYTHON=0` 또는 `PHOTOME_BUNDLE_WEIGHTS=0` 명시.
+
+**venv가 없을 때:**
+
+```bash
+python3.11 -m venv .venv311
+.venv311/bin/pip install -e ".[clip]"
+```
+
+이후 빌드 스크립트가 `.venv311`을 자동으로 발견한다. 또는 `PHOTOME_PYTHON_BUNDLE_SRC=/path/to/venv` 명시.
+
+**Entitlements (`mac/PhotomeForMac/Resources/PhotomeForMac.entitlements`):**
+
+빌드 스크립트가 Developer ID 서명 시 자동으로 `--entitlements`로 부착한다.
+포함:
+- `com.apple.security.cs.allow-jit`
+- `com.apple.security.cs.allow-unsigned-executable-memory`
+- `com.apple.security.cs.disable-library-validation`
+- `com.apple.security.network.client/server`
+- `com.apple.security.files.user-selected.read-only`
+
+이게 없으면 hardened runtime 안에서 Python interpreter + PyTorch JIT가 차단된다.
 
 앱 실행 시 탐색 순서:
 
