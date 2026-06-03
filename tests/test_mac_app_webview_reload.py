@@ -44,7 +44,7 @@ def test_backend_supervisor_persists_source_roots_lan_and_ai_mode_state() -> Non
     assert "self.offlineMode = true" in content
     assert "UserDefaults.standard.set(lanEnabled, forKey: Self.lanEnabledDefaultsKey)" in content
     assert "UserDefaults.standard.set(offlineMode, forKey: Self.offlineModeDefaultsKey)" in content
-    assert "self?.sourceRoots = paths" in content
+    assert "self.sourceRoots = paths" in content
     # 번들 weights → user data 1회 복사 helper가 존재해야 함
     assert "seedPreinstalledModels" in content
 

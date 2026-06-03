@@ -219,7 +219,7 @@ final class BackendSupervisor: ObservableObject {
     }
 
     var aiModeLabel: String {
-        offlineMode ? "AI 오프라인" : "AI 온라인 준비"
+        offlineMode ? "외부 다운로드 차단됨" : "외부 다운로드 허용"
     }
 
     func updateStatusMessage(_ message: String) {
@@ -353,6 +353,10 @@ final class BackendSupervisor: ObservableObject {
         statusMessage = "원본 폴더 \(normalized.count)개를 추가했습니다."
         if process != nil {
             restart()
+        } else if state == .stopped {
+            // 첫 폴더 추가 후 사용자가 별도로 [백엔드 시작]을 또 누르지 않아도
+            // 곧장 라이브러리가 뜨도록 자동 시작한다.
+            start()
         }
     }
 
@@ -430,7 +434,9 @@ final class BackendSupervisor: ObservableObject {
 
     func toggleOfflineMode() {
         offlineMode.toggle()
-        statusMessage = offlineMode ? "AI 오프라인 모드로 전환했습니다." : "AI 온라인 준비 모드로 전환했습니다."
+        statusMessage = offlineMode
+            ? "외부 다운로드를 차단했습니다. 번들/캐시된 모델만 사용합니다."
+            : "외부 다운로드를 허용했습니다. 누락된 모델을 자동으로 받습니다."
         if process != nil {
             restart()
         }
@@ -447,11 +453,15 @@ final class BackendSupervisor: ObservableObject {
             guard response == .OK else { return }
             let paths = panel.urls.map { $0.path }
             Task { @MainActor in
-                self?.sourceRoots = paths
-                self?.statusMessage = "선택한 폴더: \(paths.joined(separator: ", "))"
+                guard let self else { return }
+                self.sourceRoots = paths
+                self.statusMessage = "선택한 폴더: \(paths.joined(separator: ", "))"
                 UserDefaults.standard.set(paths, forKey: Self.sourceRootsDefaultsKey)
-                if self?.process != nil {
-                    self?.restart()
+                if self.process != nil {
+                    self.restart()
+                } else if self.state == .stopped {
+                    // 첫 선택 후 따로 [백엔드 시작]을 누를 필요 없이 바로 시작.
+                    self.start()
                 }
             }
         }

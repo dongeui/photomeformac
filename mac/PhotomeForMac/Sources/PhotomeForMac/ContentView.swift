@@ -41,7 +41,10 @@ struct ContentView: View {
         }
         .frame(minWidth: 1100, minHeight: 760)
         .onAppear {
-            if backend.state == .stopped {
+            // 사용자가 선택해둔 폴더가 있을 때만 자동 시작한다. 폴더가 비어 있는
+            // 첫 실행에서는 landing의 [사진 폴더 선택] 흐름이 끝나야 백엔드가
+            // 의미를 갖는다.
+            if backend.state == .stopped && !backend.sourceRoots.isEmpty {
                 backend.start()
             }
         }
@@ -131,11 +134,11 @@ struct ContentView: View {
                 backend.toggleOfflineMode()
             }
 
-            Button("모델 폴더") {
+            Button("모델 캐시 열기") {
                 backend.openModelCache()
             }
 
-            Button("사진 폴더") {
+            Button("사진 폴더 선택") {
                 backend.choosePhotoFolder()
             }
 
@@ -251,12 +254,18 @@ struct ContentView: View {
                         Image(systemName: "folder.fill")
                             .foregroundStyle(.secondary)
                             .imageScale(.small)
-                        Text(path)
-                            .font(.caption)
-                            .textSelection(.enabled)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text((path as NSString).lastPathComponent)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                            Text(path)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .help(path)
                         Button {
                             backend.removeSourceRoot(path)
                         } label: {
