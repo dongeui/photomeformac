@@ -1319,16 +1319,35 @@ def _render_datalist_options(values: list[str]) -> str:
 
 def _render_empty_state(q: str | None, person: str | None, place: str | None) -> str:
     if q or person or place:
-        message = "조건에 맞는 사진이나 영상을 찾지 못했습니다."
-        hint = "검색어를 더 짧게 쓰거나 날짜, 인물, 장소 조건을 하나씩 줄여보세요."
+        message = f"\"{q or person or place}\"(으)로 일치하는 사진을 찾지 못했어요."
+        hint = (
+            "다른 키워드 예시: <strong>바다, 산, 케이크, 강아지, 카페, 벚꽃, 단풍, "
+            "비행기, 휴대폰</strong> 같은 사물·장소·시즌 키워드를 한국어로 그대로 입력할 수 있습니다."
+        )
+        examples_html = """
+          <p class="detail" style="margin-top:8px">현재 121개 카테고리(사람·사물·장면·이벤트)에 한국어/영어 별명이 매핑되어 있습니다.
+          OCR + 사람 이름 태그 + 장소 지오코드(예: 서울, 제주)도 함께 검색합니다.</p>
+          <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
+            <a class="quick-chip" href="/gallery?q=%EB%B0%94%EB%8B%A4">바다</a>
+            <a class="quick-chip" href="/gallery?q=%EC%82%B0">산</a>
+            <a class="quick-chip" href="/gallery?q=%EC%BC%80%EC%9D%B4%ED%81%AC">케이크</a>
+            <a class="quick-chip" href="/gallery?q=%EC%B9%B4%ED%8E%98">카페</a>
+            <a class="quick-chip" href="/gallery?q=%EB%B2%9A%EA%BD%83">벚꽃</a>
+            <a class="quick-chip" href="/gallery?q=%EB%8B%A8%ED%92%8D">단풍</a>
+            <a class="quick-chip" href="/gallery?q=%EC%9D%8C%EC%8B%9D">음식</a>
+            <a class="quick-chip" href="/gallery?q=%EC%84%9C%EC%9A%B8">서울</a>
+          </div>
+        """
     else:
         message = "아직 보여줄 사진이나 영상이 없습니다."
         hint = "진행 상태 보기에서 사진 가져오기가 끝났는지 확인할 수 있습니다."
+        examples_html = ""
     return f"""
       <article class="card">
         <div class="body">
           <p class="summary">{escape(message)}</p>
-          <p class="detail">{escape(hint)}</p>
+          <p class="detail">{hint}</p>
+          {examples_html}
         </div>
       </article>
     """

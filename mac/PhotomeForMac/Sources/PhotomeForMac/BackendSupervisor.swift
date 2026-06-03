@@ -915,6 +915,7 @@ final class BackendSupervisor: ObservableObject {
         let result = job["result"] as? [String: Any]
         let progress = result?["progress"] as? [String: Any]
         let kind = job["job_kind"] as? String ?? ""
+        let startedAt = parseISO8601(job["started_at"] as? String)
 
         if kind == "scan" {
             let scan = progress?["scan"] as? [String: Any]
@@ -922,14 +923,16 @@ final class BackendSupervisor: ObservableObject {
                 let current = intValue(scan?["current"]) ?? 0
                 let found = intValue(progress?["files_found"]) ?? total
                 let failed = intValue(scan?["failed"]) ?? 0
-                return "스캔 중 · \(current) / \(total) · 발견 \(found) · 실패 \(failed)"
+                let eta = formatETA(startedAt: startedAt, current: current, total: total)
+                return "스캔 중 · \(current) / \(total) · 발견 \(found) · 실패 \(failed)\(eta)"
             }
             let processed = progress?["processed"] as? [String: Any]
             if let total = intValue(processed?["total"]) {
                 let current = intValue(processed?["current"]) ?? 0
                 let succeeded = intValue(processed?["succeeded"]) ?? 0
                 let failed = intValue(processed?["failed"]) ?? 0
-                return "처리 중 · \(current) / \(total) · 완료 \(succeeded) · 실패 \(failed)"
+                let eta = formatETA(startedAt: startedAt, current: current, total: total)
+                return "처리 중 · \(current) / \(total) · 완료 \(succeeded) · 실패 \(failed)\(eta)"
             }
             let summary = progress?["summary"] as? [String: Any]
             if let scanned = intValue(summary?["scanned"]) {
@@ -960,6 +963,46 @@ final class BackendSupervisor: ObservableObject {
         parts.append("AI +\(totalEmbeddings)")
         parts.append("태그 +\(totalTags)")
         return parts.joined(separator: " · ")
+    }
+
+    static func parseISO8601(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        // 백엔드가 보내는 "2026-06-03T22:31:23.123456" 형태와 표준 ISO8601 둘 다 시도.
+        let f1 = ISO8601DateFormatter()
+        f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f1.date(from: raw) { return d }
+        let f2 = ISO8601DateFormatter()
+        f2.formatOptions = [.withInternetDateTime]
+        if let d = f2.date(from: raw) { return d }
+        // datetime.utcnow().isoformat() — TZ 없음
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        for pattern in ["yyyy-MM-dd'T'HH:mm:ss.SSSSSS", "yyyy-MM-dd'T'HH:mm:ss"] {
+            formatter.dateFormat = pattern
+            if let d = formatter.date(from: raw) { return d }
+        }
+        return nil
+    }
+
+    static func formatETA(startedAt: Date?, current: Int, total: Int) -> String {
+        guard let startedAt, current > 0, total > current else { return "" }
+        let elapsed = Date().timeIntervalSince(startedAt)
+        guard elapsed > 2 else { return "" }
+        let perItem = elapsed / Double(current)
+        let remaining = Double(total - current) * perItem
+        if remaining >= 3600 {
+            let hours = Int(remaining / 3600)
+            let mins = Int((remaining.truncatingRemainder(dividingBy: 3600)) / 60)
+            return " · 약 \(hours)시간 \(mins)분 남음"
+        }
+        if remaining >= 90 {
+            return " · 약 \(Int(remaining / 60))분 남음"
+        }
+        if remaining >= 10 {
+            return " · 약 \(Int(remaining))초 남음"
+        }
+        return " · 곧 완료"
     }
 
     static func intValue(_ value: Any?) -> Int? {
