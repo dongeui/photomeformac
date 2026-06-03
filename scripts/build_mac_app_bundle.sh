@@ -31,11 +31,24 @@ rm -rf "$APP_BUNDLE" "$DMG_PATH" "$DMG_STAGING"
 
 cd "$PACKAGE_DIR"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" swift build -c release
-BINARY_PATH="$(DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" swift build -c release --show-bin-path)/$APP_NAME"
+SPM_BIN_DIR="$(DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" swift build -c release --show-bin-path)"
+BINARY_PATH="$SPM_BIN_DIR/$APP_NAME"
 
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BINARY_PATH" "$MACOS_DIR/$APP_NAME"
 chmod 755 "$MACOS_DIR/$APP_NAME"
+
+# SwiftPM은 Sparkle 같은 dynamic framework를 자동으로 .app/Contents/Frameworks/
+# 에 embed하지 않는다. 직접 복사하고 rpath를 @executable_path/../Frameworks로
+# 설정해야 사용자 Mac에서 dyld가 framework를 찾을 수 있다.
+FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
+if [[ -d "$SPM_BIN_DIR/Sparkle.framework" ]]; then
+  mkdir -p "$FRAMEWORKS_DIR"
+  rsync -a "$SPM_BIN_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/"
+  # binary가 @rpath/Sparkle.framework/...로 link됐을 텐데, 그 rpath를
+  # @executable_path/../Frameworks 로 정해줘야 한다.
+  install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS_DIR/$APP_NAME" 2>/dev/null || true
+fi
 
 if [[ -d "$PACKAGE_DIR/Resources/Assets.xcassets/AppIcon.appiconset" ]]; then
   ICONSET_DIR="$RESOURCES_DIR/AppIcon.iconset"
