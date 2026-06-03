@@ -1,170 +1,72 @@
 import Foundation
 import AppKit
-import UserNotifications
+import Sparkle
 
+/// Sparkle 2 기반 자동 업데이트 controller.
+///
+/// 사용자 첫 정식 릴리스부터 Sparkle-aware로 출시되도록 코드 측은 미리 통합한다.
+/// 운영 측에서는:
+/// 1. edDSA key 쌍을 생성 (`generate_keys` from Sparkle tools)해서 private은
+///    안전한 곳에, public은 Info.plist의 `SUPublicEDKey`에 박는다.
+/// 2. 정적 호스팅(GitHub Pages 등)에 `appcast.xml`을 둔다.
+/// 3. 빌드 시 `generate_appcast` 도구로 새 DMG의 edDSA 서명을 부착하고
+///    appcast.xml에 새 release entry를 추가한다.
+/// 4. Info.plist의 `SUFeedURL`을 그 appcast.xml의 https URL로 설정.
+///
+/// 자세한 절차는 docs/mac/USER_TODO.md 의 Sparkle 섹션 참고.
 @MainActor
 final class UpdateChecker: ObservableObject {
-    struct ReleaseInfo: Equatable {
-        let version: String
-        let tag: String
-        let htmlURL: URL
-        let publishedAt: String
-    }
-
-    @Published private(set) var latestRelease: ReleaseInfo?
-    @Published private(set) var lastCheckedAt: Date?
     @Published private(set) var lastError: String?
+    @Published private(set) var lastCheckedAt: Date?
     @Published private(set) var isChecking: Bool = false
 
-    private let owner: String
-    private let repo: String
-    private let currentVersion: String
-    private var pollTask: Task<Void, Never>?
+    private let updater: SPUUpdater
+    private let driver: SPUStandardUserDriver
+    private let delegate: SparkleDelegate
 
-    private static let lastSeenVersionKey = "PhotomeUpdateLastSeenVersion"
-    private static let pollIntervalSeconds: TimeInterval = 6 * 60 * 60
-
-    init(owner: String = "dongeui",
-         repo: String = "photomeformac",
-         currentVersion: String? = nil) {
-        self.owner = owner
-        self.repo = repo
-        if let supplied = currentVersion, !supplied.isEmpty {
-            self.currentVersion = supplied
-        } else if let bundleVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
-                  !bundleVersion.isEmpty {
-            self.currentVersion = bundleVersion
-        } else {
-            self.currentVersion = "0.0.0"
+    init(automaticallyChecks: Bool = true) {
+        let hostBundle = Bundle.main
+        let delegate = SparkleDelegate()
+        let driver = SPUStandardUserDriver(hostBundle: hostBundle, delegate: nil)
+        let updater = SPUUpdater(
+            hostBundle: hostBundle,
+            applicationBundle: hostBundle,
+            userDriver: driver,
+            delegate: delegate
+        )
+        updater.automaticallyChecksForUpdates = automaticallyChecks
+        // 24시간마다 자동 체크. Sparkle은 그 사이 지나야 실제 네트워크 호출.
+        updater.updateCheckInterval = 24 * 60 * 60
+        updater.automaticallyDownloadsUpdates = false  // 사용자 동의 후 다운로드
+        do {
+            try updater.start()
+        } catch {
+            NSLog("Sparkle updater failed to start: \(error)")
         }
+        self.updater = updater
+        self.driver = driver
+        self.delegate = delegate
     }
 
-    var hasNewerRelease: Bool {
-        guard let latest = latestRelease else { return false }
-        return Self.isVersion(latest.version, newerThan: currentVersion)
-    }
-
-    var releasesPageURL: URL {
-        URL(string: "https://github.com/\(owner)/\(repo)/releases/latest")!
-    }
-
-    func startPolling() {
-        guard pollTask == nil else { return }
-        pollTask = Task { [weak self] in
-            while !Task.isCancelled {
-                await self?.checkOnce()
-                try? await Task.sleep(nanoseconds: UInt64(Self.pollIntervalSeconds * 1_000_000_000))
-            }
-        }
-    }
-
-    func stopPolling() {
-        pollTask?.cancel()
-        pollTask = nil
-    }
-
-    func checkOnce() async {
+    /// 사용자가 메뉴에서 [업데이트 확인] 눌렀을 때 호출. 이미 최신이면 그 다이얼로그까지
+    /// Sparkle이 표준 UI로 표시한다.
+    func checkForUpdates() {
         guard !isChecking else { return }
         isChecking = true
         defer { isChecking = false }
-
-        let endpoint = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases/latest")!
-        var request = URLRequest(url: endpoint)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("photomeformac-update-checker", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 12
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                throw URLError(.badServerResponse)
-            }
-            if http.statusCode == 404 {
-                lastError = nil
-                lastCheckedAt = Date()
-                return
-            }
-            guard (200..<300).contains(http.statusCode) else {
-                throw NSError(domain: "UpdateChecker", code: http.statusCode,
-                              userInfo: [NSLocalizedDescriptionKey: "GitHub 응답 \(http.statusCode)"])
-            }
-            let parsed = try Self.parseRelease(data: data)
-            lastCheckedAt = Date()
-            lastError = nil
-            latestRelease = parsed
-            if Self.isVersion(parsed.version, newerThan: currentVersion) {
-                announceIfNeeded(parsed)
-            }
-        } catch {
-            lastError = error.localizedDescription
-            lastCheckedAt = Date()
-        }
+        lastCheckedAt = Date()
+        updater.checkForUpdates()
     }
 
-    func openReleasePage() {
-        if let url = latestRelease?.htmlURL {
-            NSWorkspace.shared.open(url)
-        } else {
-            NSWorkspace.shared.open(releasesPageURL)
-        }
-    }
-
-    private func announceIfNeeded(_ release: ReleaseInfo) {
-        let defaults = UserDefaults.standard
-        let lastSeen = defaults.string(forKey: Self.lastSeenVersionKey) ?? ""
-        guard release.version != lastSeen else { return }
-        defaults.set(release.version, forKey: Self.lastSeenVersionKey)
-        guard Bundle.main.bundleURL.pathExtension == "app",
-              Bundle.main.bundleIdentifier != nil else { return }
-        let content = UNMutableNotificationContent()
-        content.title = "Photome \(release.version) 사용 가능"
-        content.body = "현재 \(currentVersion) → 새 버전 \(release.version)이 릴리스됐습니다. ‘업데이트 확인’ 메뉴에서 다운로드하세요."
-        content.sound = .default
-        let request = UNNotificationRequest(identifier: "photome.update.\(release.version)",
-                                            content: content,
-                                            trigger: nil)
-        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
-    }
-
-    private static func parseRelease(data: Data) throws -> ReleaseInfo {
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw URLError(.cannotParseResponse)
-        }
-        let tag = (json["tag_name"] as? String) ?? ""
-        let urlString = (json["html_url"] as? String) ?? "https://github.com"
-        let published = (json["published_at"] as? String) ?? ""
-        let version = normalizedVersion(from: tag)
-        guard let url = URL(string: urlString) else {
-            throw URLError(.badURL)
-        }
-        return ReleaseInfo(version: version, tag: tag, htmlURL: url, publishedAt: published)
-    }
-
-    private static func normalizedVersion(from tag: String) -> String {
-        var trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.lowercased().hasPrefix("mac-v") {
-            trimmed = String(trimmed.dropFirst(5))
-        } else if trimmed.lowercased().hasPrefix("v") {
-            trimmed = String(trimmed.dropFirst())
-        }
-        return trimmed
-    }
-
-    static func isVersion(_ candidate: String, newerThan baseline: String) -> Bool {
-        let parsed = parseSemver(candidate)
-        let base = parseSemver(baseline)
-        for index in 0..<max(parsed.count, base.count) {
-            let a = index < parsed.count ? parsed[index] : 0
-            let b = index < base.count ? base[index] : 0
-            if a != b { return a > b }
-        }
-        return false
-    }
-
-    private static func parseSemver(_ value: String) -> [Int] {
-        let cleaned = value.split(whereSeparator: { !$0.isNumber && $0 != "." })
-            .joined()
-        return cleaned.split(separator: ".").compactMap { Int($0) }
+    var canCheck: Bool {
+        updater.canCheckForUpdates
     }
 }
 
+@MainActor
+private final class SparkleDelegate: NSObject, SPUUpdaterDelegate {
+    nonisolated func feedURLString(for updater: SPUUpdater) -> String? {
+        // Info.plist의 SUFeedURL을 우선 사용. 추후 사용자 환경변수로도 override 가능.
+        nil
+    }
+}

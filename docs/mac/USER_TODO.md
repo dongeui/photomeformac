@@ -133,7 +133,47 @@ git push origin mac-v0.1.0
 - **App icon 변경:** `mac/PhotomeForMac/Resources/Assets.xcassets/AppIcon.appiconset/` 안 PNG 교체
 - **버전 변경:** 빌드 시 `PHOTOME_MAC_VERSION=0.2.0 scripts/build_mac_app_bundle.sh`
 - **GitHub Release 노트:** workflow의 `--notes` 자동 문구 외 직접 수정 시 release page에서 편집
-- **Sparkle 2 자동 업데이트** (추후): GitHub Release 폴링 기반 UpdateChecker가 이미 있지만, 사용자 클릭 없이 자동 다운로드/설치까지 가려면 Sparkle 2 도입 필요 (edDSA key + appcast.xml 호스팅)
+### Sparkle 2 자동 업데이트 셋업
+
+코드 측 통합은 끝났고(`UpdateChecker.swift`가 Sparkle 기반으로 교체됨), 운영 측에서 다음 한 번 작업이 필요하다. 첫 정식 릴리스 v0.1.0부터 Sparkle-aware로 나가게 된다.
+
+**1. Sparkle CLI 도구 설치:**
+```bash
+# Homebrew로 설치하거나
+brew install --cask sparkle
+# 또는 GitHub releases에서 직접: https://github.com/sparkle-project/Sparkle/releases
+# 통상 ~/Downloads/Sparkle-2.x.x/bin/{generate_keys,sign_update,generate_appcast}
+```
+
+**2. edDSA key 쌍 생성 (한 번만):**
+```bash
+generate_keys
+# → Public Key가 Keychain "Sparkle"에 저장됨, base64 출력됨 (예: "MCowB...wI=")
+# 그 base64 문자열을 안전한 곳에도 백업 — 분실 시 모든 사용자가 자동 업데이트 못 받음
+```
+
+**3. appcast.xml 호스팅 결정:**
+- 권장: GitHub Pages — `https://dongeui.github.io/photomeformac/appcast.xml`
+  - repo의 `gh-pages` branch 또는 main의 `/docs` 디렉토리에 두면 자동 호스팅
+- 대안: 자체 도메인, S3, Cloudflare R2 등 https 정적 호스팅이면 모두 OK
+
+**4. 환경변수 설정해서 빌드:**
+```bash
+export PHOTOME_SPARKLE_FEED_URL="https://dongeui.github.io/photomeformac/appcast.xml"
+export PHOTOME_SPARKLE_PUBLIC_ED_KEY="MCowB...wI="  # 2번에서 출력된 base64
+scripts/build_mac_app_bundle.sh
+# Info.plist에 SUFeedURL + SUPublicEDKey가 자동 부착됨
+```
+
+**5. 새 릴리스마다 appcast.xml 갱신:**
+```bash
+generate_appcast /path/to/release_dmgs/   # 이 폴더의 모든 *.dmg를 스캔해서 appcast.xml 작성
+# → 자동으로 edDSA 서명, version 추출, release notes 생성 (markdown 파일 옆에 두면)
+# 결과 appcast.xml + dmg 들을 GitHub Pages 또는 정적 호스팅에 푸시
+```
+
+**6. (선택) GitHub Actions로 자동화:**
+새 tag push 시 `generate_appcast` 실행 + appcast.xml을 gh-pages branch에 커밋. workflow 추가는 향후 작업.
 
 ---
 
@@ -149,3 +189,7 @@ git push origin mac-v0.1.0
 - [ ] 4.2 LAN admin guard QA
 - [ ] 4.3 NAS / 대용량 QA
 - [ ] 4.4 외부 사용자 테스트
+- [ ] 5. Sparkle CLI 도구 설치 + edDSA key 쌍 생성
+- [ ] 5. appcast.xml 호스팅 위치 결정 (GitHub Pages 추천)
+- [ ] 5. `PHOTOME_SPARKLE_FEED_URL` + `PHOTOME_SPARKLE_PUBLIC_ED_KEY` 환경변수로 첫 빌드
+- [ ] 5. 첫 릴리스 후 generate_appcast로 appcast.xml 호스팅 push

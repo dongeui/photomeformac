@@ -172,20 +172,17 @@ LAN 공유를 켜면 백엔드는 `0.0.0.0`에 바인딩한다. 원격 기기의
 
 ## 10. 자동 업데이트 전략
 
-GitHub Releases 폴링 방식이 기본 구현돼 있다.
+**Sparkle 2** 기반 자동 업데이트가 코드에 통합되어 있다. 첫 정식 릴리스부터 사용자는 클릭 한 번으로 다음 버전을 받게 된다.
 
-- `UpdateChecker`(Swift)가 6시간 주기로 `api.github.com/repos/<owner>/<repo>/releases/latest`를 호출한다.
-- semver 비교(`mac-v0.1.1` → `0.1.1`)로 새 버전 여부를 판단한다.
-- 새 버전이 처음 감지되면 UNNotification 한 번 발사 + 메뉴에 "새 버전 X 다운로드…" 항목이 추가된다.
-- 다운로드는 자동 설치 없이 GitHub Release 페이지를 연다 (Gatekeeper에서 검증 후 사용자가 수동 교체).
-- GitHub Actions `Mac Release` workflow가 tag(`mac-v*`) 또는 수동 dispatch에서 ad-hoc DMG artifact + Release asset 업로드까지 수행한다.
+- `UpdateChecker.swift`가 `SPUUpdater`를 감싸 24시간마다 백그라운드 폴링.
+- 새 버전 감지 → Sparkle 표준 다이얼로그 → 사용자 [지금 설치] → DMG 백그라운드 다운로드 + edDSA 서명 검증 + 자동 교체 + 앱 재시작.
+- 운영 측 준비물: edDSA key 쌍 + appcast.xml 호스팅(GitHub Pages 등 정적 https).
+- 빌드 시 `PHOTOME_SPARKLE_FEED_URL` + `PHOTOME_SPARKLE_PUBLIC_ED_KEY` 환경변수로 Info.plist에 자동 부착.
+- 새 릴리스마다 `generate_appcast`로 appcast.xml 갱신 + 호스팅에 push.
 
-Sparkle 2는 후보로 남겨둔다. 도입 시 필요한 것:
-- edDSA signing key
-- appcast.xml 호스팅
-- Sparkle 프레임워크 vendoring
+설정 절차는 `docs/mac/USER_TODO.md`의 Sparkle 섹션 참고.
 
-현재 권장: 첫 공개 전까지는 GitHub Releases + notarized DMG, 트래픽이 늘면 Sparkle 2 도입을 재검토한다.
+GitHub Actions `Mac Release` workflow가 tag(`mac-v*`) 또는 수동 dispatch에서 DMG artifact + Release asset 업로드까지 수행하며, 향후 appcast.xml 자동 갱신 단계 추가 예정.
 
 ## 11. NAS/대용량 라이브러리 QA
 

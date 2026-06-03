@@ -20,6 +20,11 @@ BUNDLE_WEIGHTS="${PHOTOME_BUNDLE_WEIGHTS:-1}"
 VERSION="${PHOTOME_MAC_VERSION:-0.1.0}"
 BUILD_NUMBER="${PHOTOME_MAC_BUILD:-1}"
 BUNDLE_ID="${PHOTOME_MAC_BUNDLE_ID:-com.photome.mac}"
+# Sparkle 2 자동 업데이트 메타데이터. 둘 다 설정되어야 정상 동작한다.
+# - SUFeedURL: appcast.xml의 정식 https URL (GitHub Pages 등 정적 호스팅).
+# - SUPublicEDKey: Sparkle generate_keys로 만든 edDSA public key (base64).
+SPARKLE_FEED_URL="${PHOTOME_SPARKLE_FEED_URL:-}"
+SPARKLE_PUBLIC_ED_KEY="${PHOTOME_SPARKLE_PUBLIC_ED_KEY:-}"
 
 mkdir -p "$DIST_DIR"
 rm -rf "$APP_BUNDLE" "$DMG_PATH" "$DMG_STAGING"
@@ -92,6 +97,20 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <string>사용자가 선택한 사진 폴더를 읽기 전용으로 스캔하기 위해 접근합니다.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>LAN 공유를 켠 경우 같은 네트워크의 기기에서 Photome 대시보드에 접근할 수 있게 합니다.</string>
+PLIST
+if [[ -n "$SPARKLE_FEED_URL" ]]; then
+  cat >> "$CONTENTS_DIR/Info.plist" <<PLIST
+    <key>SUFeedURL</key>
+    <string>$SPARKLE_FEED_URL</string>
+PLIST
+fi
+if [[ -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+  cat >> "$CONTENTS_DIR/Info.plist" <<PLIST
+    <key>SUPublicEDKey</key>
+    <string>$SPARKLE_PUBLIC_ED_KEY</string>
+PLIST
+fi
+cat >> "$CONTENTS_DIR/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST

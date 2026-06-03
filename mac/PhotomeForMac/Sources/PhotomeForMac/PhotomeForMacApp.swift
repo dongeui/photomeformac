@@ -29,7 +29,6 @@ struct PhotomeForMacApp: App {
                 .onAppear {
                     appDelegate.backend = backend
                     backend.requestNotificationAuthorization()
-                    updateChecker.startPolling()
                 }
         }
         .commands {
@@ -141,16 +140,10 @@ struct PhotomeForMacApp: App {
 
             Divider()
 
-            if updateChecker.hasNewerRelease, let release = updateChecker.latestRelease {
-                Button("새 버전 \(release.version) 다운로드…") {
-                    updateChecker.openReleasePage()
-                }
+            Button("업데이트 확인…") {
+                updateChecker.checkForUpdates()
             }
-
-            Button(updateChecker.isChecking ? "업데이트 확인 중..." : "업데이트 확인") {
-                Task { await updateChecker.checkOnce() }
-            }
-            .disabled(updateChecker.isChecking)
+            .disabled(!updateChecker.canCheck)
 
             Divider()
 
