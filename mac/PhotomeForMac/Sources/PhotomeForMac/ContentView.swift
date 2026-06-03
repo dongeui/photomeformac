@@ -130,10 +130,6 @@ struct ContentView: View {
             }
             .disabled(!backend.isRunning || !backend.clipEnabled || backend.hasActiveLibraryJob)
 
-            Button(backend.aiModeLabel) {
-                backend.toggleOfflineMode()
-            }
-
             Button("모델 캐시 열기") {
                 backend.openModelCache()
             }
@@ -224,9 +220,14 @@ struct ContentView: View {
                 }
             }
 
-            Text("로그 보기·진단 내보내기는 메뉴바 아이콘에서 사용할 수 있습니다.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            VStack(spacing: 4) {
+                Text("첫 분석은 사진 수에 따라 수십 분에서 수 시간이 걸릴 수 있습니다.")
+                Text("창을 닫아도 메뉴바 아이콘이 계속 떠 있고, 백그라운드에서 진행됩니다.")
+                Text("로그 보기·진단 내보내기는 메뉴바 아이콘에서 사용할 수 있습니다.")
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .multilineTextAlignment(.center)
         }
         .padding(32)
         .frame(maxWidth: 700)

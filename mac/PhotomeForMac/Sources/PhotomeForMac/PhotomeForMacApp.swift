@@ -33,6 +33,11 @@ struct PhotomeForMacApp: App {
                 }
         }
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("Photome에 관하여") {
+                    Self.presentAboutPanel()
+                }
+            }
             CommandGroup(after: .appInfo) {
                 Button("Photome 대시보드 열기") {
                     backend.openDashboard()
@@ -57,10 +62,6 @@ struct PhotomeForMacApp: App {
                 .disabled(!backend.isRunning || !backend.clipEnabled || backend.hasActiveLibraryJob)
 
                 Divider()
-
-                Button(backend.aiModeLabel) {
-                    backend.toggleOfflineMode()
-                }
 
                 Button("모델 캐시 폴더 열기") {
                     backend.openModelCache()
@@ -104,14 +105,11 @@ struct PhotomeForMacApp: App {
             }
             .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
 
-            Button(backend.offlineMode ? "캐시만 로드" : "모델 준비") {
+            Button("모델 준비/재로드") {
                 backend.prepareAIModel(loadCached: backend.offlineMode)
             }
             .disabled(!backend.isRunning || backend.aiPackStatus?.modelLoading == true)
-
-            Button(backend.aiModeLabel) {
-                backend.toggleOfflineMode()
-            }
+            .help("번들/캐시된 모델 weights를 메모리에 로드합니다.")
 
             Button("모델 캐시 폴더 열기") {
                 backend.openModelCache()
@@ -180,6 +178,27 @@ struct PhotomeForMacApp: App {
                 NSApp.terminate(nil)
             }
         }
+    }
+
+    static func presentAboutPanel() {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = info["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info["CFBundleVersion"] as? String ?? "?"
+        let credits = NSAttributedString(
+            string: "Docker 없이 실행되는 macOS용 Photome.\n로컬 사진 라이브러리, AI 검색, 사람·장소 태그.\n\nGitHub: https://github.com/dongeui/photomeformac",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11),
+                .foregroundColor: NSColor.secondaryLabelColor,
+            ]
+        )
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationName: "Photome",
+            .applicationVersion: version,
+            .version: "Build \(build)",
+            .credits: credits,
+            NSApplication.AboutPanelOptionKey(rawValue: "Copyright"): "© Photome",
+        ])
     }
 
     private func toggleLaunchAtLogin() {

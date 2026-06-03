@@ -121,12 +121,9 @@ final class BackendSupervisor: ObservableObject {
     /// CLIP 이미지 AI는 정식 배포에서 항상 켜진 상태로 동작한다 (DMG에 PyTorch +
     /// weights 동봉). 사용자에게 토글을 노출하지 않는다.
     let clipEnabled: Bool = true
-    @Published var offlineMode: Bool {
-        didSet {
-            guard offlineMode != oldValue else { return }
-            UserDefaults.standard.set(offlineMode, forKey: Self.offlineModeDefaultsKey)
-        }
-    }
+    /// 외부 인터넷 다운로드는 정식 배포에서 항상 차단된다. 번들 weights + 사용자
+    /// 데이터 캐시만 사용. 사용자에게 토글을 노출하지 않는다.
+    let offlineMode: Bool = true
 
     let port: Int
 
@@ -140,18 +137,12 @@ final class BackendSupervisor: ObservableObject {
 
     private static let sourceRootsDefaultsKey = "PhotomeSourceRoots"
     private static let lanEnabledDefaultsKey = "PhotomeLANEnabled"
-    private static let offlineModeDefaultsKey = "PhotomeOfflineMode"
     private static let maxCrashRestartAttempts: Int = 1
 
     init(port: Int = 8000) {
         self.port = port
         self.sourceRoots = UserDefaults.standard.stringArray(forKey: Self.sourceRootsDefaultsKey) ?? []
         self.lanEnabled = UserDefaults.standard.bool(forKey: Self.lanEnabledDefaultsKey)
-        if UserDefaults.standard.object(forKey: Self.offlineModeDefaultsKey) == nil {
-            self.offlineMode = true
-        } else {
-            self.offlineMode = UserDefaults.standard.bool(forKey: Self.offlineModeDefaultsKey)
-        }
     }
 
     deinit {
@@ -218,9 +209,6 @@ final class BackendSupervisor: ObservableObject {
         }
     }
 
-    var aiModeLabel: String {
-        offlineMode ? "외부 다운로드 차단됨" : "외부 다운로드 허용"
-    }
 
     func updateStatusMessage(_ message: String) {
         statusMessage = message
@@ -427,16 +415,6 @@ final class BackendSupervisor: ObservableObject {
 
     func toggleLAN() {
         lanEnabled.toggle()
-        if process != nil {
-            restart()
-        }
-    }
-
-    func toggleOfflineMode() {
-        offlineMode.toggle()
-        statusMessage = offlineMode
-            ? "외부 다운로드를 차단했습니다. 번들/캐시된 모델만 사용합니다."
-            : "외부 다운로드를 허용했습니다. 누락된 모델을 자동으로 받습니다."
         if process != nil {
             restart()
         }
