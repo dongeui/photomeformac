@@ -782,6 +782,44 @@ async def gallery_page(
     .lightbox-download:hover, .lightbox-close:hover {{
       background: rgba(255, 255, 255, 0.26);
     }}
+    .lightbox-meta {{
+      width: min(900px, 92vw);
+      margin-top: 10px;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.55);
+      color: rgba(255, 255, 255, 0.92);
+      border-radius: 10px;
+      font-size: .85rem;
+    }}
+    .lightbox-meta > summary {{
+      cursor: pointer;
+      list-style: none;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }}
+    .lightbox-meta > summary::-webkit-details-marker {{ display: none; }}
+    .lightbox-meta > summary::before {{
+      content: "ⓘ 사진 정보";
+      display: inline-block;
+    }}
+    .lightbox-meta[open] > summary::before {{ content: "▾ 사진 정보"; }}
+    .lightbox-meta > summary {{ content-visibility: visible; }}
+    .lightbox-meta .meta-grid {{
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      column-gap: 12px;
+      row-gap: 6px;
+      margin: 10px 0 0;
+      padding: 0;
+    }}
+    .lightbox-meta dt {{
+      color: rgba(255,255,255,0.72);
+      font-weight: 600;
+    }}
+    .lightbox-meta dd {{
+      margin: 0;
+      word-break: break-all;
+    }}
     @media (max-width: 1100px) {{
       form.filters {{ grid-template-columns: minmax(220px, 1fr) auto auto; }}
       .advanced-grid {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
@@ -1146,6 +1184,7 @@ def _render_card(
     )
     preview_id = f"preview-{asset.id}" if asset is not None else ""
     thumb_href = f"#{preview_id}" if asset is not None else "#gallery"
+    metadata_panel = _render_metadata_panel(media_file=media_file, tags=tags)
     lightbox_html = (
         f"""
       <div id="{preview_id}" class="lightbox" aria-label="{escape(title)} 미리보기">
@@ -1159,6 +1198,7 @@ def _render_card(
               <a class="lightbox-close" href="#gallery">닫기</a>
             </div>
           </div>
+          {metadata_panel}
         </div>
       </div>
         """
@@ -1190,6 +1230,92 @@ def _render_card(
       </article>
       {lightbox_html}
     """
+
+
+def _render_metadata_panel(*, media_file: MediaFile, tags: list[Tag]) -> str:
+    """Lightbox 하단에 노출할 EXIF/태그 메타데이터 미리보기 패널."""
+    rows: list[tuple[str, str]] = []
+
+    captured = _display_date(media_file)
+    if captured:
+        rows.append(("촬영", captured))
+
+    if media_file.width and media_file.height:
+        size_str = f"{media_file.width} × {media_file.height}"
+        rows.append(("해상도", size_str))
+
+    if media_file.size_bytes:
+        rows.append(("용량", _format_bytes(int(media_file.size_bytes))))
+
+    meta = media_file.metadata_json or {}
+    camera_make = (meta.get("camera_make") or meta.get("Make") or "").strip() if isinstance(meta, dict) else ""
+    camera_model = (meta.get("camera_model") or meta.get("Model") or "").strip() if isinstance(meta, dict) else ""
+    camera = " ".join(p for p in (camera_make, camera_model) if p)
+    if camera:
+        rows.append(("카메라", camera))
+
+    lens = ""
+    if isinstance(meta, dict):
+        lens = str(meta.get("lens_model") or meta.get("LensModel") or "").strip()
+    if lens:
+        rows.append(("렌즈", lens))
+
+    place_tags = [t.tag_value for t in tags if t.tag_type == "place"]
+    if place_tags:
+        # 다국어 중복 제거: 최대 3개만, 한국어 우선
+        preferred = sorted(
+            set(place_tags),
+            key=lambda s: (0 if any("가" <= ch <= "힣" for ch in s) else 1, len(s)),
+        )[:3]
+        rows.append(("장소", ", ".join(preferred)))
+
+    person_tags = sorted({t.tag_value for t in tags if t.tag_type == "person" and not t.tag_value.startswith("person-")})
+    if person_tags:
+        rows.append(("인물", ", ".join(person_tags[:6])))
+
+    auto_scene = [t.tag_value for t in tags if t.tag_type == "auto_scene"]
+    auto_object = [t.tag_value for t in tags if t.tag_type == "auto_object"]
+    auto_event = [t.tag_value for t in tags if t.tag_type == "auto_event"]
+    discovered: list[str] = []
+    for source in (auto_scene, auto_object, auto_event):
+        for value in source:
+            if value not in discovered and not value.startswith("auto_"):
+                discovered.append(value)
+            if len(discovered) >= 6:
+                break
+        if len(discovered) >= 6:
+            break
+    if discovered:
+        rows.append(("자동 태그", ", ".join(discovered)))
+
+    if media_file.current_path:
+        rows.append(("경로", str(media_file.current_path)))
+
+    if not rows:
+        return ""
+
+    items = "".join(
+        f"<dt>{escape(label)}</dt><dd>{escape(value)}</dd>"
+        for label, value in rows
+    )
+    return f"""
+      <details class="lightbox-meta">
+        <summary>사진 정보</summary>
+        <dl class="meta-grid">{items}</dl>
+      </details>
+    """
+
+
+def _format_bytes(size: int) -> str:
+    if size <= 0:
+        return ""
+    if size >= 1024 * 1024 * 1024:
+        return f"{size / (1024 ** 3):.2f} GB"
+    if size >= 1024 * 1024:
+        return f"{size / (1024 ** 2):.1f} MB"
+    if size >= 1024:
+        return f"{size / 1024:.0f} KB"
+    return f"{size} B"
 
 
 def _display_title(media_file: MediaFile, annotation: MediaAnnotation | None) -> str:
