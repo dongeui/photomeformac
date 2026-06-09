@@ -175,6 +175,7 @@ PHOTOME_NOTARY_PROFILE=photome-notary scripts/notarize_mac_app.sh
 
 ## 진행 기록 (가장 최근부터)
 
+- 2026-06-09: 배포 정책 확정 — 배포 산출물은 ai-pack 단일 빌드(CLIP/venv/weights 항상 번들). `photome-base`는 배포 제외(코드 레벨 import 계약만 유지). 용량(DMG ~540MB)은 인지하고 보류. 문서 일체 정리(AGENTS/AGENTS_LIGHT/CLAUDE/README/docs/DEPLOYMENT_STRATEGY/ARCHITECTURE/RELEASE_CHECKLIST) + 최종 사용자용 `INSTALL.md` 추가. 후속 코드 작업: 빌드 스크립트 weights 누락 hard-fail, 포트 8000 자동 폴백.
 - 2026-06-03: Notarization 준비 — `.entitlements` 추가 (allow-jit, allow-unsigned-executable-memory, disable-library-validation, network.client/server, files.user-selected.read-only). build 스크립트가 Developer ID 서명 시 `--timestamp` + entitlements 자동 적용. DMG 자체도 codesign + stapler staple. notarize 스크립트가 .app까지 staple. GitHub Actions workflow에 시크릿 기반 인증서 import 단계 + 정식 빌드 + notarize 자동화 추가.
 - 2026-06-03: 사용자 컨펌으로 정식 외부 배포 방향 결정 — Developer ID + Notarization. App Store 미경유, GitHub Release 단독 배포.
 - 2026-06-03: First-run UX 폴리시 — 폴더 선택/Drag&Drop 시 자동 시작, source root 폴더명+경로 2줄 표시, 메뉴 라벨 동사화, AI Mode 토글 제거(offlineMode 상수화), 표준 About panel, landing 첫 분석 시간 안내.

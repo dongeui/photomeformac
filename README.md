@@ -2,16 +2,26 @@
 
 Docker 없이 실행되는 macOS 앱형 Photome. 기존 FastAPI 백엔드, 갤러리/대시보드, 사진 스캔, SQLite, CLIP 이미지 AI를 Mac 앱 내부 런타임으로 통합한다. Docker는 서버/NAS/Linux/Windows/CI용 보조 배포 경로로 유지한다.
 
+> **배포 산출물은 ai-pack 단일 빌드다.** Mac DMG에는 항상 Python 런타임 + CLIP 모델이 동봉되어, 사용자는 인터넷 없이도 첫 실행부터 이미지 AI를 쓸 수 있다. AI 미포함 경량 빌드(`photome-base`)는 배포하지 않는다.
+
+## 설치 (일반 사용자)
+
+1. [Releases](https://github.com/dongeui/photomeformac/releases)에서 최신 `PhotomeForMac.dmg` 다운로드
+2. DMG를 열고 **Photome 앱을 Applications 폴더로 드래그**
+3. Applications에서 Photome 실행 → 사진 폴더 선택
+
+설치/첫 실행 단계별 안내(Gatekeeper 경고 대처 포함)는 [INSTALL.md](INSTALL.md) 참고.
+
 ## 기능 요약
 
 - 사진 전용 (영상 제외)
 - OCR, 태그, 장소명, 사람 이름, 자연어 검색
-- CLIP 기반 이미지 의미 검색 (선택 — 로컬 모델 캐시 필요)
+- CLIP 기반 이미지 의미 검색 (DMG에 모델 동봉 — 첫 실행부터 동작)
 - 썸네일, 얼굴 클러스터링, 자동 태그 (장소·사물·날씨 등)
 - HEIC 포함 주요 이미지 포맷 지원 (pillow-heif 내장)
 - 원본 다운로드 지원
 
-## 시작하기
+## 개발/빌드
 
 ### Mac 앱 (권장)
 

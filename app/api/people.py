@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from html import escape
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
-from sqlalchemy import bindparam, delete, func, select, text, update
+from sqlalchemy import bindparam, delete, func, or_, select, text, update
 
 from app.api.deps import require_state
 from app.models.asset import DerivedAsset
@@ -107,6 +109,230 @@ def list_people(request: Request) -> list[PersonResponse]:
                 )
             )
         return result
+
+
+_PEOPLE_MANAGE_CSS = """
+:root{color-scheme:light dark;--bg:#f5f5f7;--panel:#fff;--line:rgba(0,0,0,.1);--text:#1d1d1f;--muted:#86868b;--accent:#0a84ff;--accent-soft:rgba(10,132,255,.12);--warn:#b25000;}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1c1e;--panel:#2c2c2e;--line:rgba(255,255,255,.12);--text:#f5f5f7;--muted:#98989d;--accent:#0a84ff;--accent-soft:rgba(10,132,255,.24);--warn:#ff9f0a;}}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text);}
+.hdr{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:5;flex-wrap:wrap;}
+.hdr h1{font-size:1.1rem;margin:0;font-weight:600;}
+.hdr .sub{font-size:.82rem;color:var(--muted);}
+.search{margin-left:auto;width:240px;max-width:45%;padding:7px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:.85rem;}
+.list{max-width:900px;margin:0 auto;padding:14px 16px 30px;}
+.hint{font-size:.84rem;color:var(--muted);padding:6px 4px 14px;}
+.row{display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:10px;transition:background .12s,border-color .12s,box-shadow .12s;}
+.row.unnamed{opacity:.85;}
+.row.merge-on{border-color:var(--accent);background:var(--accent-soft);}
+.row.merge-primary{border-color:#ff3b30;background:rgba(255,59,48,.10);box-shadow:inset 3px 0 0 #ff3b30;}
+@media (prefers-color-scheme:dark){.row.merge-primary{background:rgba(255,69,58,.16);box-shadow:inset 3px 0 0 #ff453a;}}
+.keep-tag{display:none;font-size:11px;font-weight:600;padding:2px 7px;border-radius:5px;background:rgba(255,59,48,.16);color:#ff3b30;white-space:nowrap;}
+.row.merge-primary .keep-tag{display:inline-block;}
+@media (prefers-color-scheme:dark){.keep-tag{color:#ff453a;background:rgba(255,69,58,.20);}}
+.face{width:54px;height:54px;border-radius:10px;flex:0 0 auto;overflow:hidden;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-decoration:none;}
+.face img{width:100%;height:100%;object-fit:cover;}
+.meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px;}
+.titlerow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.pm-name{font-size:14px;padding:6px 10px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);min-width:150px;}
+.pm-aliases{font-size:13px;padding:5px 9px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);width:100%;}
+.badge{font-size:11px;padding:2px 7px;border-radius:5px;}
+.badge.named{background:var(--accent-soft);color:var(--accent);}
+.badge.unnamed{background:rgba(180,80,0,.16);color:var(--warn);}
+.count{font-size:12px;color:var(--muted);white-space:nowrap;text-decoration:none;}
+.count:hover{color:var(--accent);}
+.btn{font-size:12px;padding:6px 11px;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.btn.danger{background:#ff3b30;border-color:#ff3b30;color:#fff;}
+.btn.danger:disabled{background:var(--panel);border-color:var(--line);color:var(--muted);}
+.btn:disabled{opacity:.45;cursor:default;}
+#merge-count b{color:#ff3b30;}
+.footer{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:10px 20px;border-top:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--muted);}
+.footer .sp{margin-left:auto;}
+.empty{text-align:center;color:var(--muted);padding:56px 16px;}
+.layout{display:flex;align-items:stretch;min-height:100vh;}
+.sidebar{width:224px;flex:0 0 224px;padding:18px 14px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh;}
+.side-brand{font-size:1.15rem;font-weight:600;padding:2px 8px 10px;}
+.side-item{padding:8px 10px;border-radius:8px;color:var(--text);text-decoration:none;font-size:.92rem;}
+.side-item:hover{background:var(--accent-soft);}
+.side-item.active{background:var(--accent-soft);color:var(--accent);font-weight:500;}
+.content{flex:1;min-width:0;display:flex;flex-direction:column;}
+@media (max-width:720px){.layout{flex-direction:column;}.sidebar{width:auto;flex:none;height:auto;position:static;border-right:none;border-bottom:1px solid var(--line);flex-direction:row;flex-wrap:wrap;gap:4px;}}
+"""
+
+_PEOPLE_MANAGE_JS = """
+var mergeOrder=[];
+function rowOf(id){return document.querySelector('.row[data-pid="'+id+'"]');}
+function nameOf(id){var r=rowOf(id);if(!r){return '#'+id;}var v=(r.querySelector('.pm-name').value||'').trim();return v||('그룹 #'+id);}
+function onMergeChange(cb){
+  var id=parseInt(cb.dataset.pid);
+  if(cb.checked){if(mergeOrder.indexOf(id)<0){mergeOrder.push(id);}}
+  else{mergeOrder=mergeOrder.filter(function(x){return x!==id;});}
+  [].slice.call(document.querySelectorAll('.row')).forEach(function(r){r.classList.remove('merge-on','merge-primary');});
+  mergeOrder.forEach(function(x,i){var r=rowOf(x);if(!r){return;}r.classList.add('merge-on');if(i===0){r.classList.add('merge-primary');}});
+  var n=mergeOrder.length;
+  var cnt=document.getElementById('merge-count');
+  if(n===0){cnt.textContent='0개 선택됨';}
+  else{cnt.innerHTML=n+'개 선택됨 · 남는 그룹: <b>'+escapeHtml(nameOf(mergeOrder[0]))+'</b>';}
+  var btn=document.getElementById('merge-btn');
+  btn.disabled=n<2;
+  btn.textContent=n>=2?(n-1)+'개를 '+'"'+nameOf(mergeOrder[0])+'"(으)로 병합':'선택 병합 (첫 선택이 남음)';
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+async function savePerson(id){
+  var row=rowOf(id);
+  if(!row){return;}
+  var name=row.querySelector('.pm-name').value.trim();
+  var aliases=row.querySelector('.pm-aliases').value.split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var r=await fetch('/people/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name,aliases:aliases})});
+  if(r.ok){location.reload();}else{var m='저장 실패';try{m=(await r.json()).detail||m;}catch(e){}alert(m);}
+}
+function onNameKey(e,id){if(e.key==='Enter'){e.preventDefault();savePerson(id);}}
+async function mergeSelected(){
+  if(mergeOrder.length<2){return;}
+  var target=mergeOrder[0];
+  var sources=mergeOrder.slice(1);
+  if(!confirm(sources.length+'개 그룹을 "'+nameOf(target)+'"(으)로 병합할까요?\\n선택한 다른 그룹은 사라지고 되돌릴 수 없습니다.')){return;}
+  var r=await fetch('/people/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target_person_id:target,source_person_ids:sources})});
+  if(r.ok){location.reload();}else{var m='병합 실패';try{m=(await r.json()).detail||m;}catch(e){}alert(m);}
+}
+function filterRows(q){q=q.trim().toLowerCase();[].slice.call(document.querySelectorAll('.row')).forEach(function(r){r.style.display=(!q||(r.dataset.search||'').indexOf(q)>=0)?'':'none';});}
+"""
+
+
+def _render_people_manage_html(people: list[dict]) -> str:
+    if not people:
+        rows_html = '<div class="empty">5회 이상 감지된 얼굴 그룹이 아직 없습니다.<br>이미지 AI 분석이 끝나면 여기에서 이름을 붙일 수 있어요.</div>'
+    else:
+        parts = []
+        for p in people:
+            pid = int(p["id"])
+            dn = str(p["display_name"])
+            aliases = [str(a) for a in p.get("aliases", []) if str(a).strip()]
+            is_unnamed = dn.startswith("person-") and not aliases
+            name_val = "" if is_unnamed else dn
+            gallery_href = "/gallery?person=" + quote(dn)
+            face_id = p.get("face_id")
+            face_inner = (
+                f'<img src="/people/faces/{int(face_id)}/crop" loading="lazy" decoding="async" alt="대표 얼굴">'
+                if face_id is not None
+                else "얼굴"
+            )
+            badge = (
+                '<span class="badge unnamed">이름 필요</span>'
+                if is_unnamed
+                else '<span class="badge named">이름 있음</span>'
+            )
+            search_attr = escape((dn + " " + " ".join(aliases)).lower())
+            placeholder = "대표 이름 입력" if is_unnamed else "이름"
+            parts.append(
+                f'''
+        <div class="row{' unnamed' if is_unnamed else ''}" data-pid="{pid}" data-search="{search_attr}">
+          <input type="checkbox" class="pm-merge" data-pid="{pid}" onchange="onMergeChange(this)" aria-label="병합 선택">
+          <a class="face" href="{gallery_href}" title="이 사람 사진 보기">{face_inner}</a>
+          <div class="meta">
+            <div class="titlerow">
+              <input class="pm-name" value="{escape(name_val)}" placeholder="{placeholder}" aria-label="대표 이름" onkeydown="onNameKey(event,{pid})">
+              {badge}
+              <span class="keep-tag">병합 시 남음</span>
+              <button class="btn" onclick="savePerson({pid})">저장</button>
+            </div>
+            <div class="aliasrow">
+              <input class="pm-aliases" value="{escape(', '.join(aliases))}" placeholder="애칭 (쉼표로 구분)" aria-label="애칭" onkeydown="onNameKey(event,{pid})">
+            </div>
+          </div>
+          <a class="count" href="{gallery_href}">{int(p.get('media_count') or 0)}장 · 얼굴 {int(p.get('face_count') or 0)}회</a>
+        </div>'''
+            )
+        rows_html = "".join(parts)
+
+    total = len(people)
+    return f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사람 정리 · Photome</title>
+<style>{_PEOPLE_MANAGE_CSS}</style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="side-brand">Photome</div>
+      <a class="side-item" href="/gallery">모든 사진</a>
+      <a class="side-item active" href="/people/manage">사람</a>
+      <a class="side-item" href="/dashboard">진행 상태</a>
+    </aside>
+    <section class="content">
+      <div class="hdr">
+        <h1>사람 정리</h1>
+        <span class="sub">반복해서 나온 얼굴에 이름·애칭을 붙이세요 · {total}명</span>
+        <input class="search" placeholder="이름·애칭 검색" oninput="filterRows(this.value)" aria-label="이름·애칭 검색">
+      </div>
+      <div class="list">
+        <div class="hint">대표 얼굴이나 장수를 누르면 그 사람의 사진을 모아 봅니다. 비슷한 그룹은 선택해 병합하세요.</div>
+        {rows_html}
+      </div>
+      <div class="footer">
+        <span id="merge-count">0개 선택됨</span>
+        <span class="sp"></span>
+        <button class="btn danger" id="merge-btn" onclick="mergeSelected()" disabled>선택 병합 (첫 선택이 남음)</button>
+      </div>
+    </section>
+  </div>
+  <script>{_PEOPLE_MANAGE_JS}</script>
+</body>
+</html>"""
+
+
+@router.get("/manage", response_class=HTMLResponse)
+def people_manage_page(request: Request) -> HTMLResponse:
+    database = require_state(request, "database")
+    active = MediaFile.status.not_in(("missing", "replaced", "excluded"))
+    candidate = or_(
+        func.count(Face.id).filter(active) >= 5,
+        Person.display_name.not_like("person-%"),
+    )
+    people: list[dict] = []
+    with database.session_factory() as session:
+        rows = session.execute(
+            select(
+                Person,
+                func.count(Face.id).filter(active).label("face_count"),
+                func.count(func.distinct(Face.file_id)).filter(active).label("media_count"),
+            )
+            .outerjoin(Face, Face.person_id == Person.id)
+            .outerjoin(MediaFile, MediaFile.file_id == Face.file_id)
+            .group_by(Person.id)
+            .having(candidate)
+            .order_by(func.count(Face.id).filter(active).desc(), Person.id.asc())
+            .limit(1000)
+        ).all()
+        for person, face_count, media_count in rows:
+            raw_aliases = person.aliases_json if isinstance(person.aliases_json, list) else []
+            aliases = [
+                str(a)
+                for a in raw_aliases
+                if str(a).strip() and not _INTERNAL_PERSON_ID_RE.match(str(a).strip())
+            ]
+            sample = session.execute(
+                select(Face.id)
+                .join(MediaFile, MediaFile.file_id == Face.file_id)
+                .where(Face.person_id == person.id, MediaFile.media_kind == "image", active)
+                .order_by(Face.id.asc())
+                .limit(1)
+            ).first()
+            people.append(
+                {
+                    "id": int(person.id),
+                    "display_name": str(person.display_name),
+                    "aliases": aliases,
+                    "face_count": int(face_count or 0),
+                    "media_count": int(media_count or 0),
+                    "face_id": int(sample[0]) if sample else None,
+                }
+            )
+    return HTMLResponse(_render_people_manage_html(people))
 
 
 @router.get("/{person_id}", response_model=PersonResponse)

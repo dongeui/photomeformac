@@ -88,7 +88,9 @@ scripts/build_mac_app_bundle.sh
 - `PHOTOME_BUNDLE_PYTHON=1` (기본) — venv 자동 탐색해서 Resources/python-runtime/ 에 복사
 - `PHOTOME_BUNDLE_WEIGHTS=1` (기본) — `~/.cache/huggingface/hub`에서 ViT-B-32 가중치를 Resources/preinstalled-models/huggingface/hub/ 에 복사
 
-옵트아웃하려면 `PHOTOME_BUNDLE_PYTHON=0` 또는 `PHOTOME_BUNDLE_WEIGHTS=0` 명시.
+**배포 산출물은 ai-pack 단일 빌드이므로 venv·weights 번들은 필수다.** CLIP 설치된 venv나 ViT-B-32 weights를 찾지 못하면 빌드 스크립트가 경고가 아닌 **오류로 중단**한다(weights 없는 ai-pack 빌드가 조용히 나가는 것을 막기 위함).
+
+의도적으로 옵트아웃하려면(개발/디버그용) `PHOTOME_BUNDLE_PYTHON=0` 또는 `PHOTOME_BUNDLE_WEIGHTS=0`을 **명시**해야 한다. 명시한 경우에만 중단 없이 진행한다.
 
 **venv가 없을 때:**
 

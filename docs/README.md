@@ -2,6 +2,8 @@
 
 이 디렉토리는 Mac 앱과 core/runtime 문서를 함께 관리한다. Mac 앱은 Docker판과 기능 차이를 두지 않고, Docker급 기능을 앱 내부 런타임으로 통합한다.
 
+> 배포 산출물은 ai-pack 단일 빌드(Python 런타임 + CLIP weights 항상 번들)다. AI 미포함 경량 빌드는 배포하지 않는다. 자세한 정책은 `../AGENTS.md`의 "배포 호환성" 참고.
+
 ## 문서 목록
 
 ### Mac 앱
@@ -11,6 +13,7 @@
 - [mac/RELEASE_CHECKLIST.md](mac/RELEASE_CHECKLIST.md) — 서명·notarization·DMG 릴리스
 - [mac/RELEASE_PLAN.md](mac/RELEASE_PLAN.md) — 단위별 진행 트래커 (현재 코드 작업 전부 DONE)
 - [mac/USER_TODO.md](mac/USER_TODO.md) — 사용자가 직접 해야 할 일 (Apple Developer 가입, 실기기 QA)
+- [../INSTALL.md](../INSTALL.md) — 최종 사용자용 설치/첫 실행 가이드
 
 ### 운영
 - [ops/DOCKER.md](ops/DOCKER.md) — Docker 실행·볼륨·AI 설정

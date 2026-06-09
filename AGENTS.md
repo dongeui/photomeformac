@@ -46,18 +46,26 @@
 
 ## 배포 호환성
 
-항상 두 배포 경로를 같이 고려한다.
+### 배포 산출물 정책 (2026-06-09 확정)
 
-1. `photome-base`
+- **정식 배포 산출물은 `photome-local-ai-pack` 단일 빌드뿐이다.** Mac DMG는 항상 Python venv + CLIP + ViT-B-32 weights를 번들한다(`PHOTOME_BUNDLE_PYTHON=1` / `PHOTOME_BUNDLE_WEIGHTS=1` 고정).
+- **`photome-base`(AI 미포함)는 더 이상 배포 산출물로 만들지 않는다.** 용량 절감 목적의 경량 빌드는 현재 범위 밖이다.
+- 단, 아래 "코드 레벨 base 계약"은 그대로 유지한다. base를 배포하지 않더라도 torch를 optional로 두는 규율이 startup 견고성에 도움이 되기 때문이다.
+
+### 코드 레벨 base 계약 (유지)
+
+배포물은 ai-pack 하나지만, 코드는 여전히 두 import 경로가 모두 깨지지 않게 작성한다.
+
+1. base import path
    - local AI pack 없이도 import/startup/scan/gallery/status/search 동작
-2. `photome-local-ai-pack`
+2. ai-pack path
    - 모델 캐시 기반 CLIP/semantic 검색 동작
    - offline mode에서 다운로드 시도 금지
 
 세부 원칙:
 
 - PyTorch/open_clip/모델 weight는 optional path에 격리한다.
-- base runtime import 단계에서 local-AI 의존성 때문에 실패하면 안 된다.
+- base runtime import 단계에서 local-AI 의존성 때문에 실패하면 안 된다(코드 레벨 계약).
 - 모델/프로바이더/dimension 변경은 `semantic_embedding_version` 검토 대상이다.
 - concept/alias 변경은 `semantic_auto_tag_version` 검토 대상이다.
 - search document 구성 변경은 `semantic_search_version` 검토 대상이다.
