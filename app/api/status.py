@@ -3054,7 +3054,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       return parts.join(" · ");
     }}
     function phaseStateLabel(state) {{
-      return {{"RUNNING": "실행 중", "QUEUED": "대기열", "WAITING": "대기", "IDLE": "대기 중", "FAILED": "실패", "DONE": "완료", "COMPLETED": "완료"}}[state] || state;
+      return {{"RUNNING": "실행 중", "QUEUED": "대기열", "WAITING": "대기", "IDLE": "대기 중", "FAILED": "실패", "DONE": "완료", "COMPLETED": "완료", "SUCCEEDED": "완료", "CANCELED": "취소됨", "CANCELLED": "취소됨"}}[state] || state;
     }}
     function setPhaseState(phase, state, running) {{
       const label = phaseStateLabel(state);
@@ -3334,6 +3334,23 @@ async def dashboard(request: Request) -> HTMLResponse:
       const remain = seconds % 60;
       return minutes > 0 ? `${{minutes}}m ${{remain}}s` : `${{remain}}s`;
     }}
+    function coverageSummaryLines() {{
+      const cov = semanticCoverageSnapshot || {{}};
+      const eligible = cov.eligible_media;
+      if (eligible === undefined || eligible === null) return [];
+      const fmt = (n) => (Number(n) || 0).toLocaleString();
+      const clipDone = cov.clip_embeddings_current ?? 0;
+      const searchDone = cov.search_current ?? 0;
+      const remain = (cov.remaining_for_clip ?? 0) + (cov.remaining_for_search ?? 0);
+      const pct = eligible > 0 ? Math.round((clipDone / eligible) * 100) : 100;
+      const lines = [
+        "── 전체 현황 ──",
+        `사진 ${{fmt(eligible)}}개 중 이미지 AI ${{fmt(clipDone)}}개 완료 (${{pct}}%)`,
+        `검색 색인 ${{fmt(searchDone)}} / ${{fmt(eligible)}}개`,
+      ];
+      lines.push(remain > 0 ? `아직 처리할 항목 ${{fmt(remain)}}개` : "모든 사진이 최신 상태입니다 ✓");
+      return lines;
+    }}
     function renderScanJob(job) {{
       const retryOnly = !!(job?.payload?.retry_errors_only || job?.result?.retry_errors_only || job?.result?.progress?.retry_errors_only);
       const summary = job?.result?.summary || {{}};
@@ -3359,19 +3376,33 @@ async def dashboard(request: Request) -> HTMLResponse:
         if (elapsed) lines.push(`소요 시간: ${{elapsed}}`);
         return lines.join("\\n");
       }}
+      const semantic = job?.result?.semantic || {{}};
+      const scanCreated = summary.created ?? 0;
+      const scanUpdated = summary.updated ?? 0;
+      const semWork = (semantic.search_documents_updated || 0) + (semantic.embeddings_created || 0)
+        + (semantic.auto_tag_values || 0) + (semantic.faces_reanalyzed || 0);
+      let scanHeadline;
+      if (job?.status === "failed") scanHeadline = "✗ 동기화에 실패했습니다";
+      else if (job?.status === "canceled" || job?.status === "cancelled") scanHeadline = "■ 동기화를 취소했습니다";
+      else if (retryOnly) scanHeadline = (processed.succeeded ?? 0) > 0
+        ? `✓ 오류 항목 재처리 완료 — ${{processed.succeeded}}개 복구`
+        : "✓ 재처리할 오류 항목이 없었어요 (0건)";
+      else if (scanCreated === 0 && scanUpdated === 0 && semWork === 0)
+        scanHeadline = "✓ 이미 최신 상태 — 새로 추가·변경된 사진이 없었어요 (0건)";
+      else scanHeadline = `✓ 동기화 완료 — 새 사진 ${{scanCreated}}개, 변경 ${{scanUpdated}}개`;
+      lines.unshift(scanHeadline);
       if (progress.message) lines.push(progress.message);
       if (!retryOnly) {{
         lines.push(
           `발견: ${{summary.scanned ?? 0}}`,
-          `새로 추가: ${{summary.created ?? 0}}`,
-          `업데이트: ${{summary.updated ?? 0}}`,
+          `새로 추가: ${{scanCreated}}`,
+          `업데이트: ${{scanUpdated}}`,
           `이동 감지: ${{summary.moved ?? 0}}`,
           `누락: ${{summary.missing ?? 0}}`,
           `실패: ${{summary.failed ?? 0}}`,
         );
       }}
       lines.push(`처리 완료: ${{processed.succeeded ?? 0}}, 실패: ${{processed.failed ?? 0}}`);
-      const semantic = job?.result?.semantic || {{}};
       if (semantic.search_documents_updated !== undefined) lines.push(`검색 색인: +${{semantic.search_documents_updated}}`);
       if (semantic.auto_tag_files !== undefined) lines.push(`자동 태그: ${{semantic.auto_tag_files}} 항목, +${{semantic.auto_tag_values ?? 0}}개`);
       if (semantic.faces_reanalyzed) lines.push(`얼굴 재분석: +${{semantic.faces_reanalyzed}}`);
@@ -3379,6 +3410,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       const elapsed = formatElapsed(job?.started_at, job?.finished_at);
       if (elapsed) lines.push(`소요 시간: ${{elapsed}}`);
       if (job?.error_message) lines.push(`오류: ${{job.error_message}}`);
+      lines.push(...coverageSummaryLines());
       return lines.join("\\n");
     }}
     async function pollJob(jobId, resultNode, render) {{
@@ -3537,6 +3569,15 @@ async def dashboard(request: Request) -> HTMLResponse:
         if (elapsed) lines.push(`소요 시간: ${{elapsed}}`);
         return lines.join("\\n");
       }}
+      const semDidWork = (result.embeddings_created || 0) + (result.auto_tag_values || 0)
+        + (result.search_documents_updated || 0) + (result.faces_reanalyzed || 0);
+      let semHeadline;
+      if (job?.status === "failed") semHeadline = "✗ 이미지 AI 분석에 실패했습니다";
+      else if (job?.status === "canceled" || job?.status === "cancelled") semHeadline = "■ 이미지 AI 분석을 취소했습니다";
+      else if ((result.pending ?? 0) === 0 || semDidWork === 0)
+        semHeadline = "✓ 이미 최신 상태 — 이번에 새로 처리할 항목이 없었어요 (0건)";
+      else semHeadline = `✓ 이미지 AI 분석 완료 — 이번에 ${{result.succeeded ?? 0}}개 처리`;
+      lines.unshift(semHeadline);
       if (progress.message) lines.push(progress.message);
       lines.push(
         `대상: ${{result.pending ?? 0}}`,
@@ -3557,6 +3598,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (faceAvail === false) lines.push(`얼굴 분석 모델이 준비되지 않았습니다`);
       if (result.clip_enabled === false) lines.push(`이미지 AI가 꺼져 있습니다`);
       if (job?.error_message) lines.push(`오류: ${{job.error_message}}`);
+      lines.push(...coverageSummaryLines());
       return lines.join("\\n");
     }}
     const rememberedSourceRoots = loadRememberedText(phase1SourceRootsStorageKey);
