@@ -100,6 +100,27 @@ final class BackendSupervisor: ObservableObject {
         }
     }
 
+    /// 전체 라이브러리 진행 현황(/status 의 semantic.coverage). 현재 작업
+    /// 진행률(LibraryJobStatus)과 달리 "전체 N장 중 AI M장 완료"처럼 누적 상태를
+    /// 나타낸다. 메뉴바에서 한눈에 보기 위한 요약 전용.
+    struct LibraryCoverage {
+        let eligible: Int
+        let clipDone: Int
+        let searchDone: Int
+        let remaining: Int
+        let errors: Int
+
+        var clipPercent: Int {
+            eligible > 0 ? Int((Double(clipDone) / Double(eligible) * 100).rounded()) : 100
+        }
+
+        var summary: String {
+            if eligible == 0 { return "아직 분석할 사진이 없습니다" }
+            if remaining == 0 { return "전체 \(eligible)장 · 모두 최신 ✓" }
+            return "전체 \(eligible)장 · 이미지 AI \(clipDone) (\(clipPercent)%) · 남음 \(remaining)"
+        }
+    }
+
     private struct AIPackPrepareResponse: Decodable {
         let ok: Bool
         let message: String
@@ -112,6 +133,7 @@ final class BackendSupervisor: ObservableObject {
     @Published private(set) var sourceRoots: [String]
     @Published private(set) var aiPackStatus: AIPackStatus?
     @Published private(set) var libraryJobStatus: LibraryJobStatus?
+    @Published private(set) var coverage: LibraryCoverage?
     @Published var lanEnabled: Bool {
         didSet {
             guard lanEnabled != oldValue else { return }
@@ -879,9 +901,11 @@ final class BackendSupervisor: ObservableObject {
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
             let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             let job = Self.parseLibraryJobStatus(payload: decoded)
+            let coverage = Self.parseCoverage(payload: decoded)
             await MainActor.run {
                 let previous = self.libraryJobStatus
                 self.libraryJobStatus = job
+                self.coverage = coverage
                 if let job, job.isRunning {
                     self.statusMessage = job.summary
                 }
@@ -1020,6 +1044,26 @@ final class BackendSupervisor: ObservableObject {
             jobKind: jobKind,
             status: status,
             summary: summarizeLibraryJob(active)
+        )
+    }
+
+    static func parseCoverage(payload: [String: Any]?) -> LibraryCoverage? {
+        guard
+            let payload,
+            let semantic = payload["semantic"] as? [String: Any],
+            let cov = semantic["coverage"] as? [String: Any],
+            let eligible = intValue(cov["eligible_media"])
+        else {
+            return nil
+        }
+        let remaining = (intValue(cov["remaining_for_clip"]) ?? 0)
+            + (intValue(cov["remaining_for_search"]) ?? 0)
+        return LibraryCoverage(
+            eligible: eligible,
+            clipDone: intValue(cov["clip_embeddings_current"]) ?? 0,
+            searchDone: intValue(cov["search_current"]) ?? 0,
+            remaining: remaining,
+            errors: intValue(cov["semantic_job_errors"]) ?? 0
         )
     }
 

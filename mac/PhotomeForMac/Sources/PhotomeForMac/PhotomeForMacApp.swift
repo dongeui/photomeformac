@@ -192,6 +192,13 @@ struct MenuBarContent: View {
             Text("이미지 AI: 상태 확인 중")
         }
 
+        if let coverage = backend.coverage {
+            Text("사진 현황: \(coverage.summary)")
+            if coverage.errors > 0 {
+                Text("이미지 AI 오류 \(coverage.errors)건")
+            }
+        }
+
         Divider()
 
         if scanRunning {
