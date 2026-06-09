@@ -974,7 +974,6 @@ async def gallery_page(
       <nav class="side-nav">
         <a class="side-item active" href="/gallery">모든 사진</a>
         <a class="side-item" href="/people/manage">사람</a>
-        <a class="side-item" href="/dashboard">진행 상태</a>
       </nav>
       <form class="side-filters" id="gallery-search-form" method="get" action="/gallery">
         <div class="search-ac-wrap">
@@ -1624,7 +1623,7 @@ def _render_empty_state(q: str | None, person: str | None, place: str | None) ->
         """
     else:
         message = "아직 보여줄 사진이나 영상이 없습니다."
-        hint = "진행 상태 보기에서 사진 가져오기가 끝났는지 확인할 수 있습니다."
+        hint = "메뉴바 아이콘에서 사진 가져오기가 끝났는지 확인할 수 있습니다."
         examples_html = ""
     return f"""
       <article class="card">
