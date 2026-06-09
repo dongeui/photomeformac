@@ -78,6 +78,28 @@ async def search_media_debug(
     )
 
 
+@router.get("/search/suggest")
+async def search_suggest(
+    request: Request,
+    q: str = Query(default=""),
+    limit: int = Query(default=8, ge=1, le=20),
+) -> dict[str, Any]:
+    """Autocomplete suggestions for the in-progress search query.
+
+    Lightweight, read-only: only touches the tags + search_events tables so it is
+    safe to call on every keystroke. Returns tag values (ranked prefix-first, then
+    by photo count) merged with the user's recent successful queries.
+    """
+    from app.services.search.suggest import autocomplete
+
+    if not q.strip():
+        return {"query": q, "suggestions": []}
+    database = require_state(request, "database")
+    with database.session_factory() as session:
+        suggestions = autocomplete(session, q, limit=limit)
+    return {"query": q, "suggestions": suggestions}
+
+
 @router.get("/search/benchmark")
 async def search_benchmark(
     request: Request,

@@ -335,6 +335,57 @@ async def gallery_page(
     .primary-search {{
       min-width: 0;
     }}
+    .search-ac-wrap {{
+      position: relative;
+    }}
+    .search-ac-list {{
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      z-index: 40;
+      margin: 0;
+      padding: 4px;
+      list-style: none;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+      max-height: 280px;
+      overflow-y: auto;
+    }}
+    .search-ac-item {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 9px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--text);
+    }}
+    .search-ac-item.is-active,
+    .search-ac-item:hover {{
+      background: var(--line);
+    }}
+    .search-ac-icon {{
+      flex: none;
+      width: 16px;
+      text-align: center;
+      opacity: 0.7;
+      font-size: 0.82rem;
+    }}
+    .search-ac-value {{
+      flex: 1 1 auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    .search-ac-count {{
+      flex: none;
+      color: var(--muted);
+      font-size: 0.76rem;
+    }}
     .advanced-filters {{
       grid-column: 1 / -1;
       border-top: 1px solid var(--line);
@@ -925,7 +976,10 @@ async def gallery_page(
         <a class="side-item" href="/dashboard">진행 상태</a>
       </nav>
       <form class="side-filters" id="gallery-search-form" method="get" action="/gallery">
-        <input type="search" name="q" value="{escape(q or '')}" placeholder="검색: 작년 바다, 아기…">
+        <div class="search-ac-wrap">
+          <input type="search" id="gallery-search-input" name="q" value="{escape(q or '')}" placeholder="검색: 작년 바다, 아기…" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="search-ac-list">
+          <ul id="search-ac-list" class="search-ac-list" role="listbox" hidden></ul>
+        </div>
         <div class="side-label">기간</div>
         <input type="date" name="date_from" value="{escape(date_from or '')}" aria-label="시작일">
         <input type="date" name="date_to" value="{escape(date_to or '')}" aria-label="종료일">
@@ -1045,6 +1099,101 @@ async def gallery_page(
       }}
       attachThumbnailRecovery();
     }});
+    (function setupAutocomplete() {{
+      const input = document.getElementById("gallery-search-input");
+      const list = document.getElementById("search-ac-list");
+      if (!input || !list) return;
+      let items = [];
+      let activeIndex = -1;
+      let debounceTimer = null;
+      let lastQuery = "";
+
+      function closeList() {{
+        list.hidden = true;
+        list.innerHTML = "";
+        items = [];
+        activeIndex = -1;
+        input.setAttribute("aria-expanded", "false");
+      }}
+
+      function escapeHtml(value) {{
+        return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }}
+
+      function render(suggestions) {{
+        items = suggestions;
+        activeIndex = -1;
+        if (!suggestions.length) {{ closeList(); return; }}
+        list.innerHTML = suggestions.map((s, i) => {{
+          const icon = s.kind === "recent" ? "🕘" : "🏷";
+          const count = (s.count !== null && s.count !== undefined)
+            ? `<span class="search-ac-count">${{s.count}}</span>` : "";
+          return `<li class="search-ac-item" role="option" data-index="${{i}}">`
+            + `<span class="search-ac-icon">${{icon}}</span>`
+            + `<span class="search-ac-value">${{escapeHtml(s.value)}}</span>${{count}}</li>`;
+        }}).join("");
+        list.hidden = false;
+        input.setAttribute("aria-expanded", "true");
+      }}
+
+      function setActive(idx) {{
+        const nodes = list.querySelectorAll(".search-ac-item");
+        nodes.forEach(n => n.classList.remove("is-active"));
+        if (idx >= 0 && idx < nodes.length) {{
+          nodes[idx].classList.add("is-active");
+          nodes[idx].scrollIntoView({{ block: "nearest" }});
+        }}
+        activeIndex = idx;
+      }}
+
+      function choose(idx) {{
+        if (idx < 0 || idx >= items.length) return;
+        input.value = items[idx].value;
+        closeList();
+        if (searchForm) {{
+          if (searchForm.requestSubmit) searchForm.requestSubmit();
+          else searchForm.submit();
+        }}
+      }}
+
+      async function fetchSuggestions(q) {{
+        try {{
+          const res = await fetch(`/search/suggest?q=${{encodeURIComponent(q)}}&limit=8`, {{ cache: "no-store" }});
+          if (!res.ok) return;
+          const data = await res.json();
+          if (input.value.trim() !== q) return;  // stale response
+          render(data.suggestions || []);
+        }} catch (_e) {{ /* ignore transient errors */ }}
+      }}
+
+      input.addEventListener("input", () => {{
+        const q = input.value.trim();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        if (q.length < 1) {{ lastQuery = ""; closeList(); return; }}
+        if (q === lastQuery) return;
+        lastQuery = q;
+        debounceTimer = setTimeout(() => fetchSuggestions(q), 140);
+      }});
+
+      input.addEventListener("keydown", (e) => {{
+        if (list.hidden) return;
+        if (e.key === "ArrowDown") {{ e.preventDefault(); setActive(Math.min(activeIndex + 1, items.length - 1)); }}
+        else if (e.key === "ArrowUp") {{ e.preventDefault(); setActive(Math.max(activeIndex - 1, 0)); }}
+        else if (e.key === "Enter") {{ if (activeIndex >= 0) {{ e.preventDefault(); choose(activeIndex); }} }}
+        else if (e.key === "Escape") {{ closeList(); }}
+      }});
+
+      list.addEventListener("mousedown", (e) => {{
+        const li = e.target.closest(".search-ac-item");
+        if (!li) return;
+        e.preventDefault();
+        choose(Number(li.dataset.index));
+      }});
+
+      document.addEventListener("click", (e) => {{
+        if (!list.hidden && !e.target.closest(".search-ac-wrap")) closeList();
+      }});
+    }})();
   </script>
 </body>
 </html>"""

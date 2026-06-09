@@ -1680,3 +1680,46 @@ def scan_twice(client: TestClient) -> tuple[dict, dict]:
 def create_image(path: Path) -> None:
     image = Image.new("RGB", (80, 60), color=(40, 80, 120))
     image.save(path, format="JPEG")
+
+
+def test_search_suggest_ranks_prefix_tags_and_recent_queries(
+    client: TestClient, source_root: Path
+) -> None:
+    create_image(source_root / "suggest-a.jpg")
+    create_image(source_root / "suggest-b.jpg")
+    scan_twice(client)
+
+    with client.app.state.database.session_factory() as session:
+        files = session.scalars(select(MediaFile)).all()
+        assert len(files) >= 2
+        fid, fid2 = files[0].file_id, files[1].file_id
+        session.add_all([
+            Tag(file_id=fid, tag_type="place", tag_value="바다"),
+            Tag(file_id=fid2, tag_type="place", tag_value="바다"),       # freq 2
+            Tag(file_id=fid, tag_type="object", tag_value="바닐라라떼"),  # freq 1, prefix
+            Tag(file_id=fid, tag_type="object", tag_value="강아지바"),     # substring only
+            Tag(file_id=fid, tag_type="person", tag_value="person-123456"),  # internal id, hidden
+        ])
+        session.add(SearchEvent(query="바람 부는 날", effective_mode="hybrid", intent="visual", result_count=5))
+        session.add(SearchEvent(query="바보", effective_mode="hybrid", intent="visual", result_count=0))
+        session.commit()
+
+    data = client.get("/search/suggest", params={"q": "바"}).json()
+    suggestions = data["suggestions"]
+    values = [s["value"] for s in suggestions]
+
+    assert "person-123456" not in values                         # internal id hidden
+    assert values.index("바다") < values.index("강아지바")          # prefix beats substring
+    assert values.index("바닐라라떼") < values.index("강아지바")
+    assert values.index("바다") < values.index("바닐라라떼")        # within prefix group: freq desc
+    assert "바람 부는 날" in values                                # recent successful query
+    assert next(s for s in suggestions if s["value"] == "바람 부는 날")["kind"] == "recent"
+    assert "바보" not in values                                    # zero-result query excluded
+    sea = next(s for s in suggestions if s["value"] == "바다")
+    assert sea["kind"] == "tag" and sea["count"] == 2
+
+
+def test_search_suggest_blank_query_returns_empty(client: TestClient) -> None:
+    response = client.get("/search/suggest", params={"q": "  "})
+    assert response.status_code == 200
+    assert response.json()["suggestions"] == []
