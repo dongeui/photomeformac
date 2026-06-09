@@ -9,6 +9,9 @@ struct PhotomeForMacApp: App {
     @State private var launchAtLoginEnabled = PhotomeForMacApp.currentLaunchAtLoginEnabled()
     @NSApplicationDelegateAdaptor(PhotomeAppDelegate.self) private var appDelegate
 
+    /// 메뉴바 "Photome 열기"가 닫힌 메인 창을 다시 띄울 때 쓰는 식별자.
+    static let mainWindowID = "photome-main"
+
     /// SwiftPM의 bare executable로 실행하면 mainBundle이 .app이 아니어서
     /// `SMAppService.mainApp` 호출이 NSException(bundleProxyForCurrentProcess nil)을 던진다.
     /// Xcode ⌘R / `swift run` 같은 비-번들 실행에서도 앱이 죽지 않도록 가드한다.
@@ -22,13 +25,15 @@ struct PhotomeForMacApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        Window("Photome", id: Self.mainWindowID) {
             ContentView()
                 .environmentObject(backend)
                 .environmentObject(updateChecker)
                 .onAppear {
                     appDelegate.backend = backend
-                    backend.requestNotificationAuthorization()
+                    // 알림 권한은 첫 실행 시점이 아니라 사용자가 첫 스캔/AI 작업을
+                    // 시작할 때 요청한다(BackendSupervisor.trigger* 참고). 그래야 앱을
+                    // 이해하기도 전에 권한 팝업이 뜨지 않는다.
                 }
         }
         .commands {
@@ -37,16 +42,23 @@ struct PhotomeForMacApp: App {
                     Self.presentAboutPanel()
                 }
             }
+            // 메뉴바 아이콘 메뉴는 상태 표시 전용으로 비웠으므로, 실제 조작·설정은
+            // 여기(상단 앱 메뉴)와 앱 창 툴바에 둔다.
             CommandGroup(after: .appInfo) {
                 Button("Photome 대시보드 열기") {
                     backend.openDashboard()
                 }
                 .disabled(!backend.isRunning)
 
-                Button("백엔드 재시작") {
-                    backend.restart()
+                Button("업데이트 확인…") {
+                    updateChecker.checkForUpdates()
                 }
-                .disabled(backend.isBusy)
+                .disabled(!updateChecker.canCheck)
+
+                Button(launchAtLoginEnabled ? "로그인 시 자동 시작 끄기" : "로그인 시 자동 시작 켜기") {
+                    toggleLaunchAtLogin()
+                }
+                .disabled(!Self.isLaunchAtLoginAvailable())
 
                 Divider()
 
@@ -60,116 +72,38 @@ struct PhotomeForMacApp: App {
                 }
                 .disabled(!backend.isRunning || !backend.clipEnabled || backend.hasActiveLibraryJob)
 
+                Button("사진 폴더 선택") {
+                    backend.choosePhotoFolder()
+                }
+
+                Button("Photome 다시 시작") {
+                    backend.restart()
+                }
+                .disabled(backend.isBusy)
+
                 Divider()
+
+                Button("모델 준비/재로드") {
+                    backend.prepareAIModel(loadCached: backend.offlineMode)
+                }
+                .disabled(!backend.isRunning || backend.aiPackStatus?.modelLoading == true)
 
                 Button("모델 캐시 폴더 열기") {
                     backend.openModelCache()
+                }
+
+                Button("로그 보기") {
+                    backend.showLogs()
+                }
+
+                Button("진단 내보내기") {
+                    backend.exportDiagnosticsBundle()
                 }
             }
         }
 
         MenuBarExtra(backend.menuTitle, systemImage: menuBarIcon) {
-            Button("Photome 열기") {
-                NSApp.activate(ignoringOtherApps: true)
-            }
-
-            Button("대시보드 브라우저로 열기") {
-                backend.openDashboard()
-            }
-            .disabled(!backend.isRunning)
-
-            Divider()
-
-            if let libraryJobStatus = backend.libraryJobStatus, backend.hasActiveLibraryJob {
-                Text("현재 작업: \(libraryJobStatus.summary)")
-            } else {
-                Text("현재 작업: 대기 중")
-            }
-
-            if let aiPackStatus = backend.aiPackStatus {
-                Text("이미지 AI: \(aiPackStatus.summary)")
-            } else {
-                Text("이미지 AI: 상태 확인 중")
-            }
-
-            Divider()
-
-            Button("전체 동기화 시작") {
-                backend.triggerLibraryScan()
-            }
-            .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
-
-            Button("이미지 AI 이어서 분석") {
-                backend.triggerSemanticMaintenance()
-            }
-            .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
-
-            Button("모델 준비/재로드") {
-                backend.prepareAIModel(loadCached: backend.offlineMode)
-            }
-            .disabled(!backend.isRunning || backend.aiPackStatus?.modelLoading == true)
-            .help("번들/캐시된 모델 weights를 메모리에 로드합니다.")
-
-            Button("모델 캐시 폴더 열기") {
-                backend.openModelCache()
-            }
-
-            Divider()
-
-            Button("사진 폴더 선택") {
-                backend.choosePhotoFolder()
-            }
-
-            Button(backend.lanEnabled ? "LAN 공유 끄기" : "LAN 공유 켜기") {
-                backend.toggleLAN()
-            }
-
-            Button(launchAtLoginEnabled ? "로그인 시 자동 시작 끄기" : "로그인 시 자동 시작 켜기") {
-                toggleLaunchAtLogin()
-            }
-            .disabled(!Self.isLaunchAtLoginAvailable())
-            .help(Self.isLaunchAtLoginAvailable() ? "" : "이 옵션은 정식 .app 번들로 실행해야 사용 가능합니다.")
-
-            Button("로그 보기") {
-                backend.showLogs()
-            }
-
-            Button("진단 내보내기") {
-                backend.exportDiagnosticsBundle()
-            }
-
-            Divider()
-
-            Button("업데이트 확인…") {
-                updateChecker.checkForUpdates()
-            }
-            .disabled(!updateChecker.canCheck)
-
-            Divider()
-
-            Button("백엔드 시작") {
-                backend.start()
-            }
-            .disabled(backend.isRunning || backend.isBusy)
-
-            Button("백엔드 재시작") {
-                backend.restart()
-            }
-            .disabled(backend.isBusy)
-
-            Button("백엔드 중지") {
-                backend.stop()
-            }
-            .disabled(!backend.isRunning && !backend.isBusy)
-
-            Divider()
-
-            Text(backend.statusMessage)
-
-            Button("종료") {
-                backend.stop()
-                NSApp.terminate(nil)
-            }
+            MenuBarContent(backend: backend)
         }
     }
 
@@ -228,6 +162,62 @@ struct PhotomeForMacApp: App {
             return "exclamationmark.triangle.fill"
         case .stopped:
             return "photo.stack"
+        }
+    }
+}
+
+/// 메뉴바 아이콘 메뉴. 현재 상태를 보여주고, 동기화·이미지 AI의 시작/중지만
+/// 컨트롤한다. 사진 보기/검색 등 나머지 조작은 "사진첩 열기"로 앱 창에서 한다.
+/// 상태는 backend가 2초 폴링으로 갱신하며 메뉴를 열 때마다 최신값으로 평가된다.
+struct MenuBarContent: View {
+    @ObservedObject var backend: BackendSupervisor
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        let activeKind = backend.hasActiveLibraryJob ? (backend.libraryJobStatus?.jobKind ?? "") : ""
+        let scanRunning = activeKind == "scan"
+        let aiRunning = activeKind == "semantic_maintenance" || activeKind == "semantic_backfill"
+
+        Text("상태: \(backend.state.rawValue)")
+
+        if let libraryJobStatus = backend.libraryJobStatus, backend.hasActiveLibraryJob {
+            Text("현재 작업: \(libraryJobStatus.summary)")
+        } else {
+            Text("현재 작업: 대기 중")
+        }
+
+        if let aiPackStatus = backend.aiPackStatus {
+            Text("이미지 AI: \(aiPackStatus.summary)")
+        } else {
+            Text("이미지 AI: 상태 확인 중")
+        }
+
+        Divider()
+
+        if scanRunning {
+            Button("동기화 중지") { backend.cancelActiveJob() }
+        } else {
+            Button("동기화 시작") { backend.triggerLibraryScan() }
+                .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
+        }
+
+        if aiRunning {
+            Button("이미지 AI 분석 중지") { backend.cancelActiveJob() }
+        } else {
+            Button("이미지 AI 분석 시작") { backend.triggerSemanticMaintenance() }
+                .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
+        }
+
+        Divider()
+
+        Button("사진첩 열기") {
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: PhotomeForMacApp.mainWindowID)
+        }
+
+        Button("종료") {
+            backend.stop()
+            NSApp.terminate(nil)
         }
     }
 }

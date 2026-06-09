@@ -217,9 +217,16 @@ if [[ "$BUNDLE_WEIGHTS" == "1" ]]; then
     fi
   done
   if [[ "$COPIED" != "1" ]]; then
-    echo "warning: CLIP ViT-B-32 weights not found in default cache paths;" >&2
-    echo "         앱 첫 실행 시 사용자가 모델 다운로드 버튼을 눌러야 합니다." >&2
-    echo "         번들에 미리 넣으려면 PHOTOME_WEIGHTS_SRC=/path/to/huggingface/hub 환경변수 지정." >&2
+    # 정식 배포 산출물은 ai-pack 단일 빌드이므로 weights 번들은 필수다.
+    # weights 없는 빌드가 ai-pack으로 위장해 조용히 나가는 것을 막기 위해
+    # (BUNDLE_PYTHON 미발견과 동일하게) 경고가 아닌 hard fail로 중단한다.
+    # 의도적으로 weights를 빼려면 PHOTOME_BUNDLE_WEIGHTS=0 을 명시해야 한다.
+    echo "PHOTOME_BUNDLE_WEIGHTS=1 이지만 CLIP ViT-B-32 weights를 찾지 못했습니다." >&2
+    echo "  배포 산출물은 ai-pack 단일 빌드라 weights 번들이 필수입니다." >&2
+    echo "  방법 1: 모델 캐시가 있는 경로를 PHOTOME_WEIGHTS_SRC=/path/to/huggingface/hub 로 지정" >&2
+    echo "  방법 2: 한 번 CLIP을 실행해 ~/.cache/huggingface/hub 에 ViT-B-32를 받은 뒤 재실행" >&2
+    echo "  (개발/디버그용으로 weights 없이 빌드하려면 PHOTOME_BUNDLE_WEIGHTS=0 을 명시)" >&2
+    exit 2
   fi
 fi
 

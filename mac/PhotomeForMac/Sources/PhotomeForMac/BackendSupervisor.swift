@@ -66,10 +66,10 @@ final class BackendSupervisor: ObservableObject {
                     return "모델 다운로드 중 (\(detail))"
                 }
                 return "모델 준비 중"
-            case "needs_download":
-                return "모델 다운로드 필요"
-            case "needs_packages":
-                return "local AI pack 설치 필요"
+            case "needs_download", "needs_packages":
+                // 정식 배포는 weights/패키지를 항상 번들하므로 "설치/다운로드 필요"는
+                // 사용자에게 노출하지 않는다. 첫 사용 전 로드 대기 상태일 뿐이다.
+                return "준비 중"
             case "error":
                 return modelError.map { "오류: \($0)" } ?? "모델 준비 오류"
             default:
@@ -125,7 +125,11 @@ final class BackendSupervisor: ObservableObject {
     /// 데이터 캐시만 사용. 사용자에게 토글을 노출하지 않는다.
     let offlineMode: Bool = true
 
-    let port: Int
+    /// 사용자가 지정한(또는 기본) 시작 포트. 점유 시 여기서부터 위로 빈 포트를 찾는다.
+    let basePort: Int
+    /// 실제 백엔드가 바인딩하는 포트. start() 때 basePort부터 빈 포트를 탐색해 갱신된다.
+    /// baseURL/dashboardURL/healthz 등 모든 파생 URL이 이 값을 따른다.
+    private(set) var port: Int
 
     private var process: Process?
     private var healthTask: Task<Void, Never>?
@@ -151,6 +155,7 @@ final class BackendSupervisor: ObservableObject {
     private static let maxCrashRestartAttempts: Int = 1
 
     init(port: Int = 8000) {
+        self.basePort = port
         self.port = port
         self.sourceRoots = UserDefaults.standard.stringArray(forKey: Self.sourceRootsDefaultsKey) ?? []
         self.lanEnabled = UserDefaults.standard.bool(forKey: Self.lanEnabledDefaultsKey)
@@ -309,6 +314,10 @@ final class BackendSupervisor: ObservableObject {
         baseURL.appendingPathComponent("dashboard")
     }
 
+    var galleryURL: URL {
+        baseURL.appendingPathComponent("gallery")
+    }
+
     var healthURL: URL {
         baseURL.appendingPathComponent("healthz")
     }
@@ -355,6 +364,17 @@ final class BackendSupervisor: ObservableObject {
         state = .starting
         lastError = nil
         statusMessage = "백엔드를 시작합니다."
+
+        // basePort가 점유돼 있으면 위로 빈 포트를 찾아 자동 폴백한다. 사용자가
+        // 터미널에서 직접 프로세스를 죽이지 않아도 되게 한다. 못 찾으면 basePort를
+        // 그대로 쓰고(기존 동작), 충돌 시 portConflict 힌트가 backstop으로 뜬다.
+        let resolvedPort = Self.firstAvailablePort(startingAt: basePort, maxTries: 20) ?? basePort
+        if resolvedPort != port {
+            port = resolvedPort
+        }
+        if resolvedPort != basePort {
+            statusMessage = "포트 \(basePort)이 사용 중이라 \(resolvedPort) 포트로 시작합니다."
+        }
 
         do {
             let repoRoot = try Self.findRepoRoot()
@@ -405,6 +425,40 @@ final class BackendSupervisor: ObservableObject {
             lastError = error.localizedDescription
             statusMessage = "백엔드 시작 실패: \(error.localizedDescription)"
         }
+    }
+
+    /// 127.0.0.1:port에 TCP 소켓을 bind해 보고 성공하면 비어 있는 포트로 본다.
+    /// 활성 LISTEN 중인 포트는 EADDRINUSE로 실패 → 점유로 판정. SO_REUSEADDR로
+    /// TIME_WAIT 잔여 소켓은 비어 있는 것으로 취급한다(백엔드도 곧장 bind 가능).
+    static func isPortAvailable(_ port: Int) -> Bool {
+        guard port > 0, port <= 65535 else { return false }
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        if fd < 0 { return false }
+        defer { close(fd) }
+        var yes: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = in_port_t(UInt16(port).bigEndian)
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let bound = withUnsafePointer(to: &addr) { ptr -> Int32 in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                bind(fd, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        return bound == 0
+    }
+
+    /// startingAt부터 위로 maxTries개 포트를 훑어 처음 비어 있는 포트를 돌려준다.
+    static func firstAvailablePort(startingAt start: Int, maxTries: Int) -> Int? {
+        var candidate = start
+        var tries = 0
+        while tries < maxTries && candidate <= 65535 {
+            if isPortAvailable(candidate) { return candidate }
+            candidate += 1
+            tries += 1
+        }
+        return nil
     }
 
     func stop() {
@@ -517,7 +571,7 @@ final class BackendSupervisor: ObservableObject {
         var detail: String {
             switch self {
             case .portConflict(let port):
-                return "다른 프로세스가 \(port) 포트를 사용 중입니다. 터미널에서 `lsof -tiTCP:\(port) -sTCP:LISTEN`로 확인하고 종료하세요."
+                return "포트 \(port) 부근이 모두 사용 중입니다. [재시작]을 누르면 다시 빈 포트를 찾습니다. 계속되면 터미널에서 `lsof -tiTCP:\(port) -sTCP:LISTEN`로 점유 프로세스를 확인하세요."
             case .pythonMissing:
                 return "앱이 실행할 Python을 찾지 못했습니다. 개발 모드라면 .venv가 있는지, 정식 빌드라면 bundled runtime이 들어있는지 확인하세요."
             case .permissionIssue:
@@ -550,6 +604,28 @@ final class BackendSupervisor: ObservableObject {
 
     func openDashboard() {
         NSWorkspace.shared.open(dashboardURL)
+    }
+
+    /// 메뉴바 "사람 정리…" — 얼굴↔이름 매핑 전용 페이지(/people/manage)를 연다.
+    func openPeopleManager() {
+        NSWorkspace.shared.open(baseURL.appendingPathComponent("people/manage"))
+    }
+
+    /// 진행 중인 동기화/이미지 AI 작업을 취소한다 (메뉴바 "중지").
+    func cancelActiveJob() {
+        guard let jobID = libraryJobStatus?.jobID, !jobID.isEmpty else {
+            statusMessage = "취소할 작업이 없습니다."
+            return
+        }
+        actionTask?.cancel()
+        actionTask = Task { [weak self] in
+            guard let self else { return }
+            let result = await self.postJSON(endpoint: "scan/jobs/\(jobID)/cancel")
+            await MainActor.run {
+                self.statusMessage = result.ok ? "작업을 중지하는 중입니다." : result.message
+            }
+            await self.refreshLibraryJobStatus()
+        }
     }
 
     func toggleLAN() {
@@ -708,6 +784,9 @@ final class BackendSupervisor: ObservableObject {
             statusMessage = "먼저 백엔드를 실행하세요."
             return
         }
+        // 작업 완료 알림을 보낼 수 있게, 사용자가 긴 작업을 처음 시작하는 이 시점에서
+        // (첫 실행 직후가 아니라) 알림 권한을 요청한다. macOS는 한 번만 팝업한다.
+        requestNotificationAuthorization()
         actionTask?.cancel()
         actionTask = Task { [weak self] in
             guard let self else { return }
@@ -731,6 +810,7 @@ final class BackendSupervisor: ObservableObject {
             statusMessage = "이미지 AI가 꺼져 있습니다."
             return
         }
+        requestNotificationAuthorization()
         actionTask?.cancel()
         actionTask = Task { [weak self] in
             guard let self else { return }

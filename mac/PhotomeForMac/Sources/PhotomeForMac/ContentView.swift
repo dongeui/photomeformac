@@ -8,10 +8,8 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            toolbar
-            Divider()
             ZStack {
-                WebDashboardView(url: backend.dashboardURL, reloadToken: backend.state.rawValue)
+                WebDashboardView(url: backend.galleryURL, reloadToken: backend.state.rawValue)
                     .opacity(backend.isRunning ? 1 : 0.08)
                     .disabled(!backend.isRunning)
 
