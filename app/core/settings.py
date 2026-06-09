@@ -58,6 +58,33 @@ def _clamp(value: int, lower: int, upper: int) -> int:
     return max(lower, min(upper, int(value)))
 
 
+def load_env_file() -> None:
+    """`PHOTOME_ENV_FILE`(없으면 `.env`)의 KEY=VALUE를 os.environ에 채운다.
+
+    대시보드에서 저장한 값(예: 성능 설정)이 앱/백엔드 재시작 후에도 살아남게
+    한다. 이 파일은 쓰기만 되고 아무도 읽지 않아 재시작 시 설정이 초기화되던
+    문제를 해결한다. 이미 프로세스 환경에 있는 키는 건드리지 않는다(setdefault).
+    """
+    configured = os.environ.get("PHOTOME_ENV_FILE", ".env")
+    path = Path(configured).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    try:
+        if not path.is_file():
+            return
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _sep, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                os.environ.setdefault(key, value)
+    except OSError:
+        return
+
+
 def asset_worker_cap() -> int:
     return max(1, min(16, _cpu_count()))
 
@@ -167,6 +194,9 @@ def _env_float(name: str, default: float) -> float:
 
 
 def load_settings() -> AppSettings:
+    # 저장된 설정 파일을 먼저 환경에 반영해, 대시보드에서 바꾼 값이 재시작 후에도
+    # 유지되게 한다.
+    load_env_file()
     data_root = Path(_env("PHOTOMINE_DATA_ROOT", "./data")).expanduser().resolve()
     source_roots = _env_paths(
         "PHOTOMINE_SOURCE_ROOTS",

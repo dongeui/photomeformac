@@ -28,6 +28,12 @@ router = APIRouter(tags=["gallery"])
 PERSON_TAG_TYPES = ("person", "people", "face")
 PLACE_TAG_TYPES = ("place", "location", "place_detail", "geo", "geo_detail")
 PAGE_SIZE = 48
+PAGE_SIZE_OPTIONS = (50, 100, 200, 300, 500)
+DEFAULT_PAGE_SIZE = 100
+
+
+def _normalize_page_size(value: int | None) -> int:
+    return value if value in PAGE_SIZE_OPTIONS else DEFAULT_PAGE_SIZE
 GALLERY_SEARCH_LIMIT = 99999
 QUICK_SEARCH_TERMS = ("얼굴", "아기", "바다", "꽃", "여행", "영수증", "baby", "beach")
 SORT_NEWEST = "newest"
@@ -74,6 +80,7 @@ async def home_page(
     q: Optional[str] = Query(default=None),
     sort: str = Query(default=SORT_NEWEST),
     page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=DEFAULT_PAGE_SIZE),
 ) -> HTMLResponse:
     return await gallery_page(
         request,
@@ -85,6 +92,7 @@ async def home_page(
         q=q,
         sort=sort,
         page=page,
+        per_page=per_page,
     )
 
 
@@ -99,12 +107,14 @@ async def gallery_page(
     q: Optional[str] = Query(default=None),
     sort: str = Query(default=SORT_NEWEST),
     page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=DEFAULT_PAGE_SIZE),
 ) -> HTMLResponse:
     database = require_state(request, "database")
     settings = require_state(request, "settings")
     pipeline = require_state(request, "pipeline")
     log_events = not pipeline.has_active_library_job()
-    offset = (page - 1) * PAGE_SIZE
+    page_size = _normalize_page_size(per_page)
+    offset = (page - 1) * page_size
     sort_order = _normalize_sort(sort)
     parsed_date_from = _parse_date(date_from)
     parsed_date_to = _parse_date(date_to)
@@ -143,7 +153,7 @@ async def gallery_page(
         # ids_query already filters to the relevant set (ranked_ids when q is set)
         # and applies ORDER BY captured_at per sort_order, so pagination is date-consistent.
         total = int(session.scalar(select(func.count()).select_from(ids_query.subquery())) or 0)
-        file_ids = list(session.scalars(ids_query.limit(PAGE_SIZE).offset(offset)))
+        file_ids = list(session.scalars(ids_query.limit(page_size).offset(offset)))
 
         items: list[MediaFile] = []
         annotation_map: dict[str, MediaAnnotation] = {}
@@ -193,11 +203,15 @@ async def gallery_page(
         for index, item in enumerate(items)
     ]
 
-    page_count = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    page_count = max(1, (total + page_size - 1) // page_size)
     has_prev = page > 1
     has_next = offset + len(items) < total
     person_available = bool(person_options)
     place_available = bool(place_options)
+    per_page_options = "".join(
+        f'<option value="{escape(_per_page_url(request, n))}"{" selected" if n == page_size else ""}>{n}개씩</option>'
+        for n in PAGE_SIZE_OPTIONS
+    )
     active_filter_summary = _render_active_filter_summary(
         q=q,
         search_meta=search_meta,
@@ -217,23 +231,38 @@ async def gallery_page(
   <title>photome 사진첩</title>
   <style>
     :root {{
-      color-scheme: light;
-      --bg: #f6f7f8;
-      --panel: rgba(255, 255, 255, 0.94);
+      color-scheme: light dark;
+      --bg: #f5f5f7;
+      --panel: rgba(255, 255, 255, 0.96);
       --panel-strong: #ffffff;
-      --text: #172026;
-      --muted: #66727c;
-      --line: rgba(23, 32, 38, 0.1);
-      --line-strong: rgba(23, 32, 38, 0.18);
-      --accent: #26736b;
-      --accent-deep: #174f49;
-      --accent-soft: rgba(38, 115, 107, 0.11);
-      --shadow: 0 8px 24px rgba(23, 32, 38, 0.07);
+      --text: #1d1d1f;
+      --muted: #86868b;
+      --line: rgba(0, 0, 0, 0.10);
+      --line-strong: rgba(0, 0, 0, 0.16);
+      --accent: #0a84ff;
+      --accent-deep: #0060df;
+      --accent-soft: rgba(10, 132, 255, 0.12);
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }}
+    @media (prefers-color-scheme: dark) {{
+      :root {{
+        --bg: #1c1c1e;
+        --panel: rgba(44, 44, 46, 0.96);
+        --panel-strong: #2c2c2e;
+        --text: #f5f5f7;
+        --muted: #98989d;
+        --line: rgba(255, 255, 255, 0.12);
+        --line-strong: rgba(255, 255, 255, 0.22);
+        --accent: #0a84ff;
+        --accent-deep: #409cff;
+        --accent-soft: rgba(10, 132, 255, 0.24);
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      }}
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
     }}
@@ -544,31 +573,26 @@ async def gallery_page(
     }}
     .gallery {{
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+      grid-template-columns: repeat(5, 1fr);
       gap: 12px;
     }}
     .card {{
       display: flex;
       flex-direction: column;
-      min-height: 100%;
       overflow: hidden;
-      border-radius: 8px;
-      border: 1px solid var(--line);
+      border-radius: 10px;
       background: var(--panel-strong);
-      box-shadow: 0 4px 14px rgba(23, 32, 38, 0.05);
-      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+      transition: transform 160ms ease;
       content-visibility: auto;
-      contain-intrinsic-size: 360px;
+      contain-intrinsic-size: 240px;
     }}
     .card:hover {{
-      transform: translateY(-2px);
-      box-shadow: 0 10px 24px rgba(23, 32, 38, 0.09);
-      border-color: var(--line-strong);
+      transform: scale(1.015);
     }}
     .thumb {{
       position: relative;
       display: block;
-      aspect-ratio: 4 / 5;
+      aspect-ratio: 1 / 1;
       background:
         linear-gradient(180deg, rgba(23,32,38,0.02), rgba(23,32,38,0.1)),
         linear-gradient(135deg, rgba(23,32,38,0.1), rgba(23,32,38,0.04));
@@ -824,6 +848,9 @@ async def gallery_page(
       form.filters {{ grid-template-columns: minmax(220px, 1fr) auto auto; }}
       .advanced-grid {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
     }}
+    @media (max-width: 960px) {{
+      .gallery {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
+    }}
     @media (max-width: 720px) {{
       .shell {{ width: min(100vw - 18px, 1360px); padding-top: 14px; }}
       .topbar {{ align-items: flex-start; flex-direction: column; }}
@@ -841,6 +868,42 @@ async def gallery_page(
     @media (max-width: 420px) {{
       .gallery {{ grid-template-columns: 1fr; }}
     }}
+    .layout {{ display: flex; align-items: stretch; min-height: 100vh; }}
+    .sidebar {{
+      width: 224px; flex: 0 0 224px;
+      padding: 18px 14px;
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      display: flex; flex-direction: column; gap: 16px;
+      position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    }}
+    .side-brand {{ font-size: 1.15rem; font-weight: 600; padding: 2px 8px 4px; letter-spacing: -0.01em; }}
+    .side-nav {{ display: flex; flex-direction: column; gap: 2px; }}
+    .side-item {{ padding: 8px 10px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 0.92rem; }}
+    .side-item:hover {{ background: var(--accent-soft); }}
+    .side-item.active {{ background: var(--accent-soft); color: var(--accent); font-weight: 500; }}
+    .side-filters {{ display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: auto; }}
+    .side-filters input, .side-filters select {{ width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-strong); color: var(--text); font-size: 0.88rem; }}
+    .side-label {{ font-size: 0.76rem; color: var(--muted); margin-top: 4px; }}
+    .side-actions {{ display: flex; gap: 6px; margin-top: 4px; }}
+    .side-actions .button {{ flex: 1; text-align: center; }}
+    .content {{ flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 18px 22px 0; }}
+    .content-toolbar {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }}
+    .statusbar {{
+      position: sticky; bottom: 0;
+      display: flex; align-items: center; gap: 16px;
+      padding: 9px 22px;
+      border-top: 1px solid var(--line);
+      background: var(--panel);
+      font-size: 0.82rem; color: var(--muted);
+    }}
+    .statusbar .cache-note {{ color: var(--accent); font-weight: 500; }}
+    .statusbar .pager {{ margin-left: auto; display: flex; gap: 8px; }}
+    @media (max-width: 720px) {{
+      .layout {{ flex-direction: column; }}
+      .sidebar {{ width: auto; flex: none; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--line); }}
+      .side-filters {{ margin-top: 0; }}
+    }}
   </style>
 </head>
 <body>
@@ -853,93 +916,59 @@ async def gallery_page(
       <div class="search-progress-fill"></div>
     </div>
   </div>
-  <main class="shell">
-    <header class="topbar">
-      <div class="brand">
-        <h1>사진첩</h1>
-        <div class="stat-strip">
-          <span class="stat-card"><strong>{total}</strong> {'개 결과' if q else '개 항목'}</span>
-          <span class="stat-card"><strong>{page}</strong> / {page_count}페이지</span>
-        </div>
-      </div>
-      <a class="button secondary" href="/dashboard">진행 상태 보기</a>
-    </header>
-    <div class="toolbar">
-      <form id="gallery-search-form" class="filters" method="get" action="/gallery">
-        <label class="primary-search">
-          검색
-          <input type="search" name="q" value="{escape(q or '')}" placeholder="예: 작년 바다, 아기, 영수증, 스위스">
-        </label>
-        <div class="actions">
-          <button id="gallery-search-button" class="button" type="submit">검색</button>
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="side-brand">Photome</div>
+      <nav class="side-nav">
+        <a class="side-item active" href="/gallery">모든 사진</a>
+        <a class="side-item" href="/people/manage">사람</a>
+        <a class="side-item" href="/dashboard">진행 상태</a>
+      </nav>
+      <form class="side-filters" id="gallery-search-form" method="get" action="/gallery">
+        <input type="search" name="q" value="{escape(q or '')}" placeholder="검색: 작년 바다, 아기…">
+        <div class="side-label">기간</div>
+        <input type="date" name="date_from" value="{escape(date_from or '')}" aria-label="시작일">
+        <input type="date" name="date_to" value="{escape(date_to or '')}" aria-label="종료일">
+        <div class="side-label">인물</div>
+        <select name="person"{" disabled" if not person_available else ""} aria-label="인물">
+          {_render_person_options(person_options, person)}
+        </select>
+        <input type="hidden" name="sort" value="{escape(sort_order)}">
+        <div class="side-actions">
+          <button id="gallery-search-button" class="button" type="submit">적용</button>
           <a class="button secondary" href="/gallery">초기화</a>
         </div>
-        <details class="advanced-filters" {"open" if any([media_type, date_from, date_to, person, place]) else ""}>
-          <summary>필터 더보기</summary>
-          <div class="advanced-grid">
-            <label>
-              종류
-              <select name="media_type">
-                {_render_media_type_options(media_type)}
-              </select>
-            </label>
-            <label>
-              시작일
-              <input type="date" name="date_from" value="{escape(date_from or '')}">
-            </label>
-            <label>
-              종료일
-              <input type="date" name="date_to" value="{escape(date_to or '')}">
-            </label>
-            <label class="{'control-unavailable' if not person_available else ''}">
-              인물
-              <input type="text" name="person" value="{escape(person or '')}" list="person-options" placeholder="이름 또는 인물 태그"{" disabled" if not person_available else ""}>
-              <span class="control-note">{'인물 분석 후 사용 가능' if not person_available else '인물별로 보기'}</span>
-            </label>
-            <label class="{'control-unavailable' if not place_available else ''}">
-              장소
-              <input type="text" name="place" value="{escape(place or '')}" list="place-options" placeholder="장소 이름"{" disabled" if not place_available else ""}>
-              <span class="control-note">{'장소 분석 후 사용 가능' if not place_available else '장소별로 보기'}</span>
-            </label>
-          </div>
-        </details>
-        <input type="hidden" name="sort" value="{escape(sort_order)}">
-        <datalist id="person-options">{_render_datalist_options(person_options)}</datalist>
-        <datalist id="place-options">{_render_datalist_options(place_options)}</datalist>
       </form>
-      <div class="quick-searches">
-        <span>빠른 검색</span>
-        {_render_quick_searches(request, q)}
-      </div>
-    </div>
-    <section class="active-filters">
-      <div class="active-filters-list">{active_filter_summary}</div>
-    </section>
-    <div class="meta-bar">
-      <div class="meta-pillset">
-        <span class="meta-pill">{total}개 항목{_render_filter_hint(person, place)}</span>
-        {_render_search_mode_pill(search_meta)}
-        <span class="meta-pill">{page} / {page_count}페이지</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span style="font-size:0.85rem;color:var(--muted);">{str(offset + 1) + '–' + str(offset + len(items)) + '번째 표시 중' if items else '표시할 항목 없음'}</span>
-        <div class="sort-toggle">
-          <a href="{escape(_sort_url(request, SORT_NEWEST))}" class="sort-btn{'  active' if sort_order == SORT_NEWEST else ''}">최신순</a>
-          <a href="{escape(_sort_url(request, SORT_OLDEST))}" class="sort-btn{'  active' if sort_order == SORT_OLDEST else ''}">오래된순</a>
+    </aside>
+    <section class="content">
+      <div class="content-toolbar">
+        <div class="meta-pillset">
+          <span class="meta-pill">{total}장{_render_filter_hint(person, place)}</span>
+          {_render_search_mode_pill(search_meta)}
+          <span class="meta-pill">{page} / {page_count}페이지</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <select aria-label="페이지당 사진 수" onchange="if(this.value)location.href=this.value;" style="font-size:0.85rem;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:4px 8px;cursor:pointer;">{per_page_options}</select>
+          <div class="sort-toggle">
+            <a href="{escape(_sort_url(request, SORT_NEWEST))}" class="sort-btn{'  active' if sort_order == SORT_NEWEST else ''}">최신순</a>
+            <a href="{escape(_sort_url(request, SORT_OLDEST))}" class="sort-btn{'  active' if sort_order == SORT_OLDEST else ''}">오래된순</a>
+          </div>
         </div>
       </div>
-    </div>
-    <section id="gallery" class="gallery">
-      {''.join(cards) if cards else _render_empty_state(q, person, place)}
+      <section id="gallery" class="gallery">
+        {''.join(cards) if cards else _render_empty_state(q, person, place)}
+      </section>
     </section>
-    <nav class="pagination">
-      <span></span>
-      <div class="actions">
-        {_render_page_link('이전', _page_url(request, page - 1), enabled=has_prev)}
-        {_render_page_link('다음', _page_url(request, page + 1), enabled=has_next)}
-      </div>
-    </nav>
   </main>
+  <footer class="statusbar">
+    <span>{total}장</span>
+    <span>{str(offset + 1) + '–' + str(offset + len(items)) + '번째' if items else '표시할 항목 없음'}</span>
+    <span class="cache-note">로컬 캐시 · 즉시 표시</span>
+    <span class="pager">
+      {_render_page_link('이전', _page_url(request, page - 1), enabled=has_prev)}
+      {_render_page_link('다음', _page_url(request, page + 1), enabled=has_next)}
+    </span>
+  </footer>
   <script>
     const searchProgress = document.getElementById("search-progress");
     const searchForm = document.getElementById("gallery-search-form");
@@ -1184,7 +1213,6 @@ def _render_card(
     )
     preview_id = f"preview-{asset.id}" if asset is not None else ""
     thumb_href = f"#{preview_id}" if asset is not None else "#gallery"
-    metadata_panel = _render_metadata_panel(media_file=media_file, tags=tags)
     lightbox_html = (
         f"""
       <div id="{preview_id}" class="lightbox" aria-label="{escape(title)} 미리보기">
@@ -1198,7 +1226,6 @@ def _render_card(
               <a class="lightbox-close" href="#gallery">닫기</a>
             </div>
           </div>
-          {metadata_panel}
         </div>
       </div>
         """
@@ -1208,25 +1235,6 @@ def _render_card(
     return f"""
       <article id="card-{escape(media_file.file_id)}" class="card">
         <a class="thumb" href="{thumb_href}" aria-label="{escape(title)} 크게 보기">{image_html}</a>
-        <div class="body">
-          <div class="row">
-            <h2 class="filename">{escape(title)}</h2>
-            <span class="kind">{escape(_media_kind_label(media_file.media_kind))}</span>
-          </div>
-          <p class="detail">{escape(_display_date(media_file))}</p>
-          <p class="summary">{escape(description)}</p>
-          {f'<p class="tags">{tag_html}</p>' if tag_html else ''}
-          <details class="edit-panel">
-            <summary>이름, 설명, 태그 수정</summary>
-            <form class="edit-form" method="post" action="/media/{escape(media_file.file_id)}/annotation">
-              <input name="title" value="{escape(annotation.title if annotation and annotation.title else '')}" placeholder="표시할 이름">
-              <textarea name="description" placeholder="설명">{escape(annotation.description if annotation and annotation.description else '')}</textarea>
-              <input name="tags" value="{escape(custom_tags)}" placeholder="태그, 쉼표로 구분">
-              <input type="hidden" name="next" value="{escape(next_url)}">
-              <button type="submit">저장</button>
-            </form>
-          </details>
-        </div>
       </article>
       {lightbox_html}
     """
@@ -1559,6 +1567,22 @@ def _page_url(request: Request, page: int) -> str:
     params = dict(request.query_params)
     params["page"] = str(max(1, page))
     return f"/gallery?{urlencode(params)}"
+
+
+def _per_page_url(request: Request, size: int) -> str:
+    params = dict(request.query_params)
+    params["per_page"] = str(size)
+    params.pop("page", None)
+    return f"/gallery?{urlencode(params)}"
+
+
+def _render_person_options(values: list[str], selected: str | None) -> str:
+    chosen = selected or ""
+    options = [f'<option value=""{"" if chosen else " selected"}>전체</option>']
+    for value in values:
+        sel = " selected" if value == chosen else ""
+        options.append(f'<option value="{escape(value)}"{sel}>{escape(value)}</option>')
+    return "".join(options)
 
 
 def _render_page_link(label: str, href: str, *, enabled: bool) -> str:

@@ -763,26 +763,39 @@ async def dashboard(request: Request) -> HTMLResponse:
   <title>photome dashboard</title>
   <style>
     :root {{
-      color-scheme: light;
-      --bg: #f4efe7;
-      --paper: rgba(255,255,255,0.88);
-      --panel: rgba(255,255,255,0.95);
-      --line: rgba(22,31,39,0.10);
-      --text: #13202a;
-      --muted: #61717c;
-      --accent: #cc5f32;
-      --accent-soft: rgba(204,95,50,0.12);
-      --ok: #2f8f5b;
-      --warn: #b46a15;
-      --shadow: 0 18px 45px rgba(19,32,42,0.08);
+      color-scheme: light dark;
+      --bg: #f5f5f7;
+      --paper: rgba(255,255,255,0.90);
+      --panel: #ffffff;
+      --line: rgba(0,0,0,0.10);
+      --text: #1d1d1f;
+      --muted: #86868b;
+      --accent: #0a84ff;
+      --accent-soft: rgba(10,132,255,0.12);
+      --ok: #248a3d;
+      --warn: #b25000;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }}
+    @media (prefers-color-scheme: dark) {{
+      :root {{
+        --bg: #1c1c1e;
+        --paper: rgba(44,44,46,0.90);
+        --panel: #2c2c2e;
+        --line: rgba(255,255,255,0.12);
+        --text: #f5f5f7;
+        --muted: #98989d;
+        --accent: #0a84ff;
+        --accent-soft: rgba(10,132,255,0.24);
+        --ok: #30d158;
+        --warn: #ff9f0a;
+        --shadow: 0 1px 3px rgba(0,0,0,0.4);
+      }}
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      font-family: "Inter", "Helvetica Neue", sans-serif;
-      background:
-        radial-gradient(circle at top left, rgba(204,95,50,0.18), transparent 25%),
-        linear-gradient(180deg, #fbf8f3 0%, var(--bg) 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
       color: var(--text);
     }}
     .shell {{
@@ -796,17 +809,17 @@ async def dashboard(request: Request) -> HTMLResponse:
       gap: 16px;
       margin-bottom: 18px;
       padding: 24px;
-      border-radius: 28px;
+      border-radius: 16px;
       border: 1px solid var(--line);
-      background: linear-gradient(135deg, rgba(255,255,255,0.94), rgba(255,246,237,0.82));
+      background: var(--panel);
       box-shadow: var(--shadow);
     }}
     h1 {{
       margin: 0 0 10px;
-      font-size: clamp(2rem, 4vw, 3.8rem);
-      line-height: .95;
-      letter-spacing: -0.04em;
-      font-family: "Instrument Serif", "Iowan Old Style", serif;
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      font-family: inherit;
     }}
     .eyebrow {{
       display: inline-flex;
@@ -2143,48 +2156,9 @@ async def dashboard(request: Request) -> HTMLResponse:
         </div>
       </article>
 
-      <article class="card full" id="ai-pack-card">
-        <h2>이미지 AI 검색</h2>
-        <p class="sub">"바다에서 찍은 사진", "baby beach", "여자 셀카"처럼 자연어로 찾기 위한 로컬 AI 상태입니다.</p>
-        <div class="ai-steps" id="ai-pack-steps">
-
-          <!-- Step 1: packages -->
-          <div class="ai-step {'ai-step-done' if ai_pack['deps_ready'] else 'ai-step-active'}" id="ai-step-1">
-            <div class="ai-step-num">{'✓' if ai_pack['deps_ready'] else '1'}</div>
-            <div class="ai-step-body">
-              <strong>AI 패키지</strong>
-              {'<span class="status-ok">설치됨</span>' if ai_pack['deps_ready'] else f'''
-              <p class="ai-step-desc">photome 환경에서 한 번 실행하세요.</p>
-              <div class="ai-cmd-row">
-                <code id="pkg-cmd">pip install "photome[clip]"</code>
-                <button class="btn-copy" onclick="copyText('pkg-cmd', this)">복사</button>
-              </div>
-              <p class="ai-step-desc muted">PyTorch + open_clip_torch를 설치합니다. 완료 후 새로고침하세요.</p>
-              '''}
-            </div>
-          </div>
-
-          <!-- Step 2: download model -->
-          <div class="ai-step {'ai-step-done' if ai_pack_stage == 'ready' else ('ai-step-active' if ai_pack['deps_ready'] else 'ai-step-locked')}" id="ai-step-2">
-            <div class="ai-step-num">{'✓' if ai_pack_stage == 'ready' else '2'}</div>
-            <div class="ai-step-body">
-              <strong>{'로컬 모델 캐시 사용' if settings.offline_mode and ai_pack_stage != 'ready' else '모델'}</strong>
-              <span class="muted" style="font-size:0.85em">{escape(ai_pack_model_name)} / {escape(ai_pack_pretrained)} · ~340 MB</span>
-              {_ai_step2_body(ai_pack_stage, ai_pack.get('model_error'), offline_mode=settings.offline_mode, online_cmd=online_ai_cmd, offline_cmd=offline_ai_cmd)}
-            </div>
-          </div>
-
-          <!-- Step 3: activate -->
-          <div class="ai-step {'ai-step-active' if ai_pack_stage == 'ready' and not clip_enabled else ('ai-step-done' if ai_pack_stage == 'ready' and clip_enabled else 'ai-step-locked')}" id="ai-step-3">
-            <div class="ai-step-num">{'✓' if (ai_pack_stage == 'ready' and clip_enabled) else '3'}</div>
-            <div class="ai-step-body">
-              <strong>활성화</strong>
-              {_ai_step3_body(ai_pack_stage, clip_enabled, activate_cmd=activate_ai_cmd)}
-            </div>
-          </div>
-
-        </div>
-      </article>
+      <!-- 이미지 AI 설치/활성화 카드는 제거됨: 정식 배포 DMG가 CLIP 패키지와
+           weights를 항상 번들하므로 설치/다운로드 안내가 불필요하다. AI 진행
+           상태는 상단 "이미지 AI" 지표 타일에서 확인한다. -->
 
       <article class="card full" id="resource-settings-card">
         <h2>리소스 설정</h2>
@@ -3922,8 +3896,9 @@ async def dashboard(request: Request) -> HTMLResponse:
       }}
     }}
 
-    // Auto-start polling if already downloading on load
-    {'startAiPoll();' if ai_pack_stage == 'downloading' else '// not downloading on load'}
+    // 이미지 AI 설치 카드 제거됨 — 진행 폴링 auto-start 비활성.
+    // (aiPackPrepare/updateAiStepUI는 null 가드가 있어 호출돼도 무해.)
+    // ai pack install card removed
 
   </script>
 </body>
