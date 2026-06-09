@@ -187,7 +187,7 @@ async function savePerson(id){
   var r=await fetch('/people/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name,aliases:aliases})});
   if(r.ok){location.reload();}else{var m='저장 실패';try{m=(await r.json()).detail||m;}catch(e){}alert(m);}
 }
-function onNameKey(e,id){if(e.key==='Enter'){e.preventDefault();savePerson(id);}}
+function onNameKey(e,id){if(e.isComposing||e.keyCode===229){return;}if(e.key==='Enter'){e.preventDefault();savePerson(id);}}
 async function mergeSelected(){
   if(mergeOrder.length<2){return;}
   var target=mergeOrder[0];
