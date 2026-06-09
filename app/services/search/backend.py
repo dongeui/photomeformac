@@ -140,6 +140,36 @@ class SqlAlchemyHybridSearchBackend:
                 promoted.add(str(file_id))
         return hidden, promoted
 
+    def load_query_feedback(self, query: str) -> tuple[set[str], dict[str, str]]:
+        """Return (pinned_file_ids, tag_corrections) for query-aware reranking.
+
+        Surfaces two signals the base ranking does not use on a per-query basis:
+          * 'promote' feedback whose query_hint matches the current query
+            (hint tokens ⊆ query tokens) — a stronger, query-scoped pin than the
+            global +BOOST_PROMOTED applied in apply_feedback_boost.
+          * 'correct_tag' feedback as {file_id: corrected_tag}, so the reranker
+            can pin a file when the query names that corrected tag.
+        """
+        rows = self._session.execute(
+            select(
+                SearchFeedback.file_id,
+                SearchFeedback.action,
+                SearchFeedback.query_hint,
+                SearchFeedback.tag_correction,
+            )
+        ).all()
+        q_tokens = set(query.casefold().split()) if query else set()
+        pinned: set[str] = set()
+        corrections: dict[str, str] = {}
+        for file_id, action, query_hint, tag_correction in rows:
+            if action == "promote":
+                hint_tokens = set((query_hint or "").casefold().split())
+                if hint_tokens and q_tokens and hint_tokens <= q_tokens:
+                    pinned.add(str(file_id))
+            elif action == "correct_tag" and tag_correction:
+                corrections[str(file_id)] = str(tag_correction)
+        return pinned, corrections
+
     def search_by_ocr(self, query: str, *, limit: int, plan: QueryPlan | None = None) -> list[dict]:
         pattern = _like_pattern(query)
         main_statement = (

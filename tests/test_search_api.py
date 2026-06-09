@@ -25,7 +25,7 @@ from app.models.media import MediaFile
 from app.models.person import Person
 from app.models.runtime import SchedulerRuntimeConfig
 from app.core.contracts import MediaTagInput
-from app.models.semantic import MediaAnalysisSignal, MediaEmbedding, MediaOCR, SearchDocument, SearchEvent
+from app.models.semantic import MediaAnalysisSignal, MediaEmbedding, MediaOCR, SearchDocument, SearchEvent, SearchFeedback
 from app.models.tag import Tag
 from app.services.caption.registry import get_caption_provider
 from app.services.processing.incremental import IncrementalScanSummary
@@ -1723,3 +1723,38 @@ def test_search_suggest_blank_query_returns_empty(client: TestClient) -> None:
     response = client.get("/search/suggest", params={"q": "  "})
     assert response.status_code == 200
     assert response.json()["suggestions"] == []
+
+
+def test_load_query_feedback_scopes_promote_and_returns_corrections(
+    client: TestClient, source_root: Path
+) -> None:
+    from app.services.search.backend import SqlAlchemyHybridSearchBackend
+
+    create_image(source_root / "fb-a.jpg")
+    create_image(source_root / "fb-b.jpg")
+    create_image(source_root / "fb-c.jpg")
+    scan_twice(client)
+
+    settings = client.app.state.settings
+    with client.app.state.database.session_factory() as session:
+        files = session.scalars(select(MediaFile)).all()
+        assert len(files) >= 3
+        a, b, c = files[0].file_id, files[1].file_id, files[2].file_id
+        session.add_all([
+            SearchFeedback(file_id=a, action="promote", query_hint="바다"),
+            SearchFeedback(file_id=b, action="promote", query_hint="강아지"),
+            SearchFeedback(file_id=c, action="correct_tag", query_hint="", tag_correction="노을"),
+        ])
+        session.commit()
+
+        backend = SqlAlchemyHybridSearchBackend(
+            session,
+            embeddings_root=settings.embeddings_root,
+            clip_enabled=settings.semantic_clip_enabled,
+            log_events=False,
+        )
+        pinned, corrections = backend.load_query_feedback("바다 노을 사진")
+
+    assert a in pinned              # hint "바다" ⊆ query tokens → pinned
+    assert b not in pinned          # hint "강아지" absent from query → not pinned
+    assert corrections.get(c) == "노을"  # correct_tag surfaced for the reranker

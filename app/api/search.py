@@ -17,7 +17,7 @@ from app.models.semantic import SearchDocument, SearchFeedback, SearchWeightProf
 from app.services.search import HybridSearchService
 from app.services.search.backend import SqlAlchemyHybridSearchBackend
 from app.services.search.benchmark import run_benchmark_suite
-from app.services.search.hybrid import clear_query_cache, intent_weights
+from app.services.search.hybrid import FeedbackReranker, clear_query_cache, intent_weights
 from app.services.search.vector import invalidate_global_vector_index
 
 
@@ -117,7 +117,7 @@ async def search_benchmark(
             clip_enabled=settings.semantic_clip_enabled,
             log_events=False,
         )
-        service = HybridSearchService(backend)
+        service = HybridSearchService(backend, reranker=FeedbackReranker(backend))
         return run_benchmark_suite(
             service,
             limit=limit,
@@ -161,7 +161,7 @@ def _search_payload(
             clip_enabled=settings.semantic_clip_enabled,
             log_events=log_events,
         )
-        service = HybridSearchService(backend)
+        service = HybridSearchService(backend, reranker=FeedbackReranker(backend))
         items, meta = service.search_with_meta(
             q,
             limit=limit,

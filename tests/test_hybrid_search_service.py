@@ -4,6 +4,7 @@ from importlib import resources
 
 from app.services.search.backend import SqlAlchemyHybridSearchBackend
 from app.services.search.hybrid import (
+    FeedbackReranker,
     HybridSearchService,
     apply_diversity_cap,
     apply_hard_filters,
@@ -748,3 +749,59 @@ def test_heuristic_splits_rang_joiner() -> None:
     tokens = korean_nouns("엄마랑카페")
     assert "엄마" in tokens
     assert "카페" in tokens
+
+
+class _FeedbackBackend:
+    """Minimal backend exposing only load_query_feedback for the reranker."""
+
+    def __init__(self, pinned: set[str], corrections: dict[str, str]) -> None:
+        self._pinned = pinned
+        self._corrections = corrections
+
+    def load_query_feedback(self, query: str) -> tuple[set[str], dict[str, str]]:
+        return set(self._pinned), dict(self._corrections)
+
+
+def test_feedback_reranker_pins_promote_and_matching_tag_correction() -> None:
+    backend = _FeedbackBackend(
+        pinned={"f-promoted"},
+        corrections={"f-sea": "바다", "f-mtn": "산"},
+    )
+    results = [
+        {"file_id": "f-a", "rank_score": 0.9},
+        {"file_id": "f-promoted", "rank_score": 0.3},
+        {"file_id": "f-sea", "rank_score": 0.2},
+        {"file_id": "f-mtn", "rank_score": 0.8},
+    ]
+    out = FeedbackReranker(backend).rerank(results, plan_query("바다 사진"))
+    ids = [r["file_id"] for r in out]
+
+    # query-scoped promote + tag-correction matching the query ('바다') are pinned,
+    # preserving their original relative order
+    assert ids[:2] == ["f-promoted", "f-sea"]
+    # '산' correction does not appear in the query → f-mtn stays in the tail
+    assert "f-mtn" in ids[2:]
+    # nothing is dropped
+    assert set(ids) == {"f-a", "f-promoted", "f-sea", "f-mtn"}
+    # pin leaves an audit trail
+    pinned_sea = next(r for r in out if r["file_id"] == "f-sea")
+    assert any(b["stage"] == "feedback_pin" for b in pinned_sea["score_breakdown"])
+
+
+def test_feedback_reranker_is_noop_without_matching_feedback() -> None:
+    backend = _FeedbackBackend(pinned=set(), corrections={"f-x": "고양이"})
+    results = [
+        {"file_id": "f-a", "rank_score": 0.9},
+        {"file_id": "f-x", "rank_score": 0.1},
+    ]
+    out = FeedbackReranker(backend).rerank(results, plan_query("바다"))
+    assert [r["file_id"] for r in out] == ["f-a", "f-x"]  # unchanged order
+
+
+def test_feedback_reranker_tolerates_backend_without_support() -> None:
+    class _Bare:
+        pass
+
+    results = [{"file_id": "f-a", "rank_score": 0.5}]
+    out = FeedbackReranker(_Bare()).rerank(results, plan_query("바다"))
+    assert out == results

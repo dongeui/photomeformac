@@ -21,6 +21,7 @@ from app.models.media import MediaFile
 from app.models.tag import Tag
 from app.services.search import HybridSearchService
 from app.services.search.backend import SqlAlchemyHybridSearchBackend
+from app.services.search.hybrid import FeedbackReranker
 
 
 router = APIRouter(tags=["gallery"])
@@ -129,7 +130,7 @@ async def gallery_page(
                 clip_enabled=settings.semantic_clip_enabled,
                 log_events=log_events,
             )
-            service = HybridSearchService(backend)
+            service = HybridSearchService(backend, reranker=FeedbackReranker(backend))
             search_results, search_meta = service.search_with_meta(
                 q,
                 limit=GALLERY_SEARCH_LIMIT,

@@ -178,6 +178,55 @@ class PassThroughReranker:
         return results
 
 
+class FeedbackReranker:
+    """Pins query-scoped user feedback to the top of the result list.
+
+    Consumes two SearchFeedback signals the base ranking otherwise leaves on the
+    table on a per-query basis:
+      * 'promote' whose query_hint matches the current query — a per-query
+        "I want this photo for this search" pin (stronger than the global
+        promote boost in apply_feedback_boost).
+      * 'correct_tag' — when the corrected tag appears in the query, the
+        corrected file is pinned (e.g. user retags a photo "바다", so it surfaces
+        for "바다" searches even if CLIP/OCR missed it).
+
+    Pinned files move to the front preserving their relative order; all other
+    results keep their existing order, so non-feedback results are never
+    reordered among themselves or dropped.
+    """
+
+    def __init__(self, backend: "HybridSearchBackend") -> None:
+        self._backend = backend
+
+    def rerank(self, results: list[dict], plan: "QueryPlan") -> list[dict]:
+        if not results or not hasattr(self._backend, "load_query_feedback"):
+            return results
+        query = (plan.original_query or "").casefold()
+        try:
+            pinned, corrections = self._backend.load_query_feedback(plan.original_query)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("FeedbackReranker skipped: %s", exc)
+            return results
+
+        pin_ids = set(pinned)
+        for file_id, tag in corrections.items():
+            tag_lower = (tag or "").casefold().strip()
+            if tag_lower and tag_lower in query:
+                pin_ids.add(file_id)
+        if not pin_ids:
+            return results
+
+        front = [r for r in results if str(r.get("file_id", "")) in pin_ids]
+        if not front:
+            return results
+        back = [r for r in results if str(r.get("file_id", "")) not in pin_ids]
+        for result in front:
+            result.setdefault("score_breakdown", []).append(
+                {"stage": "feedback_pin", "rank_score": float(result.get("rank_score") or 0.0)}
+            )
+        return front + back
+
+
 class HybridSearchService:
     def __init__(
         self,
