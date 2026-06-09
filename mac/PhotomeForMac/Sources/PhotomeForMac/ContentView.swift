@@ -1,5 +1,4 @@
 import SwiftUI
-import WebKit
 import UniformTypeIdentifiers
 
 struct ContentView: View {
@@ -9,11 +8,9 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                WebDashboardView(url: backend.galleryURL, reloadToken: backend.state.rawValue)
-                    .opacity(backend.isRunning ? 1 : 0.08)
-                    .disabled(!backend.isRunning)
-
-                if !backend.isRunning {
+                if backend.isRunning {
+                    runningView
+                } else {
                     landing
                 }
 
@@ -37,7 +34,7 @@ struct ContentView: View {
                 return true
             }
         }
-        .frame(minWidth: 1100, minHeight: 760)
+        .frame(minWidth: 720, minHeight: 560)
         .onAppear {
             // 사용자가 선택해둔 폴더가 있을 때만 자동 시작한다. 폴더가 비어 있는
             // 첫 실행에서는 landing의 [사진 폴더 선택] 흐름이 끝나야 백엔드가
@@ -258,6 +255,62 @@ struct ContentView: View {
         .shadow(radius: 20)
     }
 
+    /// 백엔드 실행 중 메인 뷰. 앱 내장 WKWebView 대신 "사진첩 열기"로 기본
+    /// 브라우저를 띄우고, 자주 쓰는 제어와 진행 현황만 네이티브로 보여준다.
+    private var runningView: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "photo.stack.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.tint)
+
+            Text("Photome 실행 중")
+                .font(.title.bold())
+
+            if let coverage = backend.coverage {
+                Text(coverage.summary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            if let libraryJobStatus = backend.libraryJobStatus, backend.hasActiveLibraryJob {
+                Text(libraryJobStatus.summary)
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button("사진첩 열기") {
+                backend.openGallery()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(!backend.isRunning)
+
+            HStack(spacing: 10) {
+                Button("전체 동기화") { backend.triggerLibraryScan() }
+                    .disabled(backend.hasActiveLibraryJob)
+                Button("이미지 AI 이어서") { backend.triggerSemanticMaintenance() }
+                    .disabled(!backend.clipEnabled || backend.hasActiveLibraryJob)
+                Button("폴더 추가") { backend.choosePhotoFolder() }
+            }
+
+            if !backend.sourceRoots.isEmpty {
+                selectedFoldersPanel
+            }
+
+            Text("사진첩·검색·사람 정리는 기본 브라우저에서 열립니다.\n제어·로그·진단은 메뉴바 아이콘에서도 할 수 있습니다.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(32)
+        .frame(maxWidth: 620)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .shadow(radius: 20)
+    }
+
     private var applePhotosSuggestion: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -429,48 +482,5 @@ struct ContentView: View {
         case "needs_packages", "error": return .red
         default: return .gray
         }
-    }
-}
-
-struct WebDashboardView: NSViewRepresentable {
-    let url: URL
-    let reloadToken: String
-
-    final class Coordinator {
-        var lastReloadToken: String?
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    static func needsReload(currentURL: URL?, currentToken: String?, desiredURL: URL, desiredToken: String) -> Bool {
-        guard currentURL?.absoluteString == desiredURL.absoluteString else {
-            return true
-        }
-        return currentToken != desiredToken
-    }
-
-    func makeNSView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
-        let webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.allowsBackForwardNavigationGestures = true
-        context.coordinator.lastReloadToken = reloadToken
-        webView.load(URLRequest(url: url))
-        return webView
-    }
-
-    func updateNSView(_ webView: WKWebView, context: Context) {
-        guard Self.needsReload(
-            currentURL: webView.url,
-            currentToken: context.coordinator.lastReloadToken,
-            desiredURL: url,
-            desiredToken: reloadToken
-        ) else {
-            return
-        }
-        context.coordinator.lastReloadToken = reloadToken
-        webView.load(URLRequest(url: url))
     }
 }

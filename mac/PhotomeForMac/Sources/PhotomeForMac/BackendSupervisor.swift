@@ -628,6 +628,13 @@ final class BackendSupervisor: ObservableObject {
         NSWorkspace.shared.open(dashboardURL)
     }
 
+    /// 사진첩(/gallery)을 기본 브라우저에서 연다. 앱 내장 WKWebView는 WebContent
+    /// 프로세스가 ad-hoc/hardened 서명 환경에서 불안정해 입력·fetch가 막히므로,
+    /// 상호작용이 필요한 웹 UI는 기본 브라우저로 띄운다.
+    func openGallery() {
+        NSWorkspace.shared.open(galleryURL)
+    }
+
     /// 메뉴바 "사람 정리…" — 얼굴↔이름 매핑 전용 페이지(/people/manage)를 연다.
     func openPeopleManager() {
         NSWorkspace.shared.open(baseURL.appendingPathComponent("people/manage"))
