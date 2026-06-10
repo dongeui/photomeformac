@@ -805,3 +805,40 @@ def test_feedback_reranker_tolerates_backend_without_support() -> None:
     results = [{"file_id": "f-a", "rank_score": 0.5}]
     out = FeedbackReranker(_Bare()).rerank(results, plan_query("바다"))
     assert out == results
+
+
+def test_plan_query_requires_all_persons_for_multiple_names() -> None:
+    vocab = TagVocabulary(
+        person_tags=frozenset({"정이한", "장윤겸"}),
+        all_tags=frozenset({"정이한", "장윤겸"}),
+    )
+    plan = plan_query("정이한이랑 장윤겸이랑 찍은 사진", tag_vocab=vocab)
+    assert set(plan.person_terms) == {"정이한", "장윤겸"}
+    assert plan.require_all_persons is True
+    assert plan.requires_person_match() is True
+
+    # 명시적 OR 표현이 있으면 합집합(OR)로 둔다
+    plan_or = plan_query("정이한 또는 장윤겸", tag_vocab=vocab)
+    assert set(plan_or.person_terms) == {"정이한", "장윤겸"}
+    assert plan_or.require_all_persons is False
+
+
+def test_matches_person_terms_and_requires_every_named_person() -> None:
+    from app.services.search.hybrid import _matches_person_terms
+    from app.services.search.planner import QueryPlan
+
+    plan = QueryPlan(
+        original_query="정이한이랑 장윤겸이랑 찍은 사진",
+        normalized_query="정이한 장윤겸 찍은 사진",
+        keyword_query="정이한 장윤겸",
+        visual_queries=[], date_from=None, date_to=None,
+        person_terms=["정이한", "장윤겸"], place_terms=[], ocr_terms=[],
+        visual_terms=[], intent="visual", require_all_persons=True,
+    )
+    both = {"tags": [{"type": "person", "value": "정이한"},
+                     {"type": "person", "value": "장윤겸"}]}
+    only_one = {"tags": [{"type": "person", "value": "정이한"}],
+                "matched_person_ids": [40]}
+    # 두 사람 모두 있는 사진만 통과(AND), 한 사람만 있으면 matched id가 있어도 제외
+    assert _matches_person_terms(both, plan) is True
+    assert _matches_person_terms(only_one, plan) is False

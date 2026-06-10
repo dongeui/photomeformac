@@ -1068,6 +1068,21 @@ def _matches_time_constraints(result: dict, plan: "QueryPlan") -> bool:
 def _matches_person_terms(result: dict, plan: "QueryPlan") -> bool:
     if not plan.requires_person_match():
         return True
+    # 복수 인물이 "함께"로 잡힌 경우: 각 인물이 모두 이 결과에 있어야 한다(AND).
+    # 연결어 종류(이랑/와/하고/누구랑 …)와 무관하게, 이름이 2명 이상이면 함께를 뜻한다.
+    if plan.require_all_persons:
+        named = [term for term in plan.person_terms if term]
+        if len(named) >= 2:
+            result_person_values = {
+                str(tag.get("value", "")).casefold()
+                for tag in (result.get("tags") or [])
+                if tag.get("type") in {"person", "people", "face", "auto_person"}
+            }
+            matched_ids = {int(v) for v in (result.get("matched_person_ids") or []) if str(v).isdigit()}
+            return all(
+                _person_term_in_result(term, result_person_values, matched_ids)
+                for term in named
+            )
     allowed_terms = _expanded_person_terms(plan.person_terms)
     allowed_terms -= _GENERIC_ABSENT_PERSON_TERMS
     allowed_terms -= _generic_auto_person_terms()
@@ -1097,6 +1112,17 @@ def _matches_person_terms(result: dict, plan: "QueryPlan") -> bool:
     if informative_auto_terms and not informative_auto_terms.issubset(allowed_terms):
         return False
     return True
+
+
+def _person_term_in_result(term: str, result_person_values: set[str], matched_ids: set[int]) -> bool:
+    """Whether one person name/alias is present in a result (tag value or internal id)."""
+    expanded = _expanded_person_terms([term])
+    expanded -= _GENERIC_ABSENT_PERSON_TERMS
+    expanded -= _generic_auto_person_terms()
+    if expanded & result_person_values:
+        return True
+    internal = _internal_person_ids_from_terms(expanded)
+    return bool(internal & matched_ids)
 
 
 def _internal_person_ids_from_terms(terms: set[str]) -> set[int]:

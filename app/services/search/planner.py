@@ -76,6 +76,7 @@ class QueryPlan:
     face_count_max: int | None = None
     face_count_exact: int | None = None
     person_exclusive: bool = False
+    require_all_persons: bool = False
     require_place_match: bool = False
     require_date_match: bool = False
     require_visual_match: bool = False
@@ -99,6 +100,7 @@ class QueryPlan:
             "face_count_max": self.face_count_max,
             "face_count_exact": self.face_count_exact,
             "person_exclusive": self.person_exclusive,
+            "require_all_persons": self.require_all_persons,
             "require_place_match": self.require_place_match,
             "require_date_match": self.require_date_match,
             "require_visual_match": self.require_visual_match,
@@ -113,6 +115,7 @@ class QueryPlan:
     def requires_person_match(self) -> bool:
         return bool(self.person_terms) and (
             self.person_exclusive
+            or self.require_all_persons
             or self.has_face_count_filter()
             or self.require_place_match
             or self.require_date_match
@@ -205,6 +208,9 @@ def plan_query(query: str, *, tag_vocab: "TagVocabulary | None" = None) -> Query
         normalized_query=normalized,
     )
     person_exclusive = _has_person_exclusive_marker(query, person_terms)
+    # 인물 이름이 2명 이상 잡히면 자연어상 "함께"를 뜻한다(연결어 종류 무관).
+    # 명시적 OR 표현이 있을 때만 합집합으로 본다.
+    require_all_persons = len(person_terms) >= 2 and not _has_explicit_person_or(query)
     require_date_match = date_from is not None
     # Treat place_terms that fully overlap visual_terms as non-compound: e.g. "바다" appears
     # in both lists but it's a single-intent query, not a place+visual compound.
@@ -239,6 +245,7 @@ def plan_query(query: str, *, tag_vocab: "TagVocabulary | None" = None) -> Query
         face_count_max=face_count_max,
         face_count_exact=face_count_exact,
         person_exclusive=person_exclusive,
+        require_all_persons=require_all_persons,
         require_place_match=require_place_match,
         require_date_match=require_date_match,
         require_visual_match=require_visual_match,
@@ -509,6 +516,17 @@ def _has_person_exclusive_marker(query: str, person_terms: list[str]) -> bool:
         if re.search(rf"{re.escape(term)}\s*(?:만|뿐)", lowered):
             return True
     return False
+
+
+# 명시적 OR 표현. 이게 없으면 인물 다수는 기본 AND("함께")로 본다.
+# "거나/이나"는 다른 맥락(찍거나, 얼마나 …)에서 오탐 위험이 있어 제외 — AND가
+# 기본이므로 OR 마커를 보수적으로 잡아도 안전하다.
+_PERSON_OR_MARKERS = ("또는", "혹은", " or ")
+
+
+def _has_explicit_person_or(query: str) -> bool:
+    lowered = query.casefold()
+    return any(marker in lowered for marker in _PERSON_OR_MARKERS)
 
 
 def _requires_place_match(query: str, place_terms: list[str]) -> bool:
