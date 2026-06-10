@@ -261,6 +261,7 @@ def _render_people_manage_html(people: list[dict]) -> str:
       <div class="side-brand">Photome</div>
       <a class="side-item" href="/gallery">모든 사진</a>
       <a class="side-item active" href="/people/manage">사람</a>
+      <a class="side-item" href="/dashboard">설정</a>
     </aside>
     <section class="content">
       <div class="hdr">

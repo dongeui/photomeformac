@@ -974,6 +974,7 @@ async def gallery_page(
       <nav class="side-nav">
         <a class="side-item active" href="/gallery">모든 사진</a>
         <a class="side-item" href="/people/manage">사람</a>
+        <a class="side-item" href="/dashboard">설정</a>
       </nav>
       <form class="side-filters" id="gallery-search-form" method="get" action="/gallery">
         <div class="search-ac-wrap">

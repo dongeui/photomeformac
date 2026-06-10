@@ -798,8 +798,36 @@ async def dashboard(request: Request) -> HTMLResponse:
       background: var(--bg);
       color: var(--text);
     }}
+    .side-rail {{
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: 150px;
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      padding: 16px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      z-index: 50;
+      box-sizing: border-box;
+    }}
+    .side-rail .rail-brand {{
+      font-weight: 800;
+      font-size: 1.05rem;
+      padding: 4px 10px 14px;
+    }}
+    .side-rail a {{
+      padding: 8px 10px;
+      border-radius: 8px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }}
+    .side-rail a:hover {{ background: var(--accent-soft); }}
+    .side-rail a.active {{ background: var(--accent-soft); color: var(--accent); font-weight: 600; }}
+    body {{ padding-left: 150px; }}
     .shell {{
-      width: min(1280px, calc(100vw - 28px));
+      width: min(1280px, calc(100vw - 178px));
       margin: 0 auto;
       padding: 20px 0 48px;
     }}
@@ -1956,6 +1984,12 @@ async def dashboard(request: Request) -> HTMLResponse:
   </style>
 </head>
 <body>
+  <aside class="side-rail">
+    <div class="rail-brand">Photome</div>
+    <a href="/gallery">모든 사진</a>
+    <a href="/people/manage">사람</a>
+    <a class="active" href="/dashboard">설정</a>
+  </aside>
   <main class="shell">
     <section class="hero">
         <div>

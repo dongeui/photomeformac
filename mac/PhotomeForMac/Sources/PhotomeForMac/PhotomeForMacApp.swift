@@ -166,61 +166,25 @@ struct PhotomeForMacApp: App {
     }
 }
 
-/// 메뉴바 아이콘 메뉴. 현재 상태를 보여주고, 동기화·이미지 AI의 시작/중지만
-/// 컨트롤한다. 사진 보기/검색 등 나머지 조작은 "사진첩 열기"로 앱 창에서 한다.
-/// 상태는 backend가 2초 폴링으로 갱신하며 메뉴를 열 때마다 최신값으로 평가된다.
+/// 메뉴바 아이콘 메뉴. 상태와 사진 현황을 보여주고 사진첩 열기·종료만 둔다.
+/// 동기화·이미지 AI 등 제어는 웹의 "설정" 탭으로 일원화했다. 상태는 backend가
+/// 2초 폴링으로 갱신하며 메뉴를 열 때마다 최신값으로 평가된다.
 struct MenuBarContent: View {
     @ObservedObject var backend: BackendSupervisor
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        let activeKind = backend.hasActiveLibraryJob ? (backend.libraryJobStatus?.jobKind ?? "") : ""
-        let scanRunning = activeKind == "scan"
-        let aiRunning = activeKind == "semantic_maintenance" || activeKind == "semantic_backfill"
-
         Text("상태: \(backend.state.rawValue)")
-
-        if let libraryJobStatus = backend.libraryJobStatus, backend.hasActiveLibraryJob {
-            Text("현재 작업: \(libraryJobStatus.summary)")
-        } else {
-            Text("현재 작업: 대기 중")
-        }
-
-        if let aiPackStatus = backend.aiPackStatus {
-            Text("이미지 AI: \(aiPackStatus.summary)")
-        } else {
-            Text("이미지 AI: 상태 확인 중")
-        }
 
         if let coverage = backend.coverage {
             Text("사진 현황: \(coverage.summary)")
-            if coverage.errors > 0 {
-                Text("이미지 AI 오류 \(coverage.errors)건")
-            }
-        }
-
-        Divider()
-
-        if scanRunning {
-            Button("동기화 중지") { backend.cancelActiveJob() }
-        } else {
-            Button("동기화 시작") { backend.triggerLibraryScan() }
-                .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
-        }
-
-        if aiRunning {
-            Button("이미지 AI 분석 중지") { backend.cancelActiveJob() }
-        } else {
-            Button("이미지 AI 분석 시작") { backend.triggerSemanticMaintenance() }
-                .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
         }
 
         Divider()
 
         Button("사진첩 열기") {
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: PhotomeForMacApp.mainWindowID)
+            backend.openGallery()
         }
+        .disabled(!backend.isRunning)
 
         Button("종료") {
             backend.stop()
