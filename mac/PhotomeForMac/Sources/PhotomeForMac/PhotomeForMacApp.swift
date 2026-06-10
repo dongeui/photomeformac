@@ -9,9 +9,6 @@ struct PhotomeForMacApp: App {
     @State private var launchAtLoginEnabled = PhotomeForMacApp.currentLaunchAtLoginEnabled()
     @NSApplicationDelegateAdaptor(PhotomeAppDelegate.self) private var appDelegate
 
-    /// 메뉴바 "Photome 열기"가 닫힌 메인 창을 다시 띄울 때 쓰는 식별자.
-    static let mainWindowID = "photome-main"
-
     /// SwiftPM의 bare executable로 실행하면 mainBundle이 .app이 아니어서
     /// `SMAppService.mainApp` 호출이 NSException(bundleProxyForCurrentProcess nil)을 던진다.
     /// Xcode ⌘R / `swift run` 같은 비-번들 실행에서도 앱이 죽지 않도록 가드한다.
@@ -25,85 +22,18 @@ struct PhotomeForMacApp: App {
     }
 
     var body: some Scene {
-        Window("Photome", id: Self.mainWindowID) {
-            ContentView()
-                .environmentObject(backend)
-                .environmentObject(updateChecker)
-                .onAppear {
-                    appDelegate.backend = backend
-                    // 알림 권한은 첫 실행 시점이 아니라 사용자가 첫 스캔/AI 작업을
-                    // 시작할 때 요청한다(BackendSupervisor.trigger* 참고). 그래야 앱을
-                    // 이해하기도 전에 권한 팝업이 뜨지 않는다.
-                }
-        }
-        .commands {
-            CommandGroup(replacing: .appInfo) {
-                Button("Photome에 관하여") {
-                    Self.presentAboutPanel()
-                }
-            }
-            // 메뉴바 아이콘 메뉴는 상태 표시 전용으로 비웠으므로, 실제 조작·설정은
-            // 여기(상단 앱 메뉴)와 앱 창 툴바에 둔다.
-            CommandGroup(after: .appInfo) {
-                Button("Photome 대시보드 열기") {
-                    backend.openDashboard()
-                }
-                .disabled(!backend.isRunning)
-
-                Button("업데이트 확인…") {
-                    updateChecker.checkForUpdates()
-                }
-                .disabled(!updateChecker.canCheck)
-
-                Button(launchAtLoginEnabled ? "로그인 시 자동 시작 끄기" : "로그인 시 자동 시작 켜기") {
-                    toggleLaunchAtLogin()
-                }
-                .disabled(!Self.isLaunchAtLoginAvailable())
-
-                Divider()
-
-                Button("전체 동기화 시작") {
-                    backend.triggerLibraryScan()
-                }
-                .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
-
-                Button("이미지 AI 이어서 분석") {
-                    backend.triggerSemanticMaintenance()
-                }
-                .disabled(!backend.isRunning || !backend.clipEnabled || backend.hasActiveLibraryJob)
-
-                Button("사진 폴더 선택") {
-                    backend.choosePhotoFolder()
-                }
-
-                Button("Photome 다시 시작") {
-                    backend.restart()
-                }
-                .disabled(backend.isBusy)
-
-                Divider()
-
-                Button("모델 준비/재로드") {
-                    backend.prepareAIModel(loadCached: backend.offlineMode)
-                }
-                .disabled(!backend.isRunning || backend.aiPackStatus?.modelLoading == true)
-
-                Button("모델 캐시 폴더 열기") {
-                    backend.openModelCache()
-                }
-
-                Button("로그 보기") {
-                    backend.showLogs()
-                }
-
-                Button("진단 내보내기") {
-                    backend.exportDiagnosticsBundle()
-                }
-            }
-        }
-
+        // 창 없는 메뉴바 전용 앱. 사진첩/검색/설정은 "사진첩 열기"로 기본
+        // 브라우저에서 열고, 네이티브 조작은 메뉴바 아이콘 메뉴에 모은다.
         MenuBarExtra(backend.menuTitle, systemImage: menuBarIcon) {
-            MenuBarContent(backend: backend)
+            MenuBarContent(
+                backend: backend,
+                updateChecker: updateChecker,
+                launchAtLoginEnabled: launchAtLoginEnabled,
+                isLaunchAtLoginAvailable: Self.isLaunchAtLoginAvailable(),
+                onToggleLaunchAtLogin: { toggleLaunchAtLogin() },
+                onAbout: { Self.presentAboutPanel() }
+            )
+            .onAppear { appDelegate.backend = backend }
         }
     }
 
@@ -166,11 +96,17 @@ struct PhotomeForMacApp: App {
     }
 }
 
-/// 메뉴바 아이콘 메뉴. 상태와 사진 현황을 보여주고 사진첩 열기·종료만 둔다.
+/// 메뉴바 아이콘 메뉴. 상태·사진 현황 + 사진첩 열기를 메인에 두고, 자주 안 쓰는
+/// 네이티브 조작(폴더 선택/로그/진단/모델/재시작 등)은 "고급" 서브메뉴에 모은다.
 /// 동기화·이미지 AI 등 제어는 웹의 "설정" 탭으로 일원화했다. 상태는 backend가
 /// 2초 폴링으로 갱신하며 메뉴를 열 때마다 최신값으로 평가된다.
 struct MenuBarContent: View {
     @ObservedObject var backend: BackendSupervisor
+    @ObservedObject var updateChecker: UpdateChecker
+    let launchAtLoginEnabled: Bool
+    let isLaunchAtLoginAvailable: Bool
+    let onToggleLaunchAtLogin: () -> Void
+    let onAbout: () -> Void
 
     var body: some View {
         Text("상태: \(backend.state.rawValue)")
@@ -186,6 +122,54 @@ struct MenuBarContent: View {
         }
         .disabled(!backend.isRunning)
 
+        Divider()
+
+        Menu("고급") {
+            Button("사진 폴더 선택") {
+                backend.choosePhotoFolder()
+            }
+            Button("설정 열기") {
+                backend.openDashboard()
+            }
+            .disabled(!backend.isRunning)
+            Button("Photome 다시 시작") {
+                backend.restart()
+            }
+            .disabled(backend.isBusy)
+
+            Divider()
+
+            Button("모델 준비/재로드") {
+                backend.prepareAIModel(loadCached: backend.offlineMode)
+            }
+            .disabled(!backend.isRunning || backend.aiPackStatus?.modelLoading == true)
+            Button("모델 캐시 폴더 열기") {
+                backend.openModelCache()
+            }
+            Button("로그 보기") {
+                backend.showLogs()
+            }
+            Button("진단 내보내기") {
+                backend.exportDiagnosticsBundle()
+            }
+
+            Divider()
+
+            Button("업데이트 확인…") {
+                updateChecker.checkForUpdates()
+            }
+            .disabled(!updateChecker.canCheck)
+            Button(launchAtLoginEnabled ? "로그인 시 자동 시작 끄기" : "로그인 시 자동 시작 켜기") {
+                onToggleLaunchAtLogin()
+            }
+            .disabled(!isLaunchAtLoginAvailable)
+            Button("Photome에 관하여") {
+                onAbout()
+            }
+        }
+
+        Divider()
+
         Button("종료") {
             backend.stop()
             NSApp.terminate(nil)
@@ -195,6 +179,12 @@ struct MenuBarContent: View {
 
 final class PhotomeAppDelegate: NSObject, NSApplicationDelegate {
     weak var backend: BackendSupervisor?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // 창 없는 메뉴바 전용 앱: Dock 아이콘과 화면 상단 메뉴 막대를 숨기고
+        // 우측 상단 메뉴바 아이콘만 남긴다.
+        NSApp.setActivationPolicy(.accessory)
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let backend, backend.hasActiveLibraryJob else { return .terminateNow }

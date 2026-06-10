@@ -183,6 +183,14 @@ final class BackendSupervisor: ObservableObject {
         self.lanEnabled = UserDefaults.standard.bool(forKey: Self.lanEnabledDefaultsKey)
         self.sourceRootBookmarks = Self.loadBookmarks()
         self.resolveAndAccessBookmarks()
+        // 메뉴바 전용 앱이라 띄울 창이 없으므로, 선택해둔 폴더가 있으면 앱 시작과
+        // 함께 백엔드를 자동 기동한다(이전에는 메인 창 onAppear가 하던 역할).
+        if !self.sourceRoots.isEmpty {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.state == .stopped else { return }
+                self.start()
+            }
+        }
     }
 
     deinit {
