@@ -2096,33 +2096,6 @@ async def dashboard(request: Request) -> HTMLResponse:
         </form>
       </article>
 
-      <article class="{phase2_card_class}" id="phase2-card" style="display:none">
-        <h2 class="scan-title">검색 개선 <span id="phase2-state-badge" class="run-badge {'is-running' if phase2_active else ''}">{phase2_state_label}</span></h2>
-        <p class="sub">사진을 분석해서 바다, 아기, 장소, 사람 이름 같은 검색어로 찾을 수 있게 만듭니다.</p>
-        <div id="phase2-live-panel" class="{phase2_live_class}">
-          <strong>현재 상태</strong><br>
-          <span id="phase2-live-detail">{escape(phase2_live_text)}</span>
-        </div>
-        <div class="pill-row">
-          <span class="pill"><strong>상태</strong> <span id="phase2-state-text" class="{phase2_state_class}">{phase2_state_label}</span></span>
-        </div>
-        <div class="list compact-list" style="margin-top:14px;">
-          <div class="row"><span>진행</span><span id="p2-progress" class="live-status">—</span></div>
-          <div class="row"><span>분석 완료</span><span id="p2-search">{semantic_coverage["analyzed_current"]} / {semantic_coverage["eligible_media"]}</span></div>
-          <div class="row"><span>남은 작업</span><span id="p2-pending">{semantic_coverage["remaining_for_analysis"]}</span></div>
-          <div class="row"><span>자동 태그</span><span id="p2-auto-tags">{semantic_coverage["auto_tag_states_current"]}</span></div>
-          {'<div class="row"><span>얼굴 재분석</span><span id="p2-face-pending">' + str(semantic_coverage["remaining_for_face_reanalysis"]) + '</span></div>' if settings.face_analysis_enabled else ''}
-          <div class="row"><span>오류</span><span id="p2-errors">{semantic_coverage["semantic_job_errors"]}</span></div>
-        </div>
-        <form class="scan-form" id="phase2-semantic-form" onsubmit="return false">
-          <div class="scan-actions">
-            <button type="button" id="phase2-semantic-button"{phase2_run_disabled}>지금 분석</button>
-            <button type="button" id="phase2-cancel-button" style="{phase2_cancel_display}">중지</button>
-          </div>
-          <pre class="scan-result" id="phase2-semantic-result" aria-live="polite"></pre>
-        </form>
-      </article>
-
       <details class="card full manager-disclosure" id="people-manager-card">
         <summary>
           <div>
@@ -2325,11 +2298,6 @@ async def dashboard(request: Request) -> HTMLResponse:
     const sourcePickerPath = document.getElementById("source-picker-path");
     const sourcePickerList = document.getElementById("source-picker-list");
     const sourcePickerNote = document.getElementById("source-picker-note");
-    const semanticForm = document.getElementById("phase2-semantic-form");
-    const semanticResult = document.getElementById("phase2-semantic-result");
-    const semanticCard = document.getElementById("phase2-card");
-    const semanticButton = document.getElementById("phase2-semantic-button");
-    const semanticCancelButton = document.getElementById("phase2-cancel-button");
     const resourceForm = document.getElementById("resource-settings-form");
     const resourceSaveButton = document.getElementById("resource-settings-save");
     const resourceResult = document.getElementById("resource-settings-result");
@@ -2342,7 +2310,6 @@ async def dashboard(request: Request) -> HTMLResponse:
     const resourceCpuProfile = document.getElementById("resource-cpu-profile");
     const resourceMemoryProfile = document.getElementById("resource-memory-profile");
     const phase1StorageKey = "photome.dashboard.phase1.job";
-    const phase2StorageKey = "photome.dashboard.phase2.job";
     const phase1SourceRootsStorageKey = "photome.dashboard.phase1.source_roots";
     const peopleManagerOpenStorageKey = "photome.dashboard.people_manager.open";
     let isPeopleMergeInProgress = false;
@@ -3140,31 +3107,17 @@ async def dashboard(request: Request) -> HTMLResponse:
       const phase2OwnsActive = hasActive && (active.job_kind === "semantic_backfill" || active.job_kind === "semantic_maintenance");
       const phase1OwnsActive = hasActive && !phase2OwnsActive;
 
-      scanCard.classList.toggle("is-running", phase1OwnsActive);
-      semanticCard.classList.toggle("is-running", phase2OwnsActive);
-      if (phase1RetryButton) phase1RetryButton.disabled = phase1OwnsActive || phase2OwnsActive;
-      semanticButton.disabled = phase1OwnsActive || phase2OwnsActive;
-      semanticCancelButton.style.display = phase2OwnsActive ? "" : "none";
+      scanCard.classList.toggle("is-running", hasActive);
+      if (phase1RetryButton) phase1RetryButton.disabled = hasActive;
       setPhaseState("phase1", phase1OwnsActive ? "RUNNING" : "IDLE", phase1OwnsActive);
-      setPhaseState("phase2", phase2OwnsActive ? "RUNNING" : (phase1OwnsActive ? "WAITING" : "IDLE"), phase2OwnsActive);
 
-      // 진행 상황 표시는 메뉴바로 일원화 — phase1 카드에는 더 이상 수치 행이 없다.
-      _setText("p2-current-job", phase2OwnsActive ? `${{jobWorkLabel(active.job_kind)}} · ${{activeJobId(active)}}` : "대기 중");
-      _setText("p2-progress", phase2OwnsActive ? compactProgress(active) : "—");
-      _setText("phase2-live-detail", phase2OwnsActive ? detailedProgress(active) : (phase1OwnsActive ? "사진 가져오기가 끝날 때까지 대기 중" : "대기 중"));
+      // 진행 상황 표시는 메뉴바로 일원화. phase2 카드는 제거됐고, 진행 중
+      // 작업(스캔/이미지 AI 공통)은 동기화 카드 결과 패널 하나로 보여준다.
       updateAiMetricState({{ scheduler: schedulerSnapshot, performance: performanceSnapshot, semantic: {{ coverage: semanticCoverageSnapshot }} }}, phase1OwnsActive, phase2OwnsActive);
 
-      if (phase1OwnsActive) {{
+      if (hasActive) {{
         scanResult.classList.add("visible");
         scanResult.textContent = renderLibraryJob(active);
-      }}
-
-      if (phase2OwnsActive) {{
-        semanticResult.classList.add("visible");
-        semanticResult.textContent = renderSemanticJob(active);
-      }} else if (phase1OwnsActive) {{
-        semanticResult.classList.add("visible");
-        semanticResult.textContent = "사진 가져오기가 실행 중입니다. 검색 개선은 끝난 뒤 실행됩니다.";
       }}
     }}
     function _setText(id, text) {{
@@ -3311,15 +3264,6 @@ async def dashboard(request: Request) -> HTMLResponse:
         }}
 
         // Phase 2 card rows
-        if (sched.last_semantic_maintenance_at !== undefined) _setText("p2-last-run", sched.last_semantic_maintenance_at ?? "—");
-        if (sched.next_semantic_maintenance_at !== undefined) _setText("p2-next-run", sched.next_semantic_maintenance_at ?? "—");
-        if (cov.eligible_media !== undefined) _setText("p2-eligible", cov.eligible_media);
-        if (cov.clip_embeddings_current !== undefined) _setText("p2-clip", cov.clip_embeddings_current);
-        if (cov.auto_tag_states_current !== undefined) _setText("p2-auto-tags", cov.auto_tag_states_current);
-        if (cov.analyzed_current !== undefined) _setText("p2-search", cov.analyzed_current + " / " + cov.eligible_media);
-        if (cov.remaining_for_analysis !== undefined) _setText("p2-pending", cov.remaining_for_analysis.toString());
-        if (cov.remaining_for_face_reanalysis !== undefined) _setText("p2-face-pending", cov.remaining_for_face_reanalysis);
-        if (cov.semantic_job_errors !== undefined) _setText("p2-errors", cov.semantic_job_errors);
 
         updateLibraryJobGuards();
       }} catch (_error) {{}}
@@ -3339,9 +3283,8 @@ async def dashboard(request: Request) -> HTMLResponse:
         }}
         await refreshDashboardStatus();
       }} catch (error) {{
-        const target = phase === "library" || phase === "phase1" ? scanResult : semanticResult;
-        target.classList.add("visible");
-        target.textContent = `error: ${{error.message}}`;
+        scanResult.classList.add("visible");
+        scanResult.textContent = `error: ${{error.message}}`;
       }} finally {{
         button.disabled = false;
       }}
@@ -3639,7 +3582,6 @@ async def dashboard(request: Request) -> HTMLResponse:
       rememberText(phase1SourceRootsStorageKey, sourceRootsField.value);
     }});
     scanForm?.addEventListener("submit", (event) => event.preventDefault());
-    semanticForm?.addEventListener("submit", (event) => event.preventDefault());
     phase1RetryButton?.addEventListener("click", async () => {{
       if (activeLibraryJob && ["queued", "running"].includes(activeLibraryJob.status || "")) {{
         scanResult.classList.add("visible");
@@ -3671,58 +3613,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         refreshDashboardStatus();
       }}
     }});
-    semanticButton?.addEventListener("click", async () => {{
-      if (activeLibraryJob && ["queued", "running"].includes(activeLibraryJob.status || "") && activeLibraryJob.job_kind !== "semantic_backfill" && activeLibraryJob.job_kind !== "semantic_maintenance") {{
-        semanticResult.classList.add("visible");
-        semanticResult.textContent = "사진 가져오기가 실행 중입니다. 검색 개선은 끝난 뒤 실행됩니다.";
-        return;
-      }}
-      semanticResult.classList.add("visible");
-      semanticCard.classList.add("is-running");
-      semanticButton.disabled = true;
-      semanticCancelButton.style.display = "";
-      semanticResult.textContent = "검색 개선을 시작합니다...";
-      const endpoint = "/scan/semantic-maintenance/async";
-      activeLibraryJob = {{ job_kind: "semantic_maintenance", status: "queued" }};
-      updateLibraryJobGuards();
-      try {{
-        const response = await fetch(endpoint, {{ method: "POST" }});
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || `HTTP ${{response.status}}`);
-        rememberJob(phase2StorageKey, payload.job.job_id);
-        semanticResult.textContent = renderSemanticJob(payload.job);
-        const job = await pollJob(payload.job.job_id, semanticResult, renderSemanticJob);
-        semanticResult.textContent = renderSemanticJob(job);
-        if (job.status !== "queued" && job.status !== "running") {{
-          forgetJob(phase2StorageKey);
-        }}
-      }} catch (error) {{
-        semanticResult.textContent = `error: ${{error.message}}`;
-        forgetJob(phase2StorageKey);
-      }} finally {{
-        semanticCard.classList.remove("is-running");
-        semanticCancelButton.style.display = "none";
-        refreshDashboardStatus();
-      }}
-    }});
-    semanticCancelButton?.addEventListener("click", async () => {{
-      const jobId = loadRememberedJob(phase2StorageKey) || activeLibraryJob?.job_id || activeLibraryJob?.id || "";
-      if (!jobId) return;
-      semanticCancelButton.disabled = true;
-      try {{
-        const response = await fetch(`/scan/jobs/${{encodeURIComponent(jobId)}}/cancel`, {{ method: "POST" }});
-        const payload = await response.json();
-        semanticResult.textContent = `중지를 요청했습니다. 현재 묶음이 끝나면 멈춥니다.\n${{payload.message || ""}}`;
-      }} catch (error) {{
-        semanticResult.textContent = `중지 오류: ${{error.message}}`;
-      }} finally {{
-        semanticCancelButton.disabled = false;
-      }}
-    }});
     resumeJob(phase1StorageKey, scanCard, phase1RetryButton, scanResult, renderScanJob);
-    resumeJob(phase2StorageKey, semanticCard, semanticButton, semanticResult, renderSemanticJob);
-    // Show cancel button if a job is already running from a previous session
-    if (loadRememberedJob(phase2StorageKey)) semanticCancelButton.style.display = "";
 
     const _INTENT_LABELS = {{
       "fallback": "스마트 검색", "date_relaxed": "날짜 범위 확대",

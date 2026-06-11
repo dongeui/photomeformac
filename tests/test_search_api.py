@@ -1110,7 +1110,9 @@ def test_async_job_dashboard_restores_phase_cards_from_local_storage(client: Tes
     assert "function updateAiMetricState(payload, phase1OwnsActive, phase2OwnsActive)" in html
     assert "이미지 AI 자동 처리 대상" in html
     assert 'const phase1StorageKey = "photome.dashboard.phase1.job";' in html
-    assert 'const phase2StorageKey = "photome.dashboard.phase2.job";' in html
+    # phase2 카드 제거(B-8): 관련 JS/스토리지 키도 함께 사라져야 한다.
+    assert "phase2StorageKey" not in html
+    assert 'id="phase2-card"' not in html
     assert 'const phase1SourceRootsStorageKey = "photome.dashboard.phase1.source_roots";' in html
     assert "let activeLibraryJob =" in html
     assert "function updateLibraryJobGuards()" in html
@@ -1139,7 +1141,6 @@ def test_async_job_dashboard_restores_phase_cards_from_local_storage(client: Tes
     assert "if (progress.message) lines.push(progress.message);" in html
     assert "function renderLibraryJob(job)" in html
     assert "resumeJob(phase1StorageKey, scanCard, phase1RetryButton, scanResult, renderScanJob);" in html
-    assert "resumeJob(phase2StorageKey, semanticCard, semanticButton, semanticResult, renderSemanticJob);" in html
     assert 'fetch("/scan/retry-errors/async"' in html
     assert 'cycleSchedule("library", phase1ScheduleButton)' in html
     assert "sourceRootsField.value = rememberedSourceRoots;" in html
