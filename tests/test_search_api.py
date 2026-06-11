@@ -230,6 +230,9 @@ def test_status_reports_phase2_coverage(
     assert coverage["eligible_media"] >= 1
     assert coverage["search_current"] >= 1
     assert coverage["remaining_for_search"] >= 0
+    # 메뉴바/설정 페이지 공용 단일 지표: 완료 + 남음 = 전체가 항상 성립해야 한다.
+    assert coverage["analyzed_current"] + coverage["remaining_for_analysis"] == coverage["eligible_media"]
+    assert coverage["analyzed_current"] >= 1
     assert "clip_embeddings_current" in coverage
     assert "semantic_job_errors" in coverage
     assert payload["catalog"]["breakdown"]["summary_text"].startswith("1. 토탈 ")

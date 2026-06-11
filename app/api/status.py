@@ -2068,8 +2068,8 @@ async def dashboard(request: Request) -> HTMLResponse:
           <div class="row"><span>진행</span><span id="p1-progress" class="live-status">—</span></div>
           <div class="row"><span>다음 실행</span><span id="p1-next-scan">{escape(str(scheduler.get('next_library_run_at')))}</span></div>
           <div class="row"><span>마지막 실행</span><span id="p1-last-scan">{escape(str(scheduler.get('last_library_run_at')))}</span></div>
-          <div class="row"><span>검색 준비</span><span id="p1-search">{semantic_coverage["search_current"]} / {semantic_coverage["eligible_media"]}</span></div>
-          <div class="row"><span>남은 분석</span><span id="p1-pending">{semantic_coverage["remaining_for_search"] + semantic_coverage["remaining_for_clip"]}</span></div>
+          <div class="row"><span>분석 완료</span><span id="p1-search">{semantic_coverage["analyzed_current"]} / {semantic_coverage["eligible_media"]}</span></div>
+          <div class="row"><span>남은 분석</span><span id="p1-pending">{semantic_coverage["remaining_for_analysis"]}</span></div>
           <div class="row"><span>누락 파일</span><span id="p1-missing" class="{'status-warn' if health['missing'] else ''}">{health["missing"]}</span></div>
         </div>
         <form class="scan-form" id="phase1-scan-form" onsubmit="return false">
@@ -2117,8 +2117,8 @@ async def dashboard(request: Request) -> HTMLResponse:
         </div>
         <div class="list compact-list" style="margin-top:14px;">
           <div class="row"><span>진행</span><span id="p2-progress" class="live-status">—</span></div>
-          <div class="row"><span>검색 준비</span><span id="p2-search">{semantic_coverage["search_current"]} / {semantic_coverage["eligible_media"]}</span></div>
-          <div class="row"><span>남은 작업</span><span id="p2-pending">{semantic_coverage["remaining_for_search"] + semantic_coverage["remaining_for_clip"]}</span></div>
+          <div class="row"><span>분석 완료</span><span id="p2-search">{semantic_coverage["analyzed_current"]} / {semantic_coverage["eligible_media"]}</span></div>
+          <div class="row"><span>남은 작업</span><span id="p2-pending">{semantic_coverage["remaining_for_analysis"]}</span></div>
           <div class="row"><span>자동 태그</span><span id="p2-auto-tags">{semantic_coverage["auto_tag_states_current"]}</span></div>
           {'<div class="row"><span>얼굴 재분석</span><span id="p2-face-pending">' + str(semantic_coverage["remaining_for_face_reanalysis"]) + '</span></div>' if settings.face_analysis_enabled else ''}
           <div class="row"><span>오류</span><span id="p2-errors">{semantic_coverage["semantic_job_errors"]}</span></div>
@@ -3317,8 +3317,8 @@ async def dashboard(request: Request) -> HTMLResponse:
         if (sched.next_poll_at !== undefined) _setText("p1-next-poll", sched.next_poll_at ?? "—");
         if (sched.last_library_run_at !== undefined) _setText("p1-last-scan", sched.last_library_run_at ?? "—");
         if (sched.next_library_run_at !== undefined) _setText("p1-next-scan", sched.next_library_run_at ?? "—");
-        if (cov.search_current !== undefined) _setText("p1-search", cov.search_current + " / " + cov.eligible_media);
-        if (cov.remaining_for_search !== undefined) _setText("p1-pending", (cov.remaining_for_search + cov.remaining_for_clip).toString());
+        if (cov.analyzed_current !== undefined) _setText("p1-search", cov.analyzed_current + " / " + cov.eligible_media);
+        if (cov.remaining_for_analysis !== undefined) _setText("p1-pending", cov.remaining_for_analysis.toString());
         const missingEl = document.getElementById("p1-missing");
         if (missingEl && health.missing !== undefined) {{
           missingEl.className = health.missing ? "status-warn" : "";
@@ -3331,8 +3331,8 @@ async def dashboard(request: Request) -> HTMLResponse:
         if (cov.eligible_media !== undefined) _setText("p2-eligible", cov.eligible_media);
         if (cov.clip_embeddings_current !== undefined) _setText("p2-clip", cov.clip_embeddings_current);
         if (cov.auto_tag_states_current !== undefined) _setText("p2-auto-tags", cov.auto_tag_states_current);
-        if (cov.search_current !== undefined) _setText("p2-search", cov.search_current + " / " + cov.eligible_media);
-        if (cov.remaining_for_search !== undefined) _setText("p2-pending", (cov.remaining_for_search + cov.remaining_for_clip).toString());
+        if (cov.analyzed_current !== undefined) _setText("p2-search", cov.analyzed_current + " / " + cov.eligible_media);
+        if (cov.remaining_for_analysis !== undefined) _setText("p2-pending", cov.remaining_for_analysis.toString());
         if (cov.remaining_for_face_reanalysis !== undefined) _setText("p2-face-pending", cov.remaining_for_face_reanalysis);
         if (cov.semantic_job_errors !== undefined) _setText("p2-errors", cov.semantic_job_errors);
 
@@ -3375,14 +3375,13 @@ async def dashboard(request: Request) -> HTMLResponse:
       const eligible = cov.eligible_media;
       if (eligible === undefined || eligible === null) return [];
       const fmt = (n) => (Number(n) || 0).toLocaleString();
-      const clipDone = cov.clip_embeddings_current ?? 0;
-      const searchDone = cov.search_current ?? 0;
-      const remain = (cov.remaining_for_clip ?? 0) + (cov.remaining_for_search ?? 0);
-      const pct = eligible > 0 ? Math.round((clipDone / eligible) * 100) : 100;
+      const analyzed = cov.analyzed_current ?? cov.clip_embeddings_current ?? 0;
+      const remain = cov.remaining_for_analysis
+        ?? ((cov.remaining_for_clip ?? 0) + (cov.remaining_for_search ?? 0));
+      const pct = eligible > 0 ? Math.round((analyzed / eligible) * 100) : 100;
       const lines = [
         "── 전체 현황 ──",
-        `사진 ${{fmt(eligible)}}개 중 이미지 AI ${{fmt(clipDone)}}개 완료 (${{pct}}%)`,
-        `검색 색인 ${{fmt(searchDone)}} / ${{fmt(eligible)}}개`,
+        `사진 ${{fmt(eligible)}}개 중 분석 완료 ${{fmt(analyzed)}}개 (${{pct}}%)`,
       ];
       lines.push(remain > 0 ? `아직 처리할 항목 ${{fmt(remain)}}개` : "모든 사진이 최신 상태입니다 ✓");
       return lines;
@@ -4071,6 +4070,34 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
             )
             or 0
         )
+        # 사용자에게 보여주는 단일 "분석 완료" 지표: CLIP 임베딩과 검색문서가
+        # 모두 최신인 사진 수. 메뉴바와 설정 페이지가 이 한 수치만 쓰게 해서
+        # 화면마다 다른 기준(CLIP vs 검색문서)으로 보이던 불일치를 없앤다.
+        analyzed_conditions = [
+            active_media_status,
+            dashboard_ready_status,
+            MediaFile.media_kind == "image",
+            MediaFile.file_id.in_(
+                select(SearchDocument.file_id).where(
+                    SearchDocument.version == settings.semantic_search_version
+                )
+            ),
+        ]
+        if settings.semantic_clip_enabled:
+            analyzed_conditions.append(
+                MediaFile.file_id.in_(
+                    select(MediaEmbedding.file_id).where(
+                        MediaEmbedding.model_name == clip_model_identifier,
+                        MediaEmbedding.version == settings.semantic_embedding_version,
+                    )
+                )
+            )
+        analyzed_current = int(
+            session.scalar(
+                select(func.count()).select_from(MediaFile).where(*analyzed_conditions)
+            )
+            or 0
+        )
         semantic_job_errors = int(
             session.scalar(
                 select(func.count())
@@ -4381,6 +4408,8 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
                 },
                 "coverage": {
                     "eligible_media": eligible_media_count,
+                    "analyzed_current": analyzed_current,
+                    "remaining_for_analysis": max(0, eligible_media_count - analyzed_current),
                     "clip_embeddings_current": clip_embeddings_current,
                     "auto_tag_states_current": auto_tag_states_current,
                     "search_current": search_documents_current,

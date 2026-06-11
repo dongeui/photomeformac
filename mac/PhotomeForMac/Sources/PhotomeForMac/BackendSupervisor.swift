@@ -105,19 +105,21 @@ final class BackendSupervisor: ObservableObject {
     /// 나타낸다. 메뉴바에서 한눈에 보기 위한 요약 전용.
     struct LibraryCoverage {
         let eligible: Int
-        let clipDone: Int
-        let searchDone: Int
+        /// 분석 완료 = CLIP 임베딩과 검색문서가 모두 최신인 사진 수
+        /// (/status semantic.coverage.analyzed_current). 설정 페이지의
+        /// "분석 완료/남은 분석"과 같은 수치라 두 화면이 항상 일치한다.
+        let analyzedDone: Int
         let remaining: Int
         let errors: Int
 
-        var clipPercent: Int {
-            eligible > 0 ? Int((Double(clipDone) / Double(eligible) * 100).rounded()) : 100
+        var analyzedPercent: Int {
+            eligible > 0 ? Int((Double(analyzedDone) / Double(eligible) * 100).rounded()) : 100
         }
 
         var summary: String {
             if eligible == 0 { return "아직 분석할 사진이 없습니다" }
             if remaining == 0 { return "전체 \(eligible)장 · 모두 최신 ✓" }
-            return "전체 \(eligible)장 · 이미지 AI \(clipDone) (\(clipPercent)%) · 남음 \(remaining)"
+            return "전체 \(eligible)장 · 분석 완료 \(analyzedDone) (\(analyzedPercent)%) · 남음 \(remaining)"
         }
     }
 
@@ -1167,12 +1169,13 @@ final class BackendSupervisor: ObservableObject {
         else {
             return nil
         }
-        let remaining = (intValue(cov["remaining_for_clip"]) ?? 0)
-            + (intValue(cov["remaining_for_search"]) ?? 0)
+        // 구버전 백엔드(analyzed_current 없음)와 잠깐 섞여 돌 수 있어 폴백을 둔다.
+        let analyzed = intValue(cov["analyzed_current"]) ?? intValue(cov["clip_embeddings_current"]) ?? 0
+        let remaining = intValue(cov["remaining_for_analysis"])
+            ?? ((intValue(cov["remaining_for_clip"]) ?? 0) + (intValue(cov["remaining_for_search"]) ?? 0))
         return LibraryCoverage(
             eligible: eligible,
-            clipDone: intValue(cov["clip_embeddings_current"]) ?? 0,
-            searchDone: intValue(cov["search_current"]) ?? 0,
+            analyzedDone: analyzed,
             remaining: remaining,
             errors: intValue(cov["semantic_job_errors"]) ?? 0
         )
