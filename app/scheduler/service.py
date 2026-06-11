@@ -12,6 +12,7 @@ from typing import Optional
 
 from app.core.settings import AppSettings
 from app.models.runtime import SchedulerRuntimeConfig
+from app.services.nas_remount import NasRemounter
 from app.services.processing.pipeline import ProcessingPipeline
 from app.services.processing.pipeline import LibraryJobBusyError
 from sqlalchemy.orm import Session, sessionmaker
@@ -63,6 +64,8 @@ class SchedulerService:
         # NAS keep-alive state: maps source_root str → last known availability
         self._nas_available: dict[str, bool] = {}
         self._last_nas_ping_at: datetime | None = None
+        # 마운트가 살아있을 때 smb/afp URL을 기록해 두고, 끊기면 자동 재마운트.
+        self._nas_remounter = NasRemounter(settings.data_root)
 
     @property
     def enabled(self) -> bool:
@@ -223,8 +226,13 @@ class SchedulerService:
             if now_available and not was_available:
                 logger.info("NAS source root reconnected", extra={"source_root": key})
                 reconnected_roots.append(source_root)
-            elif not now_available:
+            if now_available:
+                # 살아있는 동안 마운트 URL을 기록해 둔다(끊겼을 때 재마운트용).
+                self._nas_remounter.record_url_for_root(key)
+            else:
                 logger.warning("NAS source root unreachable", extra={"source_root": key})
+                # Finder를 열지 않아도 다시 붙도록 기록된 URL로 재마운트 시도(스로틀).
+                self._nas_remounter.try_remount(key, now)
 
         if reconnected_roots:
             try:
