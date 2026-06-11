@@ -12,7 +12,9 @@ fi
 
 "$PYTHON_BIN" -m venv .venv
 .venv/bin/python -m pip install -U pip
-.venv/bin/python -m pip install -e '.[test]'
+# 배포 산출물은 ai-pack 단일 빌드 — clip(torch/open_clip)은 선택이 아니라 필수다.
+# 이걸 빼고 부트스트랩하면 백엔드가 base로 떠서 이미지 AI가 조용히 멈춘다.
+.venv/bin/python -m pip install -e '.[test,clip]'
 
 cat <<MSG
 완료:
