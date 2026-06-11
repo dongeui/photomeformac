@@ -112,8 +112,18 @@ struct MenuBarContent: View {
     var body: some View {
         Text("상태: \(backend.state.rawValue)")
 
+        // 작업이 도는 동안 "무엇을 어디까지" 했는지 메뉴에서 바로 보여준다.
+        // 이게 없으면 누적 현황(남음 N장)만 보여서 분석이 멈춘 것처럼 읽힌다.
+        if let job = backend.libraryJobStatus, job.isRunning {
+            Text("지금: \(job.badgeTitle) · \(job.summary)")
+        }
+
         if let coverage = backend.coverage {
-            Text("사진 현황: \(coverage.summary)")
+            if let job = backend.libraryJobStatus, job.isRunning, job.jobKind == "scan", coverage.remaining > 0 {
+                Text("사진 현황: \(coverage.summary) · 동기화 후 분석 계속")
+            } else {
+                Text("사진 현황: \(coverage.summary)")
+            }
         }
 
         if let usage = backend.resourceUsage {
