@@ -2055,22 +2055,13 @@ async def dashboard(request: Request) -> HTMLResponse:
     <section class="grid">
       <article class="{phase1_card_class}" id="phase1-card">
         <h2 class="scan-title">라이브러리 동기화 <span id="phase1-state-badge" class="run-badge {'is-running' if phase1_active else ''}">{phase1_state_label}</span> <span id="nas-status-badge" class="nas-badge nas-unknown">NAS 확인 중…</span></h2>
-        <p class="sub">원본 가져오기, 썸네일 생성, 검색 분석, 자동 태그 갱신을 한 루프에서 계속 처리합니다.</p>
-        <div id="phase1-live-panel" class="{phase1_live_class}">
-          <strong>현재 상태</strong><br>
-          <span id="phase1-live-detail">{escape(phase1_live_text)}</span>
-        </div>
+        <p class="sub">사진 폴더와 자동 실행만 설정합니다. 동기화 시작과 진행 상황은 메뉴 막대의 Photome 아이콘에서 봅니다.</p>
         <div class="pill-row">
-          <span class="pill"><strong>상태</strong> <span id="phase1-state-text" class="{phase1_state_class}">{phase1_state_label}</span></span>
           <button type="button" class="pill pill-button" id="phase1-schedule-button" title="자동 실행 간격 변경"><strong>자동 실행</strong> {phase1_schedule_label}</button>
         </div>
         <div class="list compact-list" style="margin-top:14px;">
-          <div class="row"><span>진행</span><span id="p1-progress" class="live-status">—</span></div>
           <div class="row"><span>다음 실행</span><span id="p1-next-scan">{escape(str(scheduler.get('next_library_run_at')))}</span></div>
           <div class="row"><span>마지막 실행</span><span id="p1-last-scan">{escape(str(scheduler.get('last_library_run_at')))}</span></div>
-          <div class="row"><span>분석 완료</span><span id="p1-search">{semantic_coverage["analyzed_current"]} / {semantic_coverage["eligible_media"]}</span></div>
-          <div class="row"><span>남은 분석</span><span id="p1-pending">{semantic_coverage["remaining_for_analysis"]}</span></div>
-          <div class="row"><span>누락 파일</span><span id="p1-missing" class="{'status-warn' if health['missing'] else ''}">{health["missing"]}</span></div>
         </div>
         <form class="scan-form" id="phase1-scan-form" onsubmit="return false">
           <label>
@@ -2095,11 +2086,10 @@ async def dashboard(request: Request) -> HTMLResponse:
             <span class="field-help" id="source-picker-note"></span>
           </div>
           <div class="scan-actions">
-            <button type="button" id="phase1-scan-button"{phase1_scan_disabled}>전체 동기화 시작</button>
             <button type="button" id="phase1-retry-button"{phase1_scan_disabled}>오류 항목만 재처리</button>
           </div>
           <div class="field-help">
-            전체 동기화는 선택한 폴더 전체를 다시 훑어서 새 사진·이동·누락을 반영하고, 썸네일/검색/자동태그까지 이어서 채웁니다. 오류 항목만 재처리는 지난 처리에서 실패한 사진만 다시 시도합니다.
+            동기화는 자동으로 돌고, 수동 시작은 메뉴 막대 Photome 아이콘의 "지금 동기화"를 씁니다. 오류 항목만 재처리는 지난 처리에서 실패한 사진만 다시 시도합니다.
           </div>
           <pre class="scan-result" id="phase1-scan-result" aria-live="polite"></pre>
         </form>
@@ -2324,7 +2314,6 @@ async def dashboard(request: Request) -> HTMLResponse:
     const scanForm = document.getElementById("phase1-scan-form");
     const scanResult = document.getElementById("phase1-scan-result");
     const scanCard = document.getElementById("phase1-card");
-    const scanButton = document.getElementById("phase1-scan-button");
     const phase1RetryButton = document.getElementById("phase1-retry-button");
     const phase1ScheduleButton = document.getElementById("phase1-schedule-button");
     const sourceRootsField = document.getElementById("phase1-source-roots");
@@ -3152,18 +3141,15 @@ async def dashboard(request: Request) -> HTMLResponse:
 
       scanCard.classList.toggle("is-running", phase1OwnsActive);
       semanticCard.classList.toggle("is-running", phase2OwnsActive);
-      scanButton.disabled = phase1OwnsActive;
       if (phase1RetryButton) phase1RetryButton.disabled = phase1OwnsActive || phase2OwnsActive;
       semanticButton.disabled = phase1OwnsActive || phase2OwnsActive;
       semanticCancelButton.style.display = phase2OwnsActive ? "" : "none";
       setPhaseState("phase1", phase1OwnsActive ? "RUNNING" : "IDLE", phase1OwnsActive);
       setPhaseState("phase2", phase2OwnsActive ? "RUNNING" : (phase1OwnsActive ? "WAITING" : "IDLE"), phase2OwnsActive);
 
-      _setText("p1-current-job", phase1OwnsActive ? `${{jobWorkLabel(active.job_kind)}} · ${{activeJobId(active)}}` : "대기 중");
-      _setText("p1-progress", phase1OwnsActive ? compactProgress(active) : "—");
+      // 진행 상황 표시는 메뉴바로 일원화 — phase1 카드에는 더 이상 수치 행이 없다.
       _setText("p2-current-job", phase2OwnsActive ? `${{jobWorkLabel(active.job_kind)}} · ${{activeJobId(active)}}` : "대기 중");
       _setText("p2-progress", phase2OwnsActive ? compactProgress(active) : "—");
-      _setText("phase1-live-detail", phase1OwnsActive ? detailedProgress(active) : "대기 중");
       _setText("phase2-live-detail", phase2OwnsActive ? detailedProgress(active) : (phase1OwnsActive ? "사진 가져오기가 끝날 때까지 대기 중" : "대기 중"));
       updateAiMetricState({{ scheduler: schedulerSnapshot, performance: performanceSnapshot, semantic: {{ coverage: semanticCoverageSnapshot }} }}, phase1OwnsActive, phase2OwnsActive);
 
@@ -3317,8 +3303,6 @@ async def dashboard(request: Request) -> HTMLResponse:
         if (sched.next_poll_at !== undefined) _setText("p1-next-poll", sched.next_poll_at ?? "—");
         if (sched.last_library_run_at !== undefined) _setText("p1-last-scan", sched.last_library_run_at ?? "—");
         if (sched.next_library_run_at !== undefined) _setText("p1-next-scan", sched.next_library_run_at ?? "—");
-        if (cov.analyzed_current !== undefined) _setText("p1-search", cov.analyzed_current + " / " + cov.eligible_media);
-        if (cov.remaining_for_analysis !== undefined) _setText("p1-pending", cov.remaining_for_analysis.toString());
         const missingEl = document.getElementById("p1-missing");
         if (missingEl && health.missing !== undefined) {{
           missingEl.className = health.missing ? "status-warn" : "";
@@ -3553,7 +3537,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (!jobId) return;
       result.classList.add("visible");
       card.classList.add("is-running");
-      button.disabled = true;
+      if (button) button.disabled = true;
       result.textContent = "실행 중인 작업을 다시 연결합니다...";
       try {{
         const job = await pollJob(jobId, result, render);
@@ -3566,7 +3550,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         forgetJob(key);
       }} finally {{
         card.classList.remove("is-running");
-        button.disabled = false;
+        if (button) button.disabled = false;
       }}
     }}
     function renderSemanticJob(job) {{
@@ -3655,42 +3639,6 @@ async def dashboard(request: Request) -> HTMLResponse:
     }});
     scanForm?.addEventListener("submit", (event) => event.preventDefault());
     semanticForm?.addEventListener("submit", (event) => event.preventDefault());
-    scanButton?.addEventListener("click", async () => {{
-      if (activeLibraryJob && ["queued", "running"].includes(activeLibraryJob.status || "")) {{
-        scanResult.classList.add("visible");
-        scanResult.textContent = "다른 라이브러리 작업이 실행 중입니다. 끝난 뒤 다시 시도하세요.";
-        return;
-      }}
-      scanResult.classList.add("visible");
-      scanCard.classList.add("is-running");
-      scanButton.disabled = true;
-      scanResult.textContent = "라이브러리 동기화를 시작합니다...";
-      activeLibraryJob = {{ job_kind: "scan", status: "queued" }};
-      updateLibraryJobGuards();
-      const sourceRoots = sourceRootsField ? sourceRootsField.value : "";
-      rememberText(phase1SourceRootsStorageKey, sourceRoots);
-      const params = new URLSearchParams();
-      if (sourceRoots.trim()) params.set("source_roots", sourceRoots);
-      params.set("full_scan", "true");
-      try {{
-        const response = await fetch(`/scan/async?${{params.toString()}}`, {{ method: "POST" }});
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || `HTTP ${{response.status}}`);
-        rememberJob(phase1StorageKey, payload.job.job_id);
-        scanResult.textContent = renderScanJob(payload.job);
-        const job = await pollJob(payload.job.job_id, scanResult, renderScanJob);
-        scanResult.textContent = renderScanJob(job);
-        if (job.status !== "queued" && job.status !== "running") {{
-          forgetJob(phase1StorageKey);
-        }}
-      }} catch (error) {{
-        scanResult.textContent = `error: ${{error.message}}`;
-        forgetJob(phase1StorageKey);
-      }} finally {{
-        scanCard.classList.remove("is-running");
-        refreshDashboardStatus();
-      }}
-    }});
     phase1RetryButton?.addEventListener("click", async () => {{
       if (activeLibraryJob && ["queued", "running"].includes(activeLibraryJob.status || "")) {{
         scanResult.classList.add("visible");
@@ -3700,7 +3648,6 @@ async def dashboard(request: Request) -> HTMLResponse:
       scanResult.classList.add("visible");
       scanCard.classList.add("is-running");
       phase1RetryButton.disabled = true;
-      scanButton.disabled = true;
       scanResult.textContent = "기존 오류 항목을 다시 처리합니다...";
       activeLibraryJob = {{ job_kind: "scan", status: "queued", payload: {{ retry_errors_only: true }} }};
       updateLibraryJobGuards();
@@ -3771,7 +3718,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         semanticCancelButton.disabled = false;
       }}
     }});
-    resumeJob(phase1StorageKey, scanCard, scanButton, scanResult, renderScanJob);
+    resumeJob(phase1StorageKey, scanCard, phase1RetryButton, scanResult, renderScanJob);
     resumeJob(phase2StorageKey, semanticCard, semanticButton, semanticResult, renderSemanticJob);
     // Show cancel button if a job is already running from a previous session
     if (loadRememberedJob(phase2StorageKey)) semanticCancelButton.style.display = "";

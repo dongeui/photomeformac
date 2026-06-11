@@ -139,6 +139,10 @@ struct MenuBarContent: View {
 
         Divider()
 
+        Button("지금 동기화") {
+            backend.triggerLibraryScan()
+        }
+        .disabled(!backend.isRunning || (backend.libraryJobStatus?.isRunning ?? false))
         Button("사진 폴더 선택") {
             backend.choosePhotoFolder()
         }

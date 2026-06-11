@@ -1118,7 +1118,11 @@ def test_async_job_dashboard_restores_phase_cards_from_local_storage(client: Tes
     assert 'id="phase1-schedule-button"' in html
     assert 'id="phase2-schedule-button"' not in html  # removed: unified into library schedule
     assert 'id="phase1-retry-button"' in html
-    assert "전체 동기화 시작" in html
+    # 설정 탭 다이어트: 시작 버튼/진행 수치는 메뉴바로 이동, 설정성 요소만 남는다.
+    assert "전체 동기화 시작" not in html
+    assert 'id="phase1-scan-button"' not in html
+    assert 'id="p1-pending"' not in html
+    assert "지금 동기화" in html
     assert "오류 항목만 재처리" in html
     assert "경로 구분: Finder 저장장치는" in html
     assert "Docker 내부 사진 폴더(/photos)는 환경변수로 따로 붙인 호환용 경로" in html
@@ -1130,12 +1134,11 @@ def test_async_job_dashboard_restores_phase_cards_from_local_storage(client: Tes
     assert "/ai-pack/prepare?load_cached=true" in html
     assert "python -m app.main" in html or "docker compose --env-file .env.docker.example up -d photome" in html
     assert 'id="phase1-full-scan"' not in html
-    assert 'params.set("full_scan", "true");' in html
     assert "function formatElapsed(startedAt, finishedAt)" in html
     assert "async function pollJob(jobId, resultNode, render)" in html
     assert "if (progress.message) lines.push(progress.message);" in html
     assert "function renderLibraryJob(job)" in html
-    assert "resumeJob(phase1StorageKey, scanCard, scanButton, scanResult, renderScanJob);" in html
+    assert "resumeJob(phase1StorageKey, scanCard, phase1RetryButton, scanResult, renderScanJob);" in html
     assert "resumeJob(phase2StorageKey, semanticCard, semanticButton, semanticResult, renderSemanticJob);" in html
     assert 'fetch("/scan/retry-errors/async"' in html
     assert 'cycleSchedule("library", phase1ScheduleButton)' in html
