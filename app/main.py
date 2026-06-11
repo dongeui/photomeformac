@@ -80,8 +80,14 @@ def main() -> None:
 
     settings: AppSettings = app.state.settings
     from app.core.logging import configure_logging
+    from app.core.single_instance import enforce_single_instance, start_parent_watchdog
 
     configure_logging(settings.log_level)
+    # 같은 data_root를 쓰는 이전/떠돌이 백엔드를 정리하고(새 인스턴스 승리),
+    # 맥앱이 죽으면 함께 내려가도록 워치독을 건다. 인스턴스가 중복되면 SQLite
+    # 잠금 경합으로 시맨틱 작업이 전부 실패하는 사고가 재발한다.
+    enforce_single_instance(settings.data_root, settings.server_port)
+    start_parent_watchdog()
     logger.info(
         "starting server",
         extra={

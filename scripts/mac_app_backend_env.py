@@ -63,6 +63,9 @@ def build_backend_env(
         "PHOTOME_SCHEDULER_ENABLED": "0",
         "PHOTOME_SEMANTIC_SCHEDULER_ENABLED": "1" if clip_enabled else "0",
         "PHOTOME_ENV_FILE": str(root / "photome.env"),
+        # 맥앱이 supervisor임을 알린다 → 백엔드가 부모 사망을 감지해 자가 종료
+        # (고아 백엔드 누적 방지, app/core/single_instance.py).
+        "PHOTOME_SUPERVISED": "1",
         "HF_HOME": str(model_root / "huggingface"),
         "TORCH_HOME": str(model_root / "torch"),
     }

@@ -19,6 +19,7 @@ def test_mac_app_env_uses_app_data_paths(tmp_path: Path) -> None:
     assert env["HF_HOME"] == str(tmp_path / "models" / "huggingface")
     assert env["TORCH_HOME"] == str(tmp_path / "models" / "torch")
     assert env["PHOTOME_OFFLINE_MODE"] == "1"
+    assert env["PHOTOME_SUPERVISED"] == "1"
 
 
 def test_mac_app_env_does_not_rewrite_source_roots_to_docker_paths(tmp_path: Path) -> None:
