@@ -775,6 +775,16 @@ class ProcessingPipeline:
         with self._session_factory() as session:
             return self._active_library_job(session) is not None
 
+    def has_pending_sync_work(self) -> bool:
+        """유휴 틱에서 '통합 동기화를 돌릴 이유가 있는지' 저비용 판정.
+
+        파일 변화는 디렉터리 stat 스윕(스캔 없음), 이미지 AI 백로그는
+        limit-1 쿼리만 본다. 스케줄러가 주기마다 호출한다.
+        """
+        if self._scanner.has_changes():
+            return True
+        return self.has_semantic_maintenance_work()
+
     def has_semantic_maintenance_work(self) -> bool:
         """Return True when idle image-AI/search maintenance has useful work."""
         with self._session_factory() as session:

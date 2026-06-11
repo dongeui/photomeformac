@@ -36,7 +36,7 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source_root: Path) -
     monkeypatch.setenv("PHOTOMINE_DERIVED_ROOT", str(derived_root))
     monkeypatch.setenv("PHOTOMINE_DATABASE_PATH", str(database_path))
     monkeypatch.setenv("PHOTOMINE_STABILITY_WINDOW_SECONDS", "1")
-    monkeypatch.setenv("PHOTOMINE_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_SYNC_SCHEDULER_ENABLED", "0")
     monkeypatch.setenv("PHOTOMINE_LOG_LEVEL", "ERROR")
 
     app = create_app(load_settings())

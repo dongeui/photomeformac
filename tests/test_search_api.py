@@ -53,7 +53,7 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source_root: Path) -
     monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
     monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
     monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
-    monkeypatch.setenv("PHOTOME_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_SYNC_SCHEDULER_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
@@ -819,7 +819,7 @@ def test_scan_accepts_host_path_and_maps_it_to_docker_mount(
     monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
     monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
     monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
-    monkeypatch.setenv("PHOTOME_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_SYNC_SCHEDULER_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
@@ -865,7 +865,7 @@ def test_scan_rejects_unmounted_explicit_docker_path_instead_of_falling_back(
     monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
     monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
     monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
-    monkeypatch.setenv("PHOTOME_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_SYNC_SCHEDULER_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
@@ -1108,7 +1108,10 @@ def test_async_job_dashboard_restores_phase_cards_from_local_storage(client: Tes
     assert "1. 대상" in html
     assert 'id="m-ai-state"' in html
     assert "function updateAiMetricState(payload, phase1OwnsActive, phase2OwnsActive)" in html
-    assert "이미지 AI 자동 처리 대상" in html
+    assert "다음 동기화에서 이어서 처리" in html
+    # 통합 동기화: 별도 유휴 이미지 AI 스케줄/백그라운드 작업 표기는 없어야 한다.
+    assert "background_task" not in html
+    assert "자동 동기화" in html
     assert 'const phase1StorageKey = "photome.dashboard.phase1.job";' in html
     # phase2 카드 제거(B-8): 관련 JS/스토리지 키도 함께 사라져야 한다.
     assert "phase2StorageKey" not in html
@@ -1142,7 +1145,7 @@ def test_async_job_dashboard_restores_phase_cards_from_local_storage(client: Tes
     assert "function renderLibraryJob(job)" in html
     assert "resumeJob(phase1StorageKey, scanCard, phase1RetryButton, scanResult, renderScanJob);" in html
     assert 'fetch("/scan/retry-errors/async"' in html
-    assert 'cycleSchedule("library", phase1ScheduleButton)' in html
+    assert "toggleSyncAuto(phase1ScheduleButton)" in html
     assert "sourceRootsField.value = rememberedSourceRoots;" in html
     assert 'id="source-picker-open"' in html
     assert 'fetch(`/source-roots/browse?' in html
@@ -1375,7 +1378,7 @@ def test_startup_recovers_interrupted_library_jobs(monkeypatch: pytest.MonkeyPat
     monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
     monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
     monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
-    monkeypatch.setenv("PHOTOME_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("PHOTOME_SYNC_SCHEDULER_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
     monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
@@ -1405,28 +1408,33 @@ def test_startup_recovers_interrupted_library_jobs(monkeypatch: pytest.MonkeyPat
             assert recovered.result_json["progress"]["resume_supported"] is True
 
 
-def test_cycle_scheduler_phase_updates_runtime_schedule(client: TestClient) -> None:
-    client.app.state.scheduler.stop()
-    first = client.post("/scheduler/cycle/library")
-    second = client.post("/scheduler/cycle/library")
-    phase2 = client.post("/scheduler/cycle/phase2")
+def test_sync_auto_toggle_updates_runtime_config(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from dataclasses import replace
 
-    assert first.status_code == 200
-    assert first.json()["scheduler"]["phase1_interval_hours"] == 6
-    assert first.json()["scheduler"]["library_interval_hours"] == 6
-    assert second.status_code == 200
-    assert second.json()["scheduler"]["phase1_interval_hours"] == 12
-    assert second.json()["scheduler"]["library_interval_hours"] == 12
-    assert phase2.status_code == 200
-    assert phase2.json()["scheduler"]["phase2_interval_hours"] == 6
-    assert first.json()["scheduler"]["next_library_run_at"] is not None
-    assert phase2.json()["scheduler"]["next_semantic_maintenance_at"] is not None
+    scheduler = client.app.state.scheduler
+    scheduler.stop()
+    # 테스트 fixture는 env 킬스위치를 꺼두므로 토글 효과를 보려면 켠다.
+    monkeypatch.setattr(scheduler, "_settings", replace(scheduler._settings, sync_scheduler_enabled=True))
+
+    off = client.post("/scheduler/sync-auto", json={"enabled": False})
+    assert off.status_code == 200
+    assert off.json()["scheduler"]["sync_auto_enabled"] is False
+    assert off.json()["scheduler"]["enabled"] is False
+    assert off.json()["scheduler"]["next_sync_run_at"] is None
+
+    on = client.post("/scheduler/sync-auto", json={"enabled": True})
+    assert on.status_code == 200
+    assert on.json()["scheduler"]["sync_auto_enabled"] is True
+    assert on.json()["scheduler"]["enabled"] is True
+    assert on.json()["scheduler"]["next_sync_run_at"] is not None
+
+    bad = client.post("/scheduler/sync-auto", json={"enabled": "yes"})
+    assert bad.status_code == 422
 
     with client.app.state.database.session_factory() as session:
         runtime_config = session.get(SchedulerRuntimeConfig, 1)
         assert runtime_config is not None
-        assert runtime_config.last_phase1_run_at is not None
-        assert runtime_config.last_phase2_run_at is not None
+        assert bool(runtime_config.sync_enabled) is True
 
 
 def test_semantic_maintenance_async_defaults_to_manual_batch_size(
@@ -1456,51 +1464,50 @@ def test_semantic_maintenance_async_defaults_to_manual_batch_size(
     assert captured == {"batch_size": 1000, "run_now": False, "trigger": "api-async"}
 
 
-def test_scheduler_runs_idle_semantic_maintenance_in_background(
+def test_scheduler_tick_submits_unified_sync_only_when_work_pending(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """통합 스케줄: 주기가 되면 할 일(파일 변화/AI 백로그)이 있을 때만
+    스캔+분석 통합 잡 하나를 제출한다. 별도 유휴 이미지 AI 경로는 없다."""
+    from dataclasses import replace
+
     scheduler = client.app.state.scheduler
     scheduler.stop()
+    monkeypatch.setattr(scheduler, "_settings", replace(scheduler._settings, sync_scheduler_enabled=True))
     now = datetime.utcnow()
-    calls: list[int] = []
-    active_snapshots: list[dict[str, object | None]] = []
+    submitted: list[dict[str, object]] = []
 
-    with client.app.state.database.session_factory() as session:
-        config = session.get(SchedulerRuntimeConfig, 1) or SchedulerRuntimeConfig(id=1)
-        config.phase1_interval_hours = None
-        config.phase2_interval_hours = None
-        config.last_phase2_run_at = now - timedelta(seconds=601)
-        session.add(config)
-        session.commit()
+    def fake_submit(**kwargs):
+        submitted.append(kwargs)
 
-    monkeypatch.setattr(client.app.state.pipeline, "has_semantic_maintenance_work", lambda: True)
+    monkeypatch.setattr(client.app.state.pipeline, "submit_scan_job", fake_submit)
 
-    def fake_maintenance(*, batch_size: int):
-        calls.append(batch_size)
-        snapshot = scheduler.snapshot(now)
-        active_snapshots.append(
-            {
-                "kind": snapshot.background_task_kind,
-                "state": snapshot.background_task_state,
-                "message": snapshot.background_task_message,
-            }
-        )
-        return {"pending": batch_size, "succeeded": 0, "failed": 0, "has_more": True}
-
-    monkeypatch.setattr(client.app.state.pipeline, "run_semantic_maintenance", fake_maintenance)
-
+    # 할 일 있음 → 통합 잡 제출
+    monkeypatch.setattr(client.app.state.pipeline, "has_pending_sync_work", lambda: True)
     scheduler.tick(now)
+    assert len(submitted) == 1
+    assert submitted[0]["full_scan"] is True
+    assert submitted[0]["run_now"] is True
+    assert submitted[0]["trigger"] == "scheduler-sync"
+    assert scheduler.snapshot(now).last_sync_run_at is not None
 
-    assert calls == [500]
-    assert active_snapshots == [
-        {
-            "kind": "semantic_maintenance",
-            "state": "running",
-            "message": "이미지 AI 누락분을 뒤에서 분석 중",
-        }
-    ]
-    assert scheduler.snapshot(now).background_task_state is None
+    # 주기가 안 됐으면 프로브조차 안 돈다
+    monkeypatch.setattr(
+        client.app.state.pipeline,
+        "has_pending_sync_work",
+        lambda: pytest.fail("주기 전에 프로브가 호출됨"),
+    )
+    scheduler.tick(now + timedelta(seconds=1))
+    assert len(submitted) == 1
+
+    # 주기는 됐지만 할 일 없음 → 제출 없이 틱만 소비
+    later = now + timedelta(seconds=601)
+    monkeypatch.setattr(client.app.state.pipeline, "has_pending_sync_work", lambda: False)
+    scheduler.tick(later)
+    assert len(submitted) == 1
+    last_run = scheduler.snapshot(later).last_sync_run_at
+    assert last_run is not None and last_run >= later
 
 
 def test_run_scan_job_persists_running_state_before_long_work(

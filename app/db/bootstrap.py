@@ -51,6 +51,7 @@ def build_database_state(settings: AppSettings) -> DatabaseState:
     _ensure_face_version_column(engine)
     _ensure_geocoding_aliases_column(engine)
     _ensure_person_merge_columns(engine)
+    _ensure_sync_scheduler_columns(engine)
     _migrate_auto_tag_types(engine)
     session_factory = create_session_factory(engine)
     logger.info("database bootstrapped", extra={"database_url": settings.database_url})
@@ -140,6 +141,33 @@ def _ensure_person_merge_columns(engine: Engine) -> None:
             ))
     except Exception as exc:
         logger.warning("person merge columns migration failed", extra={"error": str(exc)})
+
+
+def _ensure_sync_scheduler_columns(engine: Engine) -> None:
+    """phase1/phase2 이원 스케줄을 단일 통합 동기화 스케줄로 마이그레이션.
+
+    sync_enabled  : 자동 동기화 토글 (NULL=켜짐 기본값)
+    last_sync_run_at : 마지막 동기화 틱. 기존 phase1/phase2 마지막 실행 중
+                       더 최근 값을 이어받아 재시작 직후 중복 실행을 피한다.
+    옛 phase 컬럼은 물리적으로 남지만 모델/코드에서는 더 이상 읽지 않는다.
+    """
+    if engine.dialect.name != "sqlite":
+        return
+    try:
+        with engine.begin() as conn:
+            columns = {row[1] for row in conn.execute(text("PRAGMA table_info(scheduler_runtime_config)")).all()}
+            if "sync_enabled" not in columns:
+                conn.execute(text("ALTER TABLE scheduler_runtime_config ADD COLUMN sync_enabled BOOLEAN"))
+            if "last_sync_run_at" not in columns:
+                conn.execute(text("ALTER TABLE scheduler_runtime_config ADD COLUMN last_sync_run_at DATETIME"))
+                if {"last_phase1_run_at", "last_phase2_run_at"} <= columns:
+                    conn.execute(text(
+                        "UPDATE scheduler_runtime_config SET last_sync_run_at = "
+                        "MAX(COALESCE(last_phase1_run_at, '1970-01-01'), COALESCE(last_phase2_run_at, '1970-01-01')) "
+                        "WHERE last_phase1_run_at IS NOT NULL OR last_phase2_run_at IS NOT NULL"
+                    ))
+    except Exception as exc:
+        logger.warning("sync scheduler columns migration failed", extra={"error": str(exc)})
 
 
 def _migrate_auto_tag_types(engine: Engine) -> None:

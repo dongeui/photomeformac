@@ -243,8 +243,12 @@ def _source_root_guidance(settings: AppSettings) -> str:
     )
 
 
-def _schedule_label(hours: int | None) -> str:
-    return "꺼짐" if hours is None else f"{hours}시간"
+def _sync_auto_label(scheduler: dict[str, Any]) -> str:
+    if not scheduler.get("sync_auto_enabled"):
+        return "꺼짐"
+    interval_seconds = int(scheduler.get("sync_interval_seconds") or 0)
+    minutes = max(1, interval_seconds // 60)
+    return f"켜짐 · {minutes}분마다 확인"
 
 
 def _phase_state_label(value: str) -> str:
@@ -706,20 +710,15 @@ async def dashboard(request: Request) -> HTMLResponse:
         if phase2_active
         else ("사진 가져오기가 끝날 때까지 대기 중" if phase1_active else "대기 중")
     )
-    phase1_schedule_label = _schedule_label(payload["scheduler"].get("library_interval_hours"))
-    phase2_schedule_label = ""  # unified into library schedule
+    sync_auto_label = _sync_auto_label(payload["scheduler"])
     semantic_coverage = semantic["coverage"]
-    scheduler_background_semantic_active = (
-        scheduler.get("background_task_kind") in {"semantic_backfill", "semantic_maintenance"}
-        and scheduler.get("background_task_state") == "running"
-    )
     # 단일 소스: coverage가 캐노니컬이다. ai_summary.remaining_clip은 같은
     # 카운트에서 파생된 표시용 사본이라 폴백으로 섞어 읽지 않는다.
     ai_pending_count = int(semantic_coverage.get("remaining_for_clip") or 0)
-    if phase2_active or scheduler_background_semantic_active:
+    if phase2_active:
         ai_metric_state_label = "진행 중"
         ai_metric_state_class = "metric-state-badge is-running"
-        ai_metric_state_detail = str(scheduler.get("background_task_message") or phase2_live_text or "이미지 AI 분석 중")
+        ai_metric_state_detail = str(phase2_live_text or "이미지 AI 분석 중")
     elif phase1_active:
         ai_metric_state_label = "대기"
         ai_metric_state_class = "metric-state-badge is-waiting"
@@ -727,10 +726,9 @@ async def dashboard(request: Request) -> HTMLResponse:
     elif ai_pending_count:
         ai_metric_state_label = "진행 중"
         ai_metric_state_class = "metric-state-badge is-running"
-        next_ai_run = scheduler.get("next_semantic_maintenance_at") or "자동 주기"
+        next_ai_run = scheduler.get("next_sync_run_at") or "자동 주기"
         ai_metric_state_detail = (
-            f"남은 {ai_pending_count}개가 있어 이미지 AI 자동 처리 대상입니다. "
-            f"전체 동기화 중이 아니면 백그라운드에서 순차 처리합니다. 다음 확인: {next_ai_run}"
+            f"남은 {ai_pending_count}개는 다음 동기화에서 이어서 처리됩니다. 다음 확인: {next_ai_run}"
         )
     else:
         ai_metric_state_label = "완료"
@@ -2058,11 +2056,11 @@ async def dashboard(request: Request) -> HTMLResponse:
         <h2 class="scan-title">라이브러리 동기화 <span id="phase1-state-badge" class="run-badge {'is-running' if phase1_active else ''}">{phase1_state_label}</span> <span id="nas-status-badge" class="nas-badge nas-unknown">NAS 확인 중…</span></h2>
         <p class="sub">사진 폴더와 자동 실행만 설정합니다. 동기화 시작과 진행 상황은 메뉴 막대의 Photome 아이콘에서 봅니다.</p>
         <div class="pill-row">
-          <button type="button" class="pill pill-button" id="phase1-schedule-button" title="자동 실행 간격 변경"><strong>자동 실행</strong> {phase1_schedule_label}</button>
+          <button type="button" class="pill pill-button" id="phase1-schedule-button" title="자동 동기화 켜기/끄기"><strong>자동 동기화</strong> {sync_auto_label}</button>
         </div>
         <div class="list compact-list" style="margin-top:14px;">
-          <div class="row"><span>다음 실행</span><span id="p1-next-scan">{escape(str(scheduler.get('next_library_run_at')))}</span></div>
-          <div class="row"><span>마지막 실행</span><span id="p1-last-scan">{escape(str(scheduler.get('last_library_run_at')))}</span></div>
+          <div class="row"><span>다음 확인</span><span id="p1-next-scan">{escape(str(scheduler.get('next_sync_run_at')))}</span></div>
+          <div class="row"><span>마지막 확인</span><span id="p1-last-scan">{escape(str(scheduler.get('last_sync_run_at')))}</span></div>
         </div>
         <form class="scan-form" id="phase1-scan-form" onsubmit="return false">
           <label>
@@ -2960,8 +2958,10 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (kind === "semantic_backfill") return "AI 분석";
       return "사진첩 작업";
     }}
-    function scheduleLabel(hours) {{
-      return hours === null || hours === undefined ? "꺼짐" : `${{hours}}시간`;
+    function syncAutoLabel(sched) {{
+      if (!sched?.sync_auto_enabled) return "꺼짐";
+      const minutes = Math.max(1, Math.floor((sched.sync_interval_seconds || 0) / 60));
+      return `켜짐 · ${{minutes}}분마다 확인`;
     }}
     function activeJobId(job) {{
       return job?.job_id || job?.id || "";
@@ -3071,14 +3071,13 @@ async def dashboard(request: Request) -> HTMLResponse:
       const perf = payload?.performance || {{}};
       const cov = payload?.semantic?.coverage || {{}};
       const pending = Number(cov.remaining_for_clip ?? perf?.ai_summary?.remaining_clip ?? 0);
-      const backgroundActive = ["semantic_backfill", "semantic_maintenance"].includes(sched.background_task_kind) && sched.background_task_state === "running";
       let label = "완료";
       let className = "metric-state-badge is-idle";
       let note = "현재 이미지 AI 대상 사진은 모두 완료됐습니다.";
-      if (phase2OwnsActive || backgroundActive) {{
+      if (phase2OwnsActive) {{
         label = "진행 중";
         className = "metric-state-badge is-running";
-        note = sched.background_task_message || (phase2OwnsActive ? detailedProgress(activeLibraryJob) : "이미지 AI 분석 중");
+        note = detailedProgress(activeLibraryJob) || "이미지 AI 분석 중";
       }} else if (phase1OwnsActive) {{
         label = "대기";
         className = "metric-state-badge is-waiting";
@@ -3086,7 +3085,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       }} else if (pending > 0) {{
         label = "진행 중";
         className = "metric-state-badge is-running";
-        note = `남은 ${{pending}}개가 있어 이미지 AI 자동 처리 대상입니다. 전체 동기화 중이 아니면 백그라운드에서 순차 처리합니다. 다음 확인: ${{sched.next_semantic_maintenance_at || "자동 주기"}}`;
+        note = `남은 ${{pending}}개는 다음 동기화에서 이어서 처리됩니다. 다음 확인: ${{sched.next_sync_run_at || "자동 주기"}}`;
       }}
       const badge = document.getElementById("m-ai-state");
       if (badge) {{
@@ -3234,7 +3233,7 @@ async def dashboard(request: Request) -> HTMLResponse:
           }}
         }}
 
-        if (phase1ScheduleButton) phase1ScheduleButton.innerHTML = `<strong>Auto-run</strong> ${{scheduleLabel(sched.library_interval_hours)}}`;
+        if (phase1ScheduleButton) phase1ScheduleButton.innerHTML = `<strong>자동 동기화</strong> ${{syncAutoLabel(sched)}}`;
 
         // Impact metrics
         if (cat.breakdown?.total !== undefined) _setText("m-total", cat.breakdown.total + "개");
@@ -3255,8 +3254,8 @@ async def dashboard(request: Request) -> HTMLResponse:
         // Phase 1 card rows
         if (sched.last_poll_at !== undefined) _setText("p1-last-poll", sched.last_poll_at ?? "—");
         if (sched.next_poll_at !== undefined) _setText("p1-next-poll", sched.next_poll_at ?? "—");
-        if (sched.last_library_run_at !== undefined) _setText("p1-last-scan", sched.last_library_run_at ?? "—");
-        if (sched.next_library_run_at !== undefined) _setText("p1-next-scan", sched.next_library_run_at ?? "—");
+        if (sched.last_sync_run_at !== undefined) _setText("p1-last-scan", sched.last_sync_run_at ?? "—");
+        if (sched.next_sync_run_at !== undefined) _setText("p1-next-scan", sched.next_sync_run_at ?? "—");
         const missingEl = document.getElementById("p1-missing");
         if (missingEl && health.missing !== undefined) {{
           missingEl.className = health.missing ? "status-warn" : "";
@@ -3268,19 +3267,21 @@ async def dashboard(request: Request) -> HTMLResponse:
         updateLibraryJobGuards();
       }} catch (_error) {{}}
     }}
-    async function cycleSchedule(phase, button) {{
+    async function toggleSyncAuto(button) {{
       if (!button) return;
       button.disabled = true;
       try {{
-        const response = await fetch(`/scheduler/cycle/${{phase}}`, {{ method: "POST" }});
+        const next = !(schedulerSnapshot?.sync_auto_enabled ?? true);
+        const response = await fetch("/scheduler/sync-auto", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify({{ enabled: next }}),
+        }});
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || `HTTP ${{response.status}}`);
         const scheduler = payload.scheduler || {{}};
-        if (phase === "library" || phase === "phase1") {{
-          button.innerHTML = `<strong>Auto-run</strong> ${{scheduleLabel(scheduler.library_interval_hours ?? scheduler.phase1_interval_hours)}}`;
-        }} else {{
-          button.innerHTML = `<strong>Auto-run</strong> ${{scheduleLabel(scheduler.phase2_interval_hours)}}`;
-        }}
+        schedulerSnapshot = scheduler;
+        button.innerHTML = `<strong>자동 동기화</strong> ${{syncAutoLabel(scheduler)}}`;
         await refreshDashboardStatus();
       }} catch (error) {{
         scanResult.classList.add("visible");
@@ -3570,7 +3571,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     }}
     updateLibraryJobGuards();
     setInterval(refreshDashboardStatus, 3000);
-    phase1ScheduleButton?.addEventListener("click", () => cycleSchedule("library", phase1ScheduleButton));
+    phase1ScheduleButton?.addEventListener("click", () => toggleSyncAuto(phase1ScheduleButton));
     sourcePickerOpen?.addEventListener("click", () => {{
       if (!sourcePicker) return;
       sourcePicker.hidden = !sourcePicker.hidden;
@@ -4226,8 +4227,8 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
             },
             "scheduler": serialize_scheduler_snapshot(scheduler.snapshot()),
             "semantic": {
-                "scheduler_enabled": settings.semantic_scheduler_enabled,
-                "scheduler_interval_seconds": settings.semantic_scheduler_interval_seconds,
+                "scheduler_enabled": settings.sync_scheduler_enabled,
+                "scheduler_interval_seconds": settings.sync_scheduler_interval_seconds,
                 "versions": {
                     "place": settings.semantic_place_version,
                     "person": settings.semantic_person_version,
@@ -4382,10 +4383,13 @@ async def status_detail(category: str, request: Request) -> dict[str, Any]:
         return {"category": category, "summary": summary, "notes": notes, "items": items}
 
 
-@router.post("/scheduler/cycle/{phase}")
-async def cycle_scheduler_phase(phase: str, request: Request) -> dict[str, Any]:
-    if phase not in {"library", "phase1", "phase2"}:
-        raise HTTPException(status_code=404, detail="unknown scheduler phase")
+@router.post("/scheduler/sync-auto")
+async def set_sync_auto(request: Request) -> dict[str, Any]:
+    """자동 동기화(통합 스캔+이미지 AI) 토글."""
+    body = await request.json()
+    enabled = body.get("enabled")
+    if not isinstance(enabled, bool):
+        raise HTTPException(status_code=422, detail="'enabled' must be a boolean")
     scheduler = require_state(request, "scheduler")
-    snapshot = scheduler.cycle_phase_schedule(phase)
+    snapshot = scheduler.set_sync_auto(enabled)
     return {"scheduler": serialize_scheduler_snapshot(snapshot)}

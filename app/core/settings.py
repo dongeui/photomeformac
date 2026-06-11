@@ -138,10 +138,8 @@ class AppSettings:
     thumbnail_size: int
     include_hidden_files: bool
     stability_window_seconds: int
-    scheduler_enabled: bool
-    scheduler_poll_interval_seconds: int
-    semantic_scheduler_enabled: bool
-    semantic_scheduler_interval_seconds: int
+    sync_scheduler_enabled: bool
+    sync_scheduler_interval_seconds: int
     semantic_ocr_enabled: bool
     semantic_ocr_heuristic_enabled: bool
     semantic_clip_enabled: bool
@@ -238,10 +236,16 @@ def load_settings() -> AppSettings:
         thumbnail_size=_env_int("PHOTOME_THUMBNAIL_SIZE", 512),
         include_hidden_files=_env_bool("PHOTOME_INCLUDE_HIDDEN_FILES", False),
         stability_window_seconds=_env_int("PHOTOME_STABILITY_WINDOW_SECONDS", 300),
-        scheduler_enabled=_env_bool("PHOTOME_SCHEDULER_ENABLED", False),
-        scheduler_poll_interval_seconds=_env_int("PHOTOME_SCHEDULER_POLL_INTERVAL_SECONDS", 900),
-        semantic_scheduler_enabled=_env_bool("PHOTOME_SEMANTIC_SCHEDULER_ENABLED", True),
-        semantic_scheduler_interval_seconds=_env_int("PHOTOME_SEMANTIC_SCHEDULER_INTERVAL_SECONDS", 600),
+        # 통합 동기화(스캔+이미지 AI) 스케줄러. 옛 SEMANTIC_SCHEDULER_* 이름은
+        # 레거시 별칭으로만 읽는다.
+        sync_scheduler_enabled=_env_bool(
+            "PHOTOME_SYNC_SCHEDULER_ENABLED",
+            _env_bool("PHOTOME_SEMANTIC_SCHEDULER_ENABLED", True),
+        ),
+        sync_scheduler_interval_seconds=_env_int(
+            "PHOTOME_SYNC_SCHEDULER_INTERVAL_SECONDS",
+            _env_int("PHOTOME_SEMANTIC_SCHEDULER_INTERVAL_SECONDS", 600),
+        ),
         semantic_ocr_enabled=_env_bool("PHOTOME_OCR_ENABLED", True),
         semantic_ocr_heuristic_enabled=_env_bool("PHOTOME_OCR_HEURISTIC_ENABLED", True),
         semantic_clip_enabled=_env_bool("PHOTOME_CLIP_ENABLED", False),

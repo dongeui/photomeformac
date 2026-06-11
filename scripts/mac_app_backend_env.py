@@ -60,8 +60,9 @@ def build_backend_env(
         "PHOTOME_DATABASE_PATH": str(data_root / "photome.sqlite3"),
         "PHOTOME_OFFLINE_MODE": "1" if offline_mode else "0",
         "PHOTOME_CLIP_ENABLED": "1" if clip_enabled else "0",
-        "PHOTOME_SCHEDULER_ENABLED": "0",
-        "PHOTOME_SEMANTIC_SCHEDULER_ENABLED": "1" if clip_enabled else "0",
+        # 통합 동기화(스캔+이미지 AI) 스케줄러 — CLIP 없는 빌드에서도 스캔은
+        # 자동으로 돌아야 하므로 항상 켠다.
+        "PHOTOME_SYNC_SCHEDULER_ENABLED": "1",
         "PHOTOME_ENV_FILE": str(root / "photome.env"),
         # 맥앱이 supervisor임을 알린다 → 백엔드가 부모 사망을 감지해 자가 종료
         # (고아 백엔드 누적 방지, app/core/single_instance.py).
