@@ -65,3 +65,32 @@ def test_corrupt_cache_file_is_ignored(tmp_path: Path) -> None:
     cache = DirMtimeCache()
     cache.attach_persistence(cache_path)
     assert len(cache) == 0  # corrupt file → empty start, no crash
+
+
+def test_save_entries_writes_snapshot_without_touching_memory(tmp_path: Path) -> None:
+    cache_path = tmp_path / "scan_cache.json"
+    cache = DirMtimeCache()
+    cache.attach_persistence(cache_path)
+    cache.update(Path("/photos/a"), 100)
+    cache.update(Path("/photos/b"), 200)
+
+    # 체크포인트: 완료된 a만 담긴 스냅샷 저장
+    cache.save_entries({"/photos/a": 100})
+
+    reloaded = DirMtimeCache()
+    reloaded.attach_persistence(cache_path)
+    assert reloaded.get(Path("/photos/a")) == 100
+    assert reloaded.get(Path("/photos/b")) is None
+    # 메모리 캐시는 그대로
+    assert cache.get(Path("/photos/b")) == 200
+
+
+def test_forget_removes_entry_so_dir_is_rewalked(tmp_path: Path) -> None:
+    cache = DirMtimeCache()
+    cache.update(Path("/photos/a"), 100)
+    assert not cache.is_changed(Path("/photos/a"), 100)
+
+    cache.forget(Path("/photos/a"))
+
+    assert cache.is_changed(Path("/photos/a"), 100)
+    assert cache.entries() == {}

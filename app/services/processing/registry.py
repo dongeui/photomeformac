@@ -464,6 +464,18 @@ class MediaCatalog:
                 continue
             yield unicodedata.normalize("NFC", current_path)
 
+    def iter_missing_media_paths(self, active_source_roots: set[str]):
+        """Yield (source_root, current_path) for media marked missing.
+
+        디렉터리 mtime 캐시가 unchanged 디렉터리를 건너뛰므로, missing 파일이
+        디렉터리 변경 없이 되살아난 경우(NAS 재연결 등)는 스캔이 따로
+        재확인해야 한다."""
+        query = select(MediaFile.source_root, MediaFile.current_path).where(MediaFile.status == "missing")
+        for source_root, current_path in self._session.execute(query):
+            if active_source_roots and source_root not in active_source_roots:
+                continue
+            yield source_root, current_path
+
     def mark_missing_except(self, seen_paths: set[str], active_source_roots: set[str]) -> int:
         missing_count = 0
         query = select(MediaFile.file_id, MediaFile.source_root, MediaFile.current_path, MediaFile.status)

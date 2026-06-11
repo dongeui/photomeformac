@@ -1874,3 +1874,28 @@ def test_load_query_feedback_scopes_promote_and_returns_corrections(
     assert a in pinned              # hint "바다" ⊆ query tokens → pinned
     assert b not in pinned          # hint "강아지" absent from query → not pinned
     assert corrections.get(c) == "노을"  # correct_tag surfaced for the reranker
+
+
+def test_scan_cache_excludes_dirs_with_unstable_files(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    """안정화 대기 파일이 있는 폴더는 dir mtime 캐시에 남기지 않는다.
+
+    남겨두면 다음 스캔이 폴더를 건너뛰어 그 파일이 영영 ingest되지 않는다.
+    """
+    import json
+
+    create_image(source_root / "fresh-unstable.jpg")
+    client.post("/scan")  # 생성 직후라 안정화 창(1초)을 못 넘긴 상태
+
+    cache_path = Path(client.app.state.settings.data_root) / "scan_cache.json"
+    assert cache_path.is_file()
+    assert str(source_root) not in json.loads(cache_path.read_text(encoding="utf-8"))
+
+    time.sleep(SCAN_DELAY_SECONDS)
+    client.post("/scan")
+
+    assert str(source_root) in json.loads(cache_path.read_text(encoding="utf-8"))
+    items = client.get("/media", params={"q": "unstable"}).json()["items"]
+    assert len(items) == 1

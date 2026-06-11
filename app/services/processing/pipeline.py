@@ -180,7 +180,9 @@ class ProcessingPipeline:
         self._asset_processing_workers = max(1, min(asset_worker_cap(), int(asset_processing_workers or 1)))
         self._semantic_maintenance_batch_size = max(50, min(5000, int(semantic_maintenance_batch_size or SEMANTIC_MAINTENANCE_BATCH_SIZE)))
         self._semantic_manual_batch_size = max(50, min(5000, int(semantic_manual_batch_size or SEMANTIC_MANUAL_BATCH_SIZE)))
-        self._dir_mtime_cache = dir_mtime_cache or DirMtimeCache()
+        # `or` 금지: DirMtimeCache는 __len__이 있어 비어 있으면 falsy다.
+        # 첫 부팅(빈 캐시)에 영속화가 붙은 인스턴스를 버리는 사고가 났었다.
+        self._dir_mtime_cache = dir_mtime_cache if dir_mtime_cache is not None else DirMtimeCache()
         self._semantic_maintenance_lock = Lock()
         self._library_submit_lock = Lock()
 

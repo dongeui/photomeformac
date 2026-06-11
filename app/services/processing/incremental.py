@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from datetime import datetime
 import logging
 from pathlib import Path
+import time
 from typing import Any, Callable
 import unicodedata
 
 from sqlalchemy.orm import Session
 
+from app.core.contracts import FileScanRecord, MediaKind, media_kind_from_path
 from app.services.fingerprint.service import FingerprintService
 from app.services.metadata.service import MetadataService
 from app.services.processing.registry import MediaCatalog
@@ -18,6 +20,11 @@ from app.services.scanner.service import DirMtimeCache, ScannerService, _path_ex
 
 
 logger = logging.getLogger(__name__)
+
+# 스캔 도중 dir mtime 캐시 체크포인트 저장 주기. 수만 장 NAS 라이브러리의
+# 첫 검증 walk는 몇 시간씩 걸리는데, 완주 시점에만 저장하면 중간에 재시작/
+# NAS 끊김이 한 번이라도 나면 다음 스캔이 전체를 처음부터 다시 걷는다.
+_SCAN_CACHE_CHECKPOINT_SECONDS = 60.0
 
 
 def _scan_progress_message(total: int, current: int, created: int, updated: int) -> str:
@@ -62,7 +69,8 @@ class IncrementalScanService:
         self._metadata_service = metadata_service
         # Persists across scan invocations (and across backend restarts when
         # attach_persistence has been set on the cache) to enable delta scanning.
-        self._dir_mtime_cache = dir_mtime_cache or DirMtimeCache()
+        # `or` 금지: DirMtimeCache는 __len__이 있어 비어 있으면 falsy다.
+        self._dir_mtime_cache = dir_mtime_cache if dir_mtime_cache is not None else DirMtimeCache()
 
     def run(self, session: Session, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> IncrementalScanSummary:
         catalog = MediaCatalog(session)
@@ -139,6 +147,40 @@ class IncrementalScanService:
                     extra={"source_root": str(source_root), "error_count": root_scanner.error_count},
                 )
 
+        # missing으로 표시된 파일이 디렉터리 변경 없이 되살아난 경우(NAS 재연결,
+        # 수동 복원 등)는 mtime 캐시 때문에 walk가 못 본다. 따로 재확인한다.
+        # seen_paths는 DB 사전 채움이 섞여 있어 기준이 못 되고, walk가 실제로
+        # 내놓은 경로만 중복 제외한다.
+        walked_paths = {unicodedata.normalize("NFC", str(record.path)) for record in scan_records}
+        for missing_root, missing_path in catalog.iter_missing_media_paths(active_source_roots):
+            nfc_path = unicodedata.normalize("NFC", missing_path)
+            if nfc_path in walked_paths:
+                continue
+            path = Path(missing_path)
+            media_kind = media_kind_from_path(path)
+            if media_kind != MediaKind.IMAGE:
+                continue
+            try:
+                stat_result = path.stat()
+            except OSError:
+                continue
+            root = Path(missing_root)
+            try:
+                relative_path = path.relative_to(root)
+            except ValueError:
+                continue
+            seen_paths.add(nfc_path)
+            scan_records.append(
+                FileScanRecord(
+                    source_root=root,
+                    path=path,
+                    relative_path=relative_path,
+                    size_bytes=stat_result.st_size,
+                    mtime_ns=stat_result.st_mtime_ns,
+                    media_kind=media_kind,
+                )
+            )
+
         total = len(scan_records)
         if progress_callback is not None:
             progress_callback(
@@ -150,14 +192,43 @@ class IncrementalScanService:
                 }
             )
 
+        # 체크포인트: walk가 캐시에 미리 적어둔 디렉터리 중 "모든 파일의 DB
+        # 반영이 끝난" 디렉터리까지만 디스크에 저장한다. walk는 디렉터리
+        # 단위로 파일을 연속으로 내놓으므로, 부모 경로가 바뀌는 순간 직전
+        # 디렉터리는 완료된 것이다. 안정화 대기 파일이 있는 디렉터리는
+        # 캐시에 남기면 그 파일이 영영 다시 관찰되지 않으므로 제외한다.
+        checkpoint_entries = self._dir_mtime_cache.entries()
+        unstable_dirs: set[str] = set()
+        previous_parent: str | None = None
+        last_checkpoint_at = time.monotonic()
+
+        def _fold_completed_dir(dir_key: str) -> None:
+            if dir_key in unstable_dirs:
+                return
+            cached_mtime = self._dir_mtime_cache.get(Path(dir_key))
+            if cached_mtime is not None:
+                checkpoint_entries[dir_key] = cached_mtime
+
         for index, scan_record in enumerate(scan_records, start=1):
             scanned = index
+            parent_key = str(scan_record.path.parent)
+            if previous_parent is not None and parent_key != previous_parent:
+                _fold_completed_dir(previous_parent)
+                checkpoint_now = time.monotonic()
+                if checkpoint_now - last_checkpoint_at >= _SCAN_CACHE_CHECKPOINT_SECONDS:
+                    # 캐시보다 DB가 앞서야 안전하다(반대면 사진이 유실된다).
+                    session.commit()
+                    self._dir_mtime_cache.save_entries(checkpoint_entries)
+                    last_checkpoint_at = checkpoint_now
+            previous_parent = parent_key
+
             observation = catalog.observe_scan(
                 scan_record,
                 now=now,
                 stability_window_seconds=self._scanner.config.stability_window_seconds,
             )
             if not observation.ready:
+                unstable_dirs.add(parent_key)
                 continue
 
             try:
@@ -258,6 +329,9 @@ class IncrementalScanService:
         session.commit()
         # Persist directory mtime cache so the next backend boot skips unchanged
         # directories instead of treating the whole library as new.
+        # 안정화 대기 파일이 있던 디렉터리는 다음 스캔이 다시 걷도록 제외한다.
+        for dir_key in unstable_dirs:
+            self._dir_mtime_cache.forget(dir_key)
         self._dir_mtime_cache.save()
         return IncrementalScanSummary(
             scanned=scanned,

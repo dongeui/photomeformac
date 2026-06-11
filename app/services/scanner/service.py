@@ -71,6 +71,13 @@ class DirMtimeCache:
     def get(self, dir_path: Path) -> int | None:
         return self._mtimes.get(str(dir_path))
 
+    def entries(self) -> dict[str, int]:
+        return dict(self._mtimes)
+
+    def forget(self, dir_path: Path | str) -> None:
+        """다음 스캔이 이 디렉터리를 다시 걷도록 캐시에서 제거한다."""
+        self._mtimes.pop(str(dir_path), None)
+
     def clear(self) -> None:
         self._mtimes.clear()
 
@@ -98,12 +105,21 @@ class DirMtimeCache:
         self._mtimes = loaded
 
     def save(self) -> None:
+        self.save_entries(self._mtimes)
+
+    def save_entries(self, entries: dict[str, int]) -> None:
+        """임의 스냅샷을 원자적으로 저장한다.
+
+        스캔 도중 체크포인트 저장용 — 메모리의 전체 캐시(_mtimes)에는 아직
+        DB에 ingest되지 않은 디렉터리도 들어 있어, '완전히 처리된 디렉터리
+        까지'만 담은 스냅샷을 따로 받아 저장해야 중단돼도 안전하다.
+        """
         if self._persist_path is None:
             return
         try:
             self._persist_path.parent.mkdir(parents=True, exist_ok=True)
             tmp_path = self._persist_path.with_suffix(self._persist_path.suffix + ".tmp")
-            tmp_path.write_text(json.dumps(self._mtimes, ensure_ascii=False), encoding="utf-8")
+            tmp_path.write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
             os.replace(tmp_path, self._persist_path)
         except OSError as exc:
             logger.warning("scan cache save failed", extra={"path": str(self._persist_path), "error": str(exc)})
