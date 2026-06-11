@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import math
 import time
 from pathlib import Path
 from typing import Iterable, Iterator
@@ -347,6 +349,89 @@ def test_people_unmerge_restores_source_person_and_faces(
 
     # 이미 분리된 source는 다시 unmerge할 수 없다.
     assert client.post(f"/people/{target_id}/unmerge/{source_id}").status_code == 404
+
+
+def _normalized(vector: list[float]) -> list[float]:
+    norm = math.sqrt(sum(value * value for value in vector))
+    return [value / norm for value in vector]
+
+
+def _write_face_embedding_file(embeddings_root: Path, ref: str, embedding: list[float]) -> None:
+    path = embeddings_root / Path(ref).relative_to("embeddings")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"embedding": embedding}), encoding="utf-8")
+
+
+def test_merge_and_unmerge_recompute_person_centroids(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    first_path = source_root / "centroid-first.jpg"
+    second_path = source_root / "centroid-second.jpg"
+    create_image(first_path, color=(100, 40, 40))
+    create_image(second_path, color=(40, 100, 40))
+
+    scan_twice(client)
+    first_item = get_media_item(client, filename="centroid-first.jpg")
+    second_item = get_media_item(client, filename="centroid-second.jpg")
+    embedding_a = [0.1, 0.2, 0.3]
+    embedding_b = [0.4, 0.5, 0.6]
+    persist_fake_face_analysis(
+        client,
+        first_item["file_id"],
+        FakeFaceAnalyzer(
+            build_face_analysis_result(
+                first_path,
+                [{"name": "person-000001", "bbox": (6, 8, 18, 18), "confidence": 0.99, "embedding": tuple(embedding_a)}],
+            )
+        ),
+    )
+    persist_fake_face_analysis(
+        client,
+        second_item["file_id"],
+        FakeFaceAnalyzer(
+            build_face_analysis_result(
+                second_path,
+                [{"name": "person-000002", "bbox": (6, 8, 18, 18), "confidence": 0.99, "embedding": tuple(embedding_b)}],
+            )
+        ),
+    )
+
+    embeddings_root = client.app.state.settings.embeddings_root
+    people = client.get("/people").json()
+    target_id = next(person["id"] for person in people if person["display_name"] == "person-000001")
+    source_id = next(person["id"] for person in people if person["display_name"] == "person-000002")
+
+    # 테스트 헬퍼는 fake:// ref만 기록하므로, 실제 임베딩 파일과 ref를 만들어 준다.
+    with client.app.state.database.session_factory() as session:
+        for person_id, embedding in ((target_id, embedding_a), (source_id, embedding_b)):
+            face = session.scalars(select(Face).where(Face.person_id == person_id)).one()
+            ref = f"embeddings/faces/v1/te/{face.file_id}-face-000.json"
+            _write_face_embedding_file(embeddings_root, ref, embedding)
+            face.embedding_ref = ref
+        session.commit()
+
+    assert client.post(
+        "/people/merge",
+        json={"target_person_id": target_id, "source_person_ids": [source_id]},
+    ).status_code == 200
+
+    target_centroid_path = embeddings_root / "people" / "v1" / f"person-{target_id:06d}.json"
+    merged_payload = json.loads(target_centroid_path.read_text(encoding="utf-8"))
+    assert merged_payload["sample_count"] == 2
+    unit_a, unit_b = _normalized(embedding_a), _normalized(embedding_b)
+    expected_merged = _normalized([(a + b) / 2 for a, b in zip(unit_a, unit_b)])
+    assert merged_payload["embedding"] == pytest.approx(expected_merged)
+
+    assert client.post(f"/people/{target_id}/unmerge/{source_id}").status_code == 200
+
+    target_after = json.loads(target_centroid_path.read_text(encoding="utf-8"))
+    assert target_after["sample_count"] == 1
+    assert target_after["embedding"] == pytest.approx(unit_a)
+    source_centroid_path = embeddings_root / "people" / "v1" / f"person-{source_id:06d}.json"
+    source_after = json.loads(source_centroid_path.read_text(encoding="utf-8"))
+    assert source_after["sample_count"] == 1
+    assert source_after["embedding"] == pytest.approx(unit_b)
 
 
 def test_deleted_person_media_is_hidden_from_people_manager(

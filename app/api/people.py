@@ -21,6 +21,7 @@ from app.models.person import Person
 from app.models.semantic import SearchDocument
 from app.models.tag import Tag
 from app.services.image_decode import ensure_heif_support
+from app.services.processing.person_centroids import recompute_person_centroid
 from app.services.semantic import SemanticCatalog
 from app.services.search.hybrid import clear_query_cache
 from app.services.search.vocab import TagVocabularyCache
@@ -437,6 +438,11 @@ def merge_people(body: MergePeopleRequest, request: Request) -> PersonResponse:
         clear_query_cache()
         TagVocabularyCache.invalidate()
         session.refresh(target)
+        # 분류기에도 병합을 반영: target 센트로이드를 합쳐진 얼굴 전체로 재계산해
+        # 같은 사람의 새 사진이 또 새 그룹으로 빠지지 않게 한다.
+        recompute_person_centroid(
+            session, embeddings_root=request.app.state.settings.embeddings_root, person=target
+        )
         return _person_response(session, target)
 
 
@@ -485,6 +491,10 @@ def unmerge_person(target_id: int, source_id: int, request: Request) -> PersonRe
         clear_query_cache()
         TagVocabularyCache.invalidate()
         session.refresh(source)
+        # 센트로이드도 분리 결과대로 양쪽 모두 재계산한다.
+        embeddings_root = request.app.state.settings.embeddings_root
+        recompute_person_centroid(session, embeddings_root=embeddings_root, person=source)
+        recompute_person_centroid(session, embeddings_root=embeddings_root, person=target)
         return _person_response(session, source)
 
 
@@ -595,6 +605,7 @@ def assign_face(face_id: int, body: AssignFaceRequest, request: Request) -> Resp
             if target is None or target.merged_into_id is not None:
                 raise HTTPException(status_code=404, detail="Target person not found")
         file_id = str(face.file_id)
+        previous_person_id = face.person_id
         face.person_id = body.person_id
         # 수동 재할당은 새로운 확정 소속이므로 병합 origin 추적을 끊는다
         # (이후 unmerge가 이 얼굴을 다시 끌고 가지 않도록).
@@ -603,6 +614,12 @@ def assign_face(face_id: int, body: AssignFaceRequest, request: Request) -> Resp
         session.commit()
         clear_query_cache()
         TagVocabularyCache.invalidate()
+        # 사용자 교정을 분류기에 반영: 얼굴이 빠진 쪽/들어간 쪽 센트로이드 재계산.
+        embeddings_root = request.app.state.settings.embeddings_root
+        for person_id in {previous_person_id, body.person_id} - {None}:
+            person = session.get(Person, int(person_id))
+            if person is not None:
+                recompute_person_centroid(session, embeddings_root=embeddings_root, person=person)
     return Response(status_code=204)
 
 
