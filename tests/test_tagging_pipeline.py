@@ -267,6 +267,88 @@ def test_people_merge_reassigns_faces_and_rebuilds_person_search(
     assert search.json()["items"][0]["file_id"] == second_item["file_id"]
 
 
+def test_people_unmerge_restores_source_person_and_faces(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    first_path = source_root / "unmerge-first.jpg"
+    second_path = source_root / "unmerge-second.jpg"
+    create_image(first_path, color=(100, 40, 40))
+    create_image(second_path, color=(40, 100, 40))
+
+    scan_twice(client)
+    first_item = get_media_item(client, filename="unmerge-first.jpg")
+    second_item = get_media_item(client, filename="unmerge-second.jpg")
+    persist_fake_face_analysis(
+        client,
+        first_item["file_id"],
+        FakeFaceAnalyzer(
+            build_face_analysis_result(
+                first_path,
+                [{"name": "person-000001", "bbox": (6, 8, 18, 18), "confidence": 0.99, "embedding": (0.1, 0.2, 0.3)}],
+            )
+        ),
+    )
+    persist_fake_face_analysis(
+        client,
+        second_item["file_id"],
+        FakeFaceAnalyzer(
+            build_face_analysis_result(
+                second_path,
+                [{"name": "person-000002", "bbox": (6, 8, 18, 18), "confidence": 0.99, "embedding": (0.4, 0.5, 0.6)}],
+            )
+        ),
+    )
+
+    people = client.get("/people").json()
+    target_id = next(person["id"] for person in people if person["display_name"] == "person-000001")
+    source_id = next(person["id"] for person in people if person["display_name"] == "person-000002")
+    assert client.patch(f"/people/{target_id}", json={"display_name": "민준", "aliases": ["쭈니"]}).status_code == 200
+    assert client.patch(f"/people/{source_id}", json={"display_name": "민준후보", "aliases": ["주니어"]}).status_code == 200
+    assert client.post(
+        "/people/merge",
+        json={"target_person_id": target_id, "source_person_ids": [source_id]},
+    ).status_code == 200
+
+    manage = client.get("/people/manage").text
+    assert "합쳐짐" in manage
+    assert f"unmergePerson({target_id},{source_id})" in manage
+
+    unmerge = client.post(f"/people/{target_id}/unmerge/{source_id}")
+
+    assert unmerge.status_code == 200
+    restored = unmerge.json()
+    assert restored["id"] == source_id
+    assert restored["display_name"] == "민준후보"
+    assert "주니어" in restored["aliases"]
+    assert restored["media_count"] == 1
+
+    assert client.get(f"/people/{source_id}").status_code == 200
+    target_after = client.get(f"/people/{target_id}").json()
+    assert "민준후보" not in target_after["aliases"]
+    assert "주니어" not in target_after["aliases"]
+    assert "쭈니" in target_after["aliases"]
+    assert target_after["media_count"] == 1
+
+    with client.app.state.database.session_factory() as session:
+        face_person_ids = set(session.scalars(select(Face.person_id)).all())
+        second_labels = set(
+            session.scalars(
+                select(Tag.tag_value).where(Tag.tag_type == "person", Tag.file_id == second_item["file_id"])
+            )
+        )
+    assert face_person_ids == {target_id, source_id}
+    assert {"민준후보", "주니어"}.issubset(second_labels)
+    assert "민준" not in second_labels
+
+    search = client.get("/search", params={"q": "주니어 사진"})
+    assert search.status_code == 200
+    assert search.json()["items"][0]["file_id"] == second_item["file_id"]
+
+    # 이미 분리된 source는 다시 unmerge할 수 없다.
+    assert client.post(f"/people/{target_id}/unmerge/{source_id}").status_code == 404
+
+
 def test_deleted_person_media_is_hidden_from_people_manager(
     client: TestClient,
     source_root: Path,

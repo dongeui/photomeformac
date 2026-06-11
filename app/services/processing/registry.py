@@ -364,14 +364,35 @@ class MediaCatalog:
 
         person = self._session.execute(
             select(Person)
-            .where(Person.display_name == normalized_name)
+            .where(Person.display_name == normalized_name, Person.merged_into_id.is_(None))
             .order_by(Person.id.asc())
         ).scalars().first()
+        if person is None:
+            # 같은 이름이 병합돼 숨겨진 경우, 숨은 사람이 아니라 병합 target에 붙인다.
+            merged = self._session.execute(
+                select(Person)
+                .where(Person.display_name == normalized_name, Person.merged_into_id.isnot(None))
+                .order_by(Person.id.asc())
+            ).scalars().first()
+            if merged is not None:
+                person = self._resolve_merge_target(merged)
         if person is None:
             person = Person(display_name=normalized_name)
             self._session.add(person)
             self._session.flush()
         return person
+
+    def _resolve_merge_target(self, person: Person) -> Person:
+        """Follow merged_into_id links to the visible person at the end of the chain."""
+        visited = {int(person.id)}
+        current = person
+        while current.merged_into_id is not None:
+            target = self._session.get(Person, int(current.merged_into_id))
+            if target is None or int(target.id) in visited:
+                break
+            visited.add(int(target.id))
+            current = target
+        return current
 
     def mark_missing(self, file_id: str) -> None:
         media_file = self._session.get(MediaFile, file_id)

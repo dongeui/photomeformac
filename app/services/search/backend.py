@@ -793,7 +793,8 @@ class SqlAlchemyHybridSearchBackend:
         ]
         if not tokens:
             return tuple(sorted(internal_ids))
-        persons = self._session.scalars(select(Person)).all()
+        # 병합돼 숨겨진 사람은 제외 — 라벨은 병합 target의 alias로 이미 흡수돼 있다.
+        persons = self._session.scalars(select(Person).where(Person.merged_into_id.is_(None))).all()
         matched_ids: set[int] = set(internal_ids)
         for person in persons:
             labels = [person.display_name, *list(person.aliases_json or [])]

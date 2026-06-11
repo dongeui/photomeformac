@@ -2033,7 +2033,10 @@ class ProcessingPipeline:
 
     def _load_person_centroids(self, session: Session) -> list[PersonCentroidState]:
         states: list[PersonCentroidState] = []
-        people = session.scalars(select(Person).order_by(Person.id.asc())).all()
+        # 병합돼 숨겨진 사람은 제외 — 새 얼굴이 숨은 클러스터에 붙으면 안 된다.
+        people = session.scalars(
+            select(Person).where(Person.merged_into_id.is_(None)).order_by(Person.id.asc())
+        ).all()
         for person in people:
             relative_path = self._person_centroid_relative_path(person.id)
             payload = self._read_json(relative_path)

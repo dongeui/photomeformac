@@ -85,6 +85,7 @@ def list_people(request: Request) -> list[PersonResponse]:
             )
             .outerjoin(Face, Face.person_id == Person.id)
             .outerjoin(MediaFile, MediaFile.file_id == Face.file_id)
+            .where(Person.merged_into_id.is_(None))
             .group_by(Person.id)
             .having(func.count(Face.id).filter(_active_media_predicate()) > 0)
             .order_by(func.count(Face.id).filter(_active_media_predicate()).desc())
@@ -158,6 +159,10 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvet
 .side-item.active{background:var(--accent-soft);color:var(--accent);font-weight:500;}
 .content{flex:1;min-width:0;display:flex;flex-direction:column;}
 @media (max-width:720px){.layout{flex-direction:column;}.sidebar{width:auto;flex:none;height:auto;position:static;border-right:none;border-bottom:1px solid var(--line);flex-direction:row;flex-wrap:wrap;gap:4px;}}
+.mergedrow{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.merged-chip{display:inline-flex;align-items:center;gap:2px;background:var(--accent-soft);color:var(--accent);padding:2px 4px 2px 9px;border-radius:6px;font-weight:500;}
+.merged-undo{border:none;background:transparent;color:var(--accent);cursor:pointer;font-size:14px;line-height:1;padding:0 3px;}
+.merged-undo:hover{opacity:.6;}
 """
 
 _PEOPLE_MANAGE_JS = """
@@ -197,6 +202,11 @@ async function mergeSelected(){
   if(r.ok){location.reload();}else{var m='병합 실패';try{m=(await r.json()).detail||m;}catch(e){}alert(m);}
 }
 function filterRows(q){q=q.trim().toLowerCase();[].slice.call(document.querySelectorAll('.row')).forEach(function(r){r.style.display=(!q||(r.dataset.search||'').indexOf(q)>=0)?'':'none';});}
+async function unmergePerson(targetId,sourceId){
+  if(!confirm('이 사람을 병합에서 분리할까요?\\n원래 이름·애칭과 사진이 복원됩니다.')){return;}
+  var r=await fetch('/people/'+targetId+'/unmerge/'+sourceId,{method:'POST'});
+  if(r.ok){location.reload();}else{var m='분리 실패';try{m=(await r.json()).detail||m;}catch(e){}alert(m);}
+}
 """
 
 
@@ -225,6 +235,13 @@ def _render_people_manage_html(people: list[dict]) -> str:
             )
             search_attr = escape((dn + " " + " ".join(aliases)).lower())
             placeholder = "대표 이름 입력" if is_unnamed else "이름"
+            merged_sources = p.get("merged_sources") or []
+            merged_chips = "".join(
+                f'<span class="merged-chip">{escape(str(m["label"]))}'
+                f'<button type="button" class="merged-undo" onclick="unmergePerson({pid},{int(m["id"])})" title="병합 해제 (이 사람 분리)">↩</button></span>'
+                for m in merged_sources
+            )
+            merged_row = f'<div class="mergedrow">합쳐짐: {merged_chips}</div>' if merged_chips else ""
             parts.append(
                 f'''
         <div class="row{' unnamed' if is_unnamed else ''}" data-pid="{pid}" data-search="{search_attr}">
@@ -240,6 +257,7 @@ def _render_people_manage_html(people: list[dict]) -> str:
             <div class="aliasrow">
               <input class="pm-aliases" value="{escape(', '.join(aliases))}" placeholder="애칭 (쉼표로 구분)" aria-label="애칭" onkeydown="onNameKey(event,{pid})">
             </div>
+            {merged_row}
           </div>
           <a class="count" href="{gallery_href}">{int(p.get('media_count') or 0)}장 · 얼굴 {int(p.get('face_count') or 0)}회</a>
         </div>'''
@@ -303,11 +321,26 @@ def people_manage_page(request: Request) -> HTMLResponse:
             )
             .outerjoin(Face, Face.person_id == Person.id)
             .outerjoin(MediaFile, MediaFile.file_id == Face.file_id)
+            .where(Person.merged_into_id.is_(None))
             .group_by(Person.id)
             .having(candidate)
             .order_by(func.count(Face.id).filter(active).desc(), Person.id.asc())
             .limit(1000)
         ).all()
+        # 각 target에 병합돼 숨겨진 source 목록 (배치 조회로 N+1 회피)
+        merged_rows = session.scalars(
+            select(Person).where(Person.merged_into_id.isnot(None))
+        ).all()
+        merged_by_target: dict[int, list[dict]] = {}
+        for m in merged_rows:
+            label = str(m.display_name)
+            if _INTERNAL_PERSON_ID_RE.match(label.strip()):
+                m_aliases = [
+                    str(a) for a in (m.aliases_json or [])
+                    if str(a).strip() and not _INTERNAL_PERSON_ID_RE.match(str(a).strip())
+                ]
+                label = m_aliases[0] if m_aliases else f"그룹 #{int(m.id)}"
+            merged_by_target.setdefault(int(m.merged_into_id), []).append({"id": int(m.id), "label": label})
         for person, face_count, media_count in rows:
             raw_aliases = person.aliases_json if isinstance(person.aliases_json, list) else []
             aliases = [
@@ -330,6 +363,7 @@ def people_manage_page(request: Request) -> HTMLResponse:
                     "face_count": int(face_count or 0),
                     "media_count": int(media_count or 0),
                     "face_id": int(sample[0]) if sample else None,
+                    "merged_sources": merged_by_target.get(int(person.id), []),
                 }
             )
     return HTMLResponse(_render_people_manage_html(people))
@@ -339,9 +373,7 @@ def people_manage_page(request: Request) -> HTMLResponse:
 def get_person(person_id: int, request: Request) -> PersonResponse:
     database = require_state(request, "database")
     with database.session_factory() as session:
-        person = session.get(Person, person_id)
-        if person is None:
-            raise HTTPException(status_code=404, detail="Person not found")
+        person = _get_visible_person(session, person_id)
         face_count = _person_face_count(session, person_id)
         sample_faces = session.scalars(
             select(Face)
@@ -371,9 +403,12 @@ def merge_people(body: MergePeopleRequest, request: Request) -> PersonResponse:
     search_version = request.app.state.settings.semantic_search_version
     with database.session_factory() as session:
         target = session.get(Person, body.target_person_id)
-        if target is None:
+        if target is None or target.merged_into_id is not None:
             raise HTTPException(status_code=404, detail="Target person not found")
-        sources = session.scalars(select(Person).where(Person.id.in_(source_ids))).all()
+        # 이미 병합돼 숨겨진 사람은 source로 다시 쓸 수 없다(병합 체인 꼬임 방지).
+        sources = session.scalars(
+            select(Person).where(Person.id.in_(source_ids), Person.merged_into_id.is_(None))
+        ).all()
         found_source_ids = {int(person.id) for person in sources}
         missing_ids = [person_id for person_id in source_ids if person_id not in found_source_ids]
         if missing_ids:
@@ -384,10 +419,18 @@ def merge_people(body: MergePeopleRequest, request: Request) -> PersonResponse:
             old_labels.update(_person_labels(source))
 
         merged_aliases = _merge_person_aliases(target, sources)
+        # 얼굴을 target으로 옮기기 전에, 아직 origin이 없는 얼굴은 현재 소속을
+        # merged_from_person_id로 기록한다(최초 origin 보존 → unmerge로 정확히 복원).
+        session.execute(
+            update(Face)
+            .where(Face.person_id.in_(source_ids), Face.merged_from_person_id.is_(None))
+            .values(merged_from_person_id=Face.person_id)
+        )
         session.execute(update(Face).where(Face.person_id.in_(source_ids)).values(person_id=target.id))
         target.aliases_json = merged_aliases
+        # 삭제 대신 숨김(soft-hide): source의 이름/별칭을 보존해 unmerge 시 복원한다.
         for source in sources:
-            session.delete(source)
+            source.merged_into_id = target.id
 
         _sync_person_search_labels(session, target, old_labels=old_labels, search_version=search_version)
         session.commit()
@@ -395,6 +438,54 @@ def merge_people(body: MergePeopleRequest, request: Request) -> PersonResponse:
         TagVocabularyCache.invalidate()
         session.refresh(target)
         return _person_response(session, target)
+
+
+@router.post("/{target_id}/unmerge/{source_id}", response_model=PersonResponse)
+def unmerge_person(target_id: int, source_id: int, request: Request) -> PersonResponse:
+    """Undo one source of a merge: move its faces back and unhide it.
+
+    Flexible per-source unmerge — restores exactly the faces that came from
+    `source_id` (tracked via Face.merged_from_person_id) and reveals the source
+    person again with its original name/aliases intact (it was soft-hidden, not
+    deleted). The source's name/aliases are removed from the target's aliases.
+    """
+    database = require_state(request, "database")
+    search_version = request.app.state.settings.semantic_search_version
+    with database.session_factory() as session:
+        source = session.get(Person, source_id)
+        if source is None or source.merged_into_id != target_id:
+            raise HTTPException(status_code=404, detail="merged source not found for this target")
+        target = session.get(Person, target_id)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Target person not found")
+
+        old_target_labels = set(_person_labels(target))
+
+        # source에서 온 얼굴만 골라 되돌린다(origin 추적값으로 정확히 분리).
+        session.execute(
+            update(Face)
+            .where(Face.merged_from_person_id == source_id)
+            .values(person_id=source_id, merged_from_person_id=None)
+        )
+        # 숨김 해제 → 이름/별칭은 보존돼 있어 그대로 복원된다.
+        source.merged_into_id = None
+        # target이 흡수했던 source 이름/별칭을 target alias에서 제거.
+        source_labels = {label.casefold() for label in _person_labels(source)}
+        target.aliases_json = [
+            alias for alias in (target.aliases_json or [])
+            if alias.casefold() not in source_labels
+        ]
+
+        # 검색 라벨 재동기화. source 파일에는 병합 시절 붙은 target 라벨이 남아
+        # 있으므로 old_labels로 넘겨 지운다. source를 먼저 돌려야 두 사람이 같이
+        # 나온 파일에서 target 라벨이 지워졌다가 target 동기화로 다시 복원된다.
+        _sync_person_search_labels(session, source, old_labels=old_target_labels, search_version=search_version)
+        _sync_person_search_labels(session, target, old_labels=old_target_labels, search_version=search_version)
+        session.commit()
+        clear_query_cache()
+        TagVocabularyCache.invalidate()
+        session.refresh(source)
+        return _person_response(session, source)
 
 
 @router.patch("/{person_id}", response_model=PersonResponse)
@@ -416,9 +507,7 @@ def rename_person(
     if _INTERNAL_PERSON_ID_RE.match(new_name):
         raise HTTPException(status_code=422, detail="Set a real name or add at least one alias")
     with database.session_factory() as session:
-        person = session.get(Person, person_id)
-        if person is None:
-            raise HTTPException(status_code=404, detail="Person not found")
+        person = _get_visible_person(session, person_id)
         old_labels = _person_labels(person)
         person.display_name = new_name
         person.aliases_json = aliases
@@ -444,9 +533,7 @@ def list_person_media(
     """Return file_ids of media containing this person."""
     database = require_state(request, "database")
     with database.session_factory() as session:
-        person = session.get(Person, person_id)
-        if person is None:
-            raise HTTPException(status_code=404, detail="Person not found")
+        _get_visible_person(session, person_id)
         file_ids = session.scalars(
             select(Face.file_id)
             .where(Face.person_id == person_id)
@@ -466,9 +553,7 @@ def preview_person_media(
     database = require_state(request, "database")
     bounded_limit = min(max(int(limit), 1), 96)
     with database.session_factory() as session:
-        person = session.get(Person, person_id)
-        if person is None:
-            raise HTTPException(status_code=404, detail="Person not found")
+        person = _get_visible_person(session, person_id)
         rows = session.execute(
             select(MediaFile, DerivedAsset, func.min(Face.id).label("face_id"))
             .join(Face, Face.file_id == MediaFile.file_id)
@@ -505,10 +590,15 @@ def assign_face(face_id: int, body: AssignFaceRequest, request: Request) -> Resp
         face = session.get(Face, face_id)
         if face is None:
             raise HTTPException(status_code=404, detail="Face not found")
-        if body.person_id is not None and session.get(Person, body.person_id) is None:
-            raise HTTPException(status_code=404, detail="Target person not found")
+        if body.person_id is not None:
+            target = session.get(Person, body.person_id)
+            if target is None or target.merged_into_id is not None:
+                raise HTTPException(status_code=404, detail="Target person not found")
         file_id = str(face.file_id)
         face.person_id = body.person_id
+        # 수동 재할당은 새로운 확정 소속이므로 병합 origin 추적을 끊는다
+        # (이후 unmerge가 이 얼굴을 다시 끌고 가지 않도록).
+        face.merged_from_person_id = None
         _sync_single_file_person_labels(session, file_id, search_version=search_version)
         session.commit()
         clear_query_cache()
@@ -575,6 +665,14 @@ def face_crop(face_id: int, request: Request) -> Response:
 
 import re as _re
 _INTERNAL_PERSON_ID_RE = _re.compile(r"^person-\d+$", _re.IGNORECASE)
+
+
+def _get_visible_person(session, person_id: int) -> Person:
+    """Load a person, treating merged-away (soft-hidden) people as not found."""
+    person = session.get(Person, person_id)
+    if person is None or person.merged_into_id is not None:
+        raise HTTPException(status_code=404, detail="Person not found")
+    return person
 
 
 def _person_aliases(person: Person) -> list[str]:

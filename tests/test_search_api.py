@@ -23,6 +23,7 @@ from app.models.asset import DerivedAsset
 from app.models.job import ProcessingJob
 from app.models.media import MediaFile
 from app.models.person import Person
+from app.models.face import Face
 from app.models.runtime import SchedulerRuntimeConfig
 from app.core.contracts import MediaTagInput
 from app.models.semantic import MediaAnalysisSignal, MediaEmbedding, MediaOCR, SearchDocument, SearchEvent, SearchFeedback
@@ -1092,6 +1093,57 @@ def test_dashboard_people_manager_keeps_visible_alias_input(client: TestClient) 
     assert 'placeholder="애칭 입력, 쉼표로 구분"' in html
     assert "function getAliasesFromForm(form)" in html
     assert 'input.value.split(",").map' in html
+
+
+def test_merged_person_is_hidden_from_people_endpoints(client: TestClient, source_root: Path) -> None:
+    with client.app.state.database.session_factory() as session:
+        media = MediaFile(
+            file_id="merged-person-file-1",
+            current_path=str(source_root / "merged-person.jpg"),
+            filename="merged-person.jpg",
+            source_root=str(source_root),
+            relative_path="merged-person.jpg",
+            media_kind="image",
+            status="active",
+            size_bytes=123,
+            mtime_ns=123,
+            partial_hash="abc",
+        )
+        target = Person(display_name="윤겸", aliases_json=["겸이후보"])
+        session.add_all([media, target])
+        session.flush()
+        hidden = Person(display_name="겸이후보", aliases_json=[], merged_into_id=target.id)
+        session.add(hidden)
+        session.flush()
+        session.add(
+            Face(
+                file_id=media.file_id,
+                person_id=target.id,
+                bbox={"x": 0, "y": 0, "width": 10, "height": 10},
+                merged_from_person_id=hidden.id,
+            )
+        )
+        session.commit()
+        target_id, hidden_id = int(target.id), int(hidden.id)
+
+    people = client.get("/people").json()
+    ids = {person["id"] for person in people}
+    assert target_id in ids
+    assert hidden_id not in ids
+    assert client.get(f"/people/{hidden_id}").status_code == 404
+    assert client.get(f"/people/{hidden_id}/preview").status_code == 404
+    assert client.get(f"/people/{hidden_id}/media").status_code == 404
+    assert (
+        client.post(
+            "/people/merge",
+            json={"target_person_id": hidden_id, "source_person_ids": [target_id]},
+        ).status_code
+        == 404
+    )
+
+    manage = client.get("/people/manage").text
+    assert "합쳐짐" in manage
+    assert f"unmergePerson({target_id},{hidden_id})" in manage
 
 
 def test_preferred_input_source_roots_ignores_mount_exists_errors(monkeypatch: pytest.MonkeyPatch) -> None:

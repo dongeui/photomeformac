@@ -50,6 +50,7 @@ def build_database_state(settings: AppSettings) -> DatabaseState:
     _ensure_people_aliases_column(engine)
     _ensure_face_version_column(engine)
     _ensure_geocoding_aliases_column(engine)
+    _ensure_person_merge_columns(engine)
     _migrate_auto_tag_types(engine)
     session_factory = create_session_factory(engine)
     logger.info("database bootstrapped", extra={"database_url": settings.database_url})
@@ -111,6 +112,34 @@ def _ensure_geocoding_aliases_column(engine: Engine) -> None:
                 conn.execute(text("ALTER TABLE geocoding_cache ADD COLUMN aliases_json JSON NOT NULL DEFAULT '[]'"))
     except Exception as exc:
         logger.warning("geocoding aliases migration failed", extra={"error": str(exc)})
+
+
+def _ensure_person_merge_columns(engine: Engine) -> None:
+    """Add soft-merge tracking so person merges can be undone (unmerge).
+
+    people.merged_into_id  : a hidden source person points at the target it was
+                             merged into (NULL = normal, visible person).
+    faces.merged_from_person_id : the person a face belonged to before a merge,
+                             so unmerge can move exactly those faces back.
+    """
+    if engine.dialect.name != "sqlite":
+        return
+    try:
+        with engine.begin() as conn:
+            people_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(people)")).all()}
+            if "merged_into_id" not in people_cols:
+                conn.execute(text("ALTER TABLE people ADD COLUMN merged_into_id INTEGER"))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_people_merged_into_id ON people (merged_into_id)"
+            ))
+            face_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(faces)")).all()}
+            if "merged_from_person_id" not in face_cols:
+                conn.execute(text("ALTER TABLE faces ADD COLUMN merged_from_person_id INTEGER"))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_faces_merged_from_person_id ON faces (merged_from_person_id)"
+            ))
+    except Exception as exc:
+        logger.warning("person merge columns migration failed", extra={"error": str(exc)})
 
 
 def _migrate_auto_tag_types(engine: Engine) -> None:
