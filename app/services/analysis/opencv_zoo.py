@@ -11,7 +11,9 @@ from urllib.request import Request, urlopen
 
 
 def _default_model_root() -> Path:
-    data_root = Path(os.getenv("PHOTOMINE_DATA_ROOT", "./data")).expanduser().resolve()
+    from app.core.settings import _env
+
+    data_root = Path(_env("PHOTOME_DATA_ROOT", "./data")).expanduser().resolve()
     return data_root / "models"
 
 

@@ -7,10 +7,17 @@ from pathlib import Path
 import os
 
 
+_LEGACY_ENV_PREFIX = "PHOTOMINE_"
+
+
 def _env_value(name: str) -> str | None:
+    """캐노니컬은 PHOTOME_*. 옛 이름 PHOTOMINE_*은 레거시 별칭으로만 읽는다."""
     candidates = [name]
-    if name.startswith("PHOTOMINE_"):
-        candidates.insert(0, name.replace("PHOTOMINE_", "PHOTOME_", 1))
+    if name.startswith("PHOTOME_"):
+        candidates.append(_LEGACY_ENV_PREFIX + name[len("PHOTOME_"):])
+    elif name.startswith(_LEGACY_ENV_PREFIX):
+        # 혹시 남은 옛 선언을 위해: 캐노니컬을 먼저 본다.
+        candidates.insert(0, "PHOTOME_" + name[len(_LEGACY_ENV_PREFIX):])
     for candidate in candidates:
         value = os.getenv(candidate)
         if value is not None and value != "":
@@ -180,7 +187,7 @@ class AppSettings:
 
     @property
     def model_root(self) -> Path:
-        return Path(_env("PHOTOMINE_MODEL_ROOT", str(self.data_root / "models"))).expanduser().resolve()
+        return Path(_env("PHOTOME_MODEL_ROOT", str(self.data_root / "models"))).expanduser().resolve()
 
 
 def _env_float(name: str, default: float) -> float:
@@ -197,80 +204,80 @@ def load_settings() -> AppSettings:
     # 저장된 설정 파일을 먼저 환경에 반영해, 대시보드에서 바꾼 값이 재시작 후에도
     # 유지되게 한다.
     load_env_file()
-    data_root = Path(_env("PHOTOMINE_DATA_ROOT", "./data")).expanduser().resolve()
+    data_root = Path(_env("PHOTOME_DATA_ROOT", "./data")).expanduser().resolve()
     source_roots = _env_paths(
-        "PHOTOMINE_SOURCE_ROOTS",
+        "PHOTOME_SOURCE_ROOTS",
         default=_default_source_roots(),
     )
-    source_root_host_raw = _env_value("PHOTOMINE_SOURCE_ROOT_HOST")
-    source_root_mount_raw = _env_value("PHOTOMINE_SOURCE_ROOT_MOUNT")
+    source_root_host_raw = _env_value("PHOTOME_SOURCE_ROOT_HOST")
+    source_root_mount_raw = _env_value("PHOTOME_SOURCE_ROOT_MOUNT")
     source_root_host = Path(source_root_host_raw).expanduser().resolve() if source_root_host_raw else None
     source_root_mount = Path(source_root_mount_raw).expanduser().resolve() if source_root_mount_raw else None
-    derived_root = Path(_env("PHOTOMINE_DERIVED_ROOT", "./derived_root")).expanduser().resolve()
-    database_path = Path(_env("PHOTOMINE_DATABASE_PATH", str(data_root / "photome.sqlite3"))).expanduser().resolve()
-    database_url = _env("PHOTOMINE_DATABASE_URL", f"sqlite:///{database_path}")
-    offline_mode = _env_bool("PHOTOMINE_OFFLINE_MODE", False)
-    model_root = Path(_env("PHOTOMINE_MODEL_ROOT", str(data_root / "models"))).expanduser().resolve()
-    geocoding_enabled = _env_bool("PHOTOMINE_GEOCODING_ENABLED", True)
+    derived_root = Path(_env("PHOTOME_DERIVED_ROOT", "./derived_root")).expanduser().resolve()
+    database_path = Path(_env("PHOTOME_DATABASE_PATH", str(data_root / "photome.sqlite3"))).expanduser().resolve()
+    database_url = _env("PHOTOME_DATABASE_URL", f"sqlite:///{database_path}")
+    offline_mode = _env_bool("PHOTOME_OFFLINE_MODE", False)
+    model_root = Path(_env("PHOTOME_MODEL_ROOT", str(data_root / "models"))).expanduser().resolve()
+    geocoding_enabled = _env_bool("PHOTOME_GEOCODING_ENABLED", True)
 
     return AppSettings(
-        app_name=_env("PHOTOMINE_APP_NAME", "photome"),
-        app_version=_env("PHOTOMINE_APP_VERSION", "0.1.0"),
-        server_host=_env("PHOTOMINE_SERVER_HOST", "127.0.0.1"),
-        server_port=_env_int("PHOTOMINE_SERVER_PORT", 8000),
-        log_level=_env("PHOTOMINE_LOG_LEVEL", "INFO").upper(),
-        reload=_env_bool("PHOTOMINE_RELOAD", False),
+        app_name=_env("PHOTOME_APP_NAME", "photome"),
+        app_version=_env("PHOTOME_APP_VERSION", "0.1.0"),
+        server_host=_env("PHOTOME_SERVER_HOST", "127.0.0.1"),
+        server_port=_env_int("PHOTOME_SERVER_PORT", 8000),
+        log_level=_env("PHOTOME_LOG_LEVEL", "INFO").upper(),
+        reload=_env_bool("PHOTOME_RELOAD", False),
         offline_mode=offline_mode,
         data_root=data_root,
         source_roots=source_roots,
         source_root_host=source_root_host,
         source_root_mount=source_root_mount,
         derived_root=derived_root,
-        geodata_root=Path(_env("PHOTOMINE_GEODATA_ROOT", str(model_root / "geodata"))).expanduser().resolve(),
+        geodata_root=Path(_env("PHOTOME_GEODATA_ROOT", str(model_root / "geodata"))).expanduser().resolve(),
         database_path=database_path,
         database_url=database_url,
-        partial_hash_bytes=_env_int("PHOTOMINE_PARTIAL_HASH_BYTES", 1_048_576),
-        thumbnail_size=_env_int("PHOTOMINE_THUMBNAIL_SIZE", 512),
-        include_hidden_files=_env_bool("PHOTOMINE_INCLUDE_HIDDEN_FILES", False),
-        stability_window_seconds=_env_int("PHOTOMINE_STABILITY_WINDOW_SECONDS", 300),
-        scheduler_enabled=_env_bool("PHOTOMINE_SCHEDULER_ENABLED", False),
-        scheduler_poll_interval_seconds=_env_int("PHOTOMINE_SCHEDULER_POLL_INTERVAL_SECONDS", 900),
-        scheduler_daily_full_scan_hour=_env_int("PHOTOMINE_SCHEDULER_DAILY_FULL_SCAN_HOUR", 3),
-        scheduler_daily_full_scan_minute=_env_int("PHOTOMINE_SCHEDULER_DAILY_FULL_SCAN_MINUTE", 0),
-        semantic_scheduler_enabled=_env_bool("PHOTOMINE_SEMANTIC_SCHEDULER_ENABLED", True),
-        semantic_scheduler_interval_seconds=_env_int("PHOTOMINE_SEMANTIC_SCHEDULER_INTERVAL_SECONDS", 600),
-        semantic_ocr_enabled=_env_bool("PHOTOMINE_OCR_ENABLED", True),
-        semantic_ocr_heuristic_enabled=_env_bool("PHOTOMINE_OCR_HEURISTIC_ENABLED", True),
-        semantic_clip_enabled=_env_bool("PHOTOMINE_CLIP_ENABLED", False),
-        semantic_clip_model_name=_env("PHOTOMINE_CLIP_MODEL_NAME", "ViT-B-32"),
-        semantic_clip_pretrained=_env("PHOTOMINE_CLIP_PRETRAINED", "openai"),
-        face_analysis_enabled=_env_bool("PHOTOMINE_FACE_ANALYSIS_ENABLED", True),
-        face_detection_score_threshold=_env_float("PHOTOMINE_FACE_DETECTION_SCORE_THRESHOLD", 0.8),
-        face_min_size=_env_int("PHOTOMINE_FACE_MIN_SIZE", 60),
-        face_match_threshold=_env_float("PHOTOMINE_FACE_MATCH_THRESHOLD", 0.363),
-        face_analysis_version=_env("PHOTOMINE_FACE_ANALYSIS_VERSION", "face-v2"),
-        place_tag_precision=_env_int("PHOTOMINE_PLACE_TAG_PRECISION", 3),
+        partial_hash_bytes=_env_int("PHOTOME_PARTIAL_HASH_BYTES", 1_048_576),
+        thumbnail_size=_env_int("PHOTOME_THUMBNAIL_SIZE", 512),
+        include_hidden_files=_env_bool("PHOTOME_INCLUDE_HIDDEN_FILES", False),
+        stability_window_seconds=_env_int("PHOTOME_STABILITY_WINDOW_SECONDS", 300),
+        scheduler_enabled=_env_bool("PHOTOME_SCHEDULER_ENABLED", False),
+        scheduler_poll_interval_seconds=_env_int("PHOTOME_SCHEDULER_POLL_INTERVAL_SECONDS", 900),
+        scheduler_daily_full_scan_hour=_env_int("PHOTOME_SCHEDULER_DAILY_FULL_SCAN_HOUR", 3),
+        scheduler_daily_full_scan_minute=_env_int("PHOTOME_SCHEDULER_DAILY_FULL_SCAN_MINUTE", 0),
+        semantic_scheduler_enabled=_env_bool("PHOTOME_SEMANTIC_SCHEDULER_ENABLED", True),
+        semantic_scheduler_interval_seconds=_env_int("PHOTOME_SEMANTIC_SCHEDULER_INTERVAL_SECONDS", 600),
+        semantic_ocr_enabled=_env_bool("PHOTOME_OCR_ENABLED", True),
+        semantic_ocr_heuristic_enabled=_env_bool("PHOTOME_OCR_HEURISTIC_ENABLED", True),
+        semantic_clip_enabled=_env_bool("PHOTOME_CLIP_ENABLED", False),
+        semantic_clip_model_name=_env("PHOTOME_CLIP_MODEL_NAME", "ViT-B-32"),
+        semantic_clip_pretrained=_env("PHOTOME_CLIP_PRETRAINED", "openai"),
+        face_analysis_enabled=_env_bool("PHOTOME_FACE_ANALYSIS_ENABLED", True),
+        face_detection_score_threshold=_env_float("PHOTOME_FACE_DETECTION_SCORE_THRESHOLD", 0.8),
+        face_min_size=_env_int("PHOTOME_FACE_MIN_SIZE", 60),
+        face_match_threshold=_env_float("PHOTOME_FACE_MATCH_THRESHOLD", 0.363),
+        face_analysis_version=_env("PHOTOME_FACE_ANALYSIS_VERSION", "face-v2"),
+        place_tag_precision=_env_int("PHOTOME_PLACE_TAG_PRECISION", 3),
         geocoding_enabled=geocoding_enabled,
-        semantic_place_version=_env("PHOTOMINE_SEMANTIC_PLACE_VERSION", "place-v3"),
-        semantic_person_version=_env("PHOTOMINE_SEMANTIC_PERSON_VERSION", "person-v1"),
-        semantic_ocr_version=_env("PHOTOMINE_SEMANTIC_OCR_VERSION", "ocr-v1"),
-        semantic_caption_version=_env("PHOTOMINE_SEMANTIC_CAPTION_VERSION", "caption-v1"),
-        semantic_embedding_version=_env("PHOTOMINE_SEMANTIC_EMBEDDING_VERSION", "embedding-v1"),
-        semantic_auto_tag_version=_env("PHOTOMINE_SEMANTIC_AUTO_TAG_VERSION", "auto-v2"),
-        semantic_search_version=_env("PHOTOMINE_SEMANTIC_SEARCH_VERSION", "search-v4"),
-        asset_processing_workers=_clamp(_env_int("PHOTOMINE_ASSET_PROCESSING_WORKERS", 1), 1, asset_worker_cap()),
+        semantic_place_version=_env("PHOTOME_SEMANTIC_PLACE_VERSION", "place-v3"),
+        semantic_person_version=_env("PHOTOME_SEMANTIC_PERSON_VERSION", "person-v1"),
+        semantic_ocr_version=_env("PHOTOME_SEMANTIC_OCR_VERSION", "ocr-v1"),
+        semantic_caption_version=_env("PHOTOME_SEMANTIC_CAPTION_VERSION", "caption-v1"),
+        semantic_embedding_version=_env("PHOTOME_SEMANTIC_EMBEDDING_VERSION", "embedding-v1"),
+        semantic_auto_tag_version=_env("PHOTOME_SEMANTIC_AUTO_TAG_VERSION", "auto-v2"),
+        semantic_search_version=_env("PHOTOME_SEMANTIC_SEARCH_VERSION", "search-v4"),
+        asset_processing_workers=_clamp(_env_int("PHOTOME_ASSET_PROCESSING_WORKERS", 1), 1, asset_worker_cap()),
         torch_threads=(
             _clamp(torch_threads, 1, torch_thread_cap())
-            if (torch_threads := _env_optional_int("PHOTOMINE_TORCH_THREADS")) is not None
+            if (torch_threads := _env_optional_int("PHOTOME_TORCH_THREADS")) is not None
             else None
         ),
         semantic_maintenance_batch_size=_clamp(
-            _env_int("PHOTOMINE_SEMANTIC_MAINTENANCE_BATCH_SIZE", 500),
+            _env_int("PHOTOME_SEMANTIC_MAINTENANCE_BATCH_SIZE", 500),
             50,
             5000,
         ),
         semantic_manual_batch_size=_clamp(
-            _env_int("PHOTOMINE_SEMANTIC_MANUAL_BATCH_SIZE", 1000),
+            _env_int("PHOTOME_SEMANTIC_MANUAL_BATCH_SIZE", 1000),
             50,
             5000,
         ),
