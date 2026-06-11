@@ -62,12 +62,16 @@ async def trigger_scan_async(
     settings = require_state(request, "settings")
     requested_roots = _parse_source_roots(settings, source_root=source_root, source_roots=source_roots)
     try:
-        summary = pipeline.submit_scan_job(
-            full_scan=full_scan,
-            run_now=False,
-            trigger="api-async",
-            retry_errors_only=retry_errors_only,
-            source_roots=requested_roots,
+        # 제출 자체는 짧지만 submit 락이 진행 중인 스캔에 잡혀 있을 수 있다
+        # (최대 락 타임아웃만큼 대기) — 이벤트 루프를 막지 않게 워커로 내린다.
+        summary = await run_in_threadpool(
+            lambda: pipeline.submit_scan_job(
+                full_scan=full_scan,
+                run_now=False,
+                trigger="api-async",
+                retry_errors_only=retry_errors_only,
+                source_roots=requested_roots,
+            )
         )
     except LibraryJobBusyError as exc:
         _raise_active_job_conflict(exc)
@@ -84,11 +88,13 @@ async def trigger_scan_retry_errors_async(
 ) -> dict[str, Any]:
     pipeline = require_state(request, "pipeline")
     try:
-        summary = pipeline.submit_scan_job(
-            full_scan=False,
-            retry_errors_only=True,
-            run_now=False,
-            trigger="api-async-retry-errors",
+        summary = await run_in_threadpool(
+            lambda: pipeline.submit_scan_job(
+                full_scan=False,
+                retry_errors_only=True,
+                run_now=False,
+                trigger="api-async-retry-errors",
+            )
         )
     except LibraryJobBusyError as exc:
         _raise_active_job_conflict(exc)
@@ -145,10 +151,12 @@ async def trigger_semantic_backfill_async(
 ) -> dict[str, Any]:
     pipeline = require_state(request, "pipeline")
     try:
-        summary = pipeline.submit_semantic_backfill_job(
-            batch_size=batch_size,
-            run_now=False,
-            trigger="api-async",
+        summary = await run_in_threadpool(
+            lambda: pipeline.submit_semantic_backfill_job(
+                batch_size=batch_size,
+                run_now=False,
+                trigger="api-async",
+            )
         )
     except LibraryJobBusyError as exc:
         _raise_active_job_conflict(exc)
@@ -179,10 +187,12 @@ async def trigger_semantic_maintenance_async(
 ) -> dict[str, Any]:
     pipeline = require_state(request, "pipeline")
     try:
-        summary = pipeline.submit_semantic_maintenance_job(
-            batch_size=batch_size,
-            run_now=False,
-            trigger="api-async",
+        summary = await run_in_threadpool(
+            lambda: pipeline.submit_semantic_maintenance_job(
+                batch_size=batch_size,
+                run_now=False,
+                trigger="api-async",
+            )
         )
     except LibraryJobBusyError as exc:
         _raise_active_job_conflict(exc)

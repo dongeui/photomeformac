@@ -1343,6 +1343,26 @@ def test_phase1_async_is_blocked_while_phase2_job_is_active(client: TestClient) 
     assert "Phase 2 semantic work is already active" in response.json()["detail"]
 
 
+def test_scan_async_returns_conflict_when_submit_lock_is_held(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """스케줄러의 run_now 스캔이 submit 락을 스캔 내내 쥐고 있는 동안
+    API 제출은 무기한 대기(이벤트 루프 동결) 대신 409로 즉시 응답해야 한다."""
+    import app.services.processing.pipeline as pipeline_module
+
+    pipeline = client.app.state.pipeline
+    monkeypatch.setattr(pipeline_module, "LIBRARY_SUBMIT_LOCK_TIMEOUT_SECONDS", 0.05)
+    assert pipeline._library_submit_lock.acquire(blocking=False)
+    try:
+        response = client.post("/scan/async")
+    finally:
+        pipeline._library_submit_lock.release()
+
+    assert response.status_code == 409
+    assert "Phase 1 scan is already active" in response.json()["detail"]
+
+
 def test_startup_recovers_interrupted_library_jobs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     source_root = tmp_path / "source"
     source_root.mkdir(parents=True, exist_ok=True)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 import json
@@ -13,7 +14,7 @@ from pathlib import Path
 from shutil import which
 from threading import Lock
 from tempfile import NamedTemporaryFile
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 from uuid import uuid4
 
 from sqlalchemy import func, or_, select
@@ -53,6 +54,7 @@ PLACE_TAG_TYPES = frozenset({"place", "location", "place_detail", "geo", "geo_de
 PERSON_TAG_TYPES = frozenset({"person", "people", "face"})
 SEMANTIC_MAINTENANCE_BATCH_SIZE = 500
 SEMANTIC_MANUAL_BATCH_SIZE = 1000
+LIBRARY_SUBMIT_LOCK_TIMEOUT_SECONDS = 5.0
 
 
 def _add_stage_timing(timings: dict[str, float], stage: str, seconds: float) -> None:
@@ -186,6 +188,21 @@ class ProcessingPipeline:
         self._semantic_maintenance_lock = Lock()
         self._library_submit_lock = Lock()
 
+    @contextmanager
+    def _library_submit_guard(self) -> Iterator[None]:
+        # run_now=True 제출(스케줄러 라이브러리 스캔 등)은 작업 전체가 끝날
+        # 때까지 이 락을 쥔다. 그동안 들어온 제출이 무기한 대기하면 호출자
+        # (async 핸들러면 이벤트 루프 전체)가 같이 멈추므로, 짧게 기다린 뒤
+        # busy로 응답한다.
+        if not self._library_submit_lock.acquire(timeout=LIBRARY_SUBMIT_LOCK_TIMEOUT_SECONDS):
+            with self._session_factory() as session:
+                active = self._active_library_job(session)
+            raise LibraryJobBusyError(active or {"job_kind": "scan", "status": ProcessingJobState.RUNNING.value})
+        try:
+            yield
+        finally:
+            self._library_submit_lock.release()
+
     def submit_scan_job(
         self,
         *,
@@ -205,7 +222,7 @@ class ProcessingPipeline:
         if source_roots is not None:
             payload["source_roots"] = [str(path) for path in source_roots]
 
-        with self._library_submit_lock:
+        with self._library_submit_guard():
             with self._session_factory() as session:
                 self._ensure_no_active_library_job(session)
                 job = ProcessingJob(
@@ -269,7 +286,7 @@ class ProcessingPipeline:
         trigger: str = "manual",
     ) -> PipelineSummary:
         payload: dict[str, Any] = {"batch_size": batch_size, "trigger": trigger}
-        with self._library_submit_lock:
+        with self._library_submit_guard():
             with self._session_factory() as session:
                 self._ensure_no_active_library_job(session)
                 job = ProcessingJob(
@@ -300,7 +317,7 @@ class ProcessingPipeline:
     ) -> PipelineSummary:
         resolved_batch_size = int(batch_size or self._semantic_manual_batch_size)
         payload: dict[str, Any] = {"batch_size": resolved_batch_size, "trigger": trigger}
-        with self._library_submit_lock:
+        with self._library_submit_guard():
             with self._session_factory() as session:
                 self._ensure_no_active_library_job(session)
                 job = ProcessingJob(
