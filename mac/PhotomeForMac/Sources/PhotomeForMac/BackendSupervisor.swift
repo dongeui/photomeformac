@@ -89,14 +89,9 @@ final class BackendSupervisor: ObservableObject {
         }
 
         var badgeTitle: String {
-            switch jobKind {
-            case "scan":
-                return "동기화"
-            case "semantic_backfill", "semantic_maintenance":
-                return "이미지 AI"
-            default:
-                return "작업"
-            }
+            // 사용자에게 보이는 작업 종류는 "동기화" 하나다 — 스캔이든 이미지
+            // AI든 같은 통합 동기화의 단계일 뿐, 종류를 구분해 보여주지 않는다.
+            "동기화"
         }
     }
 
@@ -446,15 +441,8 @@ final class BackendSupervisor: ObservableObject {
     }
 
     var menuTitle: String {
-        if let libraryJobStatus, state == .running {
-            switch libraryJobStatus.jobKind {
-            case "scan":
-                return "Photome 스캔 중"
-            case "semantic_backfill", "semantic_maintenance":
-                return "Photome 이미지 AI 중"
-            default:
-                return "Photome 작업 중"
-            }
+        if let libraryJobStatus, state == .running, libraryJobStatus.isRunning {
+            return "Photome 동기화 중"
         }
         switch state {
         case .running: return "Photome 실행 중"
@@ -729,7 +717,7 @@ final class BackendSupervisor: ObservableObject {
         NSWorkspace.shared.open(baseURL.appendingPathComponent("people/manage"))
     }
 
-    /// 진행 중인 동기화/이미지 AI 작업을 취소한다 (메뉴바 "중지").
+    /// 진행 중인 동기화 작업을 취소한다 (메뉴바 "중지").
     func cancelActiveJob() {
         guard let jobID = libraryJobStatus?.jobID, !jobID.isEmpty else {
             statusMessage = "취소할 작업이 없습니다."
@@ -919,29 +907,6 @@ final class BackendSupervisor: ObservableObject {
         }
     }
 
-    func triggerSemanticMaintenance() {
-        guard isRunning else {
-            statusMessage = "먼저 백엔드를 실행하세요."
-            return
-        }
-        guard clipEnabled else {
-            statusMessage = "이미지 AI가 꺼져 있습니다."
-            return
-        }
-        requestNotificationAuthorization()
-        actionTask?.cancel()
-        actionTask = Task { [weak self] in
-            guard let self else { return }
-            let result = await self.postJSON(endpoint: "scan/semantic-maintenance/async")
-            await MainActor.run {
-                self.statusMessage = result.ok ? "이미지 AI 분석을 시작했습니다." : result.message
-                if !result.ok {
-                    self.lastError = result.message
-                }
-            }
-            await self.refreshLibraryJobStatus()
-        }
-    }
 
     private func startHealthLoop() {
         healthTask?.cancel()
@@ -1047,27 +1012,17 @@ final class BackendSupervisor: ObservableObject {
         } else {
             succeeded = true
         }
-        let kindLabel: String
-        switch previous.jobKind {
-        case "scan": kindLabel = "사진 동기화"
-        case "semantic_backfill", "semantic_maintenance": kindLabel = "이미지 AI"
-        default: kindLabel = "작업"
-        }
-        let title = succeeded ? "\(kindLabel) 완료" : "\(kindLabel) 종료"
+        let title = succeeded ? "동기화 완료" : "동기화 종료"
         let body = succeeded
-            ? "백그라운드 \(kindLabel)가 끝났습니다."
-            : "백그라운드 \(kindLabel)가 정상 종료되지 않았습니다. 대시보드에서 상태를 확인하세요."
+            ? "백그라운드 동기화가 끝났습니다."
+            : "백그라운드 동기화가 정상 종료되지 않았습니다. 대시보드에서 상태를 확인하세요."
         scheduleNotification(title: title, body: body)
     }
 
     private func updateDockBadge() {
         let badge: String
         if let job = libraryJobStatus, job.isRunning {
-            switch job.jobKind {
-            case "scan": badge = "스캔"
-            case "semantic_backfill", "semantic_maintenance": badge = "AI"
-            default: badge = "…"
-            }
+            badge = "동기화"
         } else if state == .error {
             badge = "!"
         } else {
@@ -1129,15 +1084,8 @@ final class BackendSupervisor: ObservableObject {
             return detail
         }
         if let job = payload?["job"] as? [String: Any] {
-            let jobKind = job["job_kind"] as? String ?? "job"
             let status = job["status"] as? String ?? "queued"
-            let kindLabel: String
-            switch jobKind {
-            case "scan": kindLabel = "전체 동기화"
-            case "semantic_backfill", "semantic_maintenance": kindLabel = "이미지 AI"
-            default: kindLabel = jobKind
-            }
-            return "\(kindLabel) 작업이 \(status) 상태로 등록됐습니다."
+            return "동기화 작업이 \(status) 상태로 등록됐습니다."
         }
         return "요청을 처리했습니다."
     }
@@ -1155,19 +1103,8 @@ final class BackendSupervisor: ObservableObject {
                 summary: summarizeLibraryJob(active)
             )
         }
-        // 스케줄러가 직접 돌리는 이미지 AI는 processing_jobs 행 없이
-        // scheduler.background_task로만 보고된다 — 잡이 없으면 이를 폴백으로
-        // 읽어 메뉴바 '지금:' 줄과 타이틀이 백그라운드 분석도 보여주게 한다.
-        if let scheduler = payload["scheduler"] as? [String: Any],
-           let kind = scheduler["background_task_kind"] as? String,
-           (scheduler["background_task_state"] as? String) == "running" {
-            return LibraryJobStatus(
-                jobID: nil,
-                jobKind: kind,
-                status: "running",
-                summary: (scheduler["background_task_message"] as? String) ?? "백그라운드 분석 중"
-            )
-        }
+        // 통합 동기화 이후 스케줄러 작업은 항상 processing_jobs 행을 만든다 —
+        // 별도 background_task 보고 경로는 백엔드에서 제거됐다.
         return nil
     }
 
@@ -1205,7 +1142,7 @@ final class BackendSupervisor: ObservableObject {
                 let found = intValue(progress?["files_found"]) ?? total
                 let failed = intValue(scan?["failed"]) ?? 0
                 let eta = formatETA(startedAt: startedAt, current: current, total: total)
-                return "스캔 중 · \(current) / \(total) · 발견 \(found) · 실패 \(failed)\(eta)"
+                return "동기화 중 · \(current) / \(total) · 발견 \(found) · 실패 \(failed)\(eta)"
             }
             let processed = progress?["processed"] as? [String: Any]
             if let total = intValue(processed?["total"]) {
@@ -1218,7 +1155,7 @@ final class BackendSupervisor: ObservableObject {
             let summary = progress?["summary"] as? [String: Any]
             if let scanned = intValue(summary?["scanned"]) {
                 let failed = intValue(summary?["failed"]) ?? 0
-                return "스캔 중 · 발견 \(scanned) · 실패 \(failed)"
+                return "동기화 중 · 발견 \(scanned) · 실패 \(failed)"
             }
             let stage = progress?["stage"] as? String
             let message = progress?["message"] as? String
@@ -1232,7 +1169,7 @@ final class BackendSupervisor: ObservableObject {
         let totalFailed = intValue(progress?["total_failed"]) ?? intValue(progress?["failed"]) ?? 0
         let totalEmbeddings = intValue(progress?["total_embeddings_created"]) ?? intValue(progress?["embeddings_created"]) ?? 0
         let totalTags = intValue(progress?["total_auto_tag_values"]) ?? intValue(progress?["auto_tag_values"]) ?? 0
-        var parts = ["검색 분석 중"]
+        var parts = ["동기화 중 · 사진 분석"]
         if let chunk {
             parts.append("묶음 \(chunk)")
         }

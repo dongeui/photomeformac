@@ -99,7 +99,7 @@ struct PhotomeForMacApp: App {
 /// 메뉴바 아이콘 메뉴. 상태·사진 현황·사진첩 열기 + 폴더 선택·설정·재시작·
 /// 업데이트·자동 시작을 한 단계로 평면 배치한다(SwiftUI MenuBarExtra의 중첩
 /// 서브메뉴는 hover 시 포커스가 메인으로 튀는 버그가 있어 Menu를 쓰지 않는다).
-/// 동기화·이미지 AI 등 제어는 웹의 "설정" 탭으로 일원화했다. 상태는 backend가
+/// 동기화 설정은 웹의 "설정" 탭으로 일원화했다. 상태는 backend가
 /// 2초 폴링으로 갱신하며 메뉴를 열 때마다 최신값으로 평가된다.
 struct MenuBarContent: View {
     @ObservedObject var backend: BackendSupervisor
@@ -191,7 +191,7 @@ final class PhotomeAppDelegate: NSObject, NSApplicationDelegate {
         guard let backend, backend.hasActiveLibraryJob else { return .terminateNow }
         let alert = NSAlert()
         alert.messageText = "백그라운드 작업이 진행 중입니다"
-        alert.informativeText = "지금 종료하면 진행 중인 동기화/이미지 AI 작업이 중단됩니다. 계속 종료할까요?"
+        alert.informativeText = "지금 종료하면 진행 중인 동기화가 중단됩니다. 계속 종료할까요?"
         alert.addButton(withTitle: "종료")
         alert.addButton(withTitle: "취소")
         alert.alertStyle = .warning
