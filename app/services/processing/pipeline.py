@@ -441,22 +441,25 @@ class ProcessingPipeline:
             with self._session_factory() as session:
                 semantic_catalog = SemanticCatalog(session)
                 catalog = MediaCatalog(session)
-                pending = semantic_catalog.list_media_needing_search_document(
-                    version=self._semantic_search_version,
-                    limit=batch_size,
-                    auto_tag_version=self._semantic_auto_tag_version if self._semantic_clip_enabled else None,
-                )
-                search_doc_pending_count = len(pending)
-                if self._semantic_clip_enabled and len(pending) < batch_size:
-                    pending = _merge_media_batches(
-                        pending,
-                        catalog.list_media_needing_embedding(
-                            limit=batch_size,
-                            model_name=self._clip_model_identifier(),
-                            version=self._semantic_embedding_version,
-                        ),
+                # 임베딩 누락분을 배치 앞에 먼저 채운다. 임베딩은 사용자에게
+                # 보이는 "이미지 AI" 진행률이라, 기존 임베딩의 태그/검색문서
+                # 갱신(수만 건)이 큐를 다 차지하면 며칠씩 진행률이 0으로 보인다.
+                pending: list[MediaFile] = []
+                if self._semantic_clip_enabled:
+                    pending = catalog.list_media_needing_embedding(
                         limit=batch_size,
+                        model_name=self._clip_model_identifier(),
+                        version=self._semantic_embedding_version,
                     )
+                search_doc_pending_count = 0
+                if len(pending) < batch_size:
+                    search_doc_batch = semantic_catalog.list_media_needing_search_document(
+                        version=self._semantic_search_version,
+                        limit=batch_size,
+                        auto_tag_version=self._semantic_auto_tag_version if self._semantic_clip_enabled else None,
+                    )
+                    search_doc_pending_count = len(search_doc_batch)
+                    pending = _merge_media_batches(pending, search_doc_batch, limit=batch_size)
                 if self._face_analysis_service is not None and len(pending) < batch_size:
                     face_pending = session.scalars(
                         select(MediaFile)
@@ -557,7 +560,8 @@ class ProcessingPipeline:
 
             # has_more=True only when there are more files to process AND we made real progress.
             # Without the embeddings_created guard, files that need CLIP but can't get it
-            # (model unavailable) keep filling the batch forever via list_media_needing_embedding.
+            # (model unavailable) keep filling the batch forever via list_media_needing_embedding —
+            # 임베딩 우선 선정에서는 그런 항목이 배치 전체를 차지하므로 이 가드가 무한 재시도를 끊는다.
             batch_full = len(pending_ids) == batch_size
             real_progress = search_doc_pending_count > 0 or embeddings_created > 0 or faces_reanalyzed > 0
             return {

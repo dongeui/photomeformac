@@ -315,6 +315,66 @@ def test_semantic_maintenance_fills_missing_clip_embeddings_when_enabled(
     assert second_no_op["pending"] == 0
 
 
+def test_semantic_maintenance_prioritizes_missing_clip_embeddings(
+    client: TestClient,
+    source_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """임베딩 누락분이 검색문서/태그 갱신 백로그보다 먼저 배치에 들어간다."""
+    create_image(source_root / "tag-refresh-backlog.jpg")
+    create_image(source_root / "needs-embedding.jpg")
+    scan_twice(client)
+
+    pipeline = client.app.state.pipeline
+    pipeline._semantic_clip_enabled = True
+
+    def fake_embedding(media_file: MediaFile) -> dict:
+        return {
+            "model_name": "ViT-B-32/openai",
+            "version": pipeline._semantic_embedding_version,
+            "embedding_ref": f"embeddings/clip/{pipeline._semantic_embedding_version}/aa/{media_file.file_id}.npy",
+            "dimensions": 3,
+            "checksum": None,
+        }
+
+    monkeypatch.setattr(pipeline, "_materialize_clip_embedding", fake_embedding)
+    from app.services.analysis import auto_tags
+
+    monkeypatch.setattr(auto_tags, "tags_from_embedding_file", lambda *_args, **_kwargs: [])
+
+    with client.app.state.database.session_factory() as session:
+        backlog = session.scalar(select(MediaFile).where(MediaFile.filename == "tag-refresh-backlog.jpg"))
+        target = session.scalar(select(MediaFile).where(MediaFile.filename == "needs-embedding.jpg"))
+        assert backlog is not None and target is not None
+        # backlog는 임베딩이 이미 있고 검색문서 갱신만 남은 상태로 만든다.
+        session.add(
+            MediaEmbedding(
+                file_id=backlog.file_id,
+                model_name="ViT-B-32/openai",
+                version=pipeline._semantic_embedding_version,
+                embedding_ref="embeddings/clip/test/backlog.npy",
+                dimensions=3,
+            )
+        )
+        document = session.get(SearchDocument, backlog.file_id)
+        assert document is not None
+        session.delete(document)
+        session.commit()
+        backlog_id = backlog.file_id
+        target_id = target.file_id
+
+    result = pipeline.run_semantic_maintenance(batch_size=1)
+
+    assert result["pending"] == 1
+    assert result["embeddings_created"] == 1
+    with client.app.state.database.session_factory() as session:
+        assert (
+            session.scalar(select(MediaEmbedding).where(MediaEmbedding.file_id == target_id)) is not None
+        )
+        # 검색문서 백로그는 다음 배치로 밀린다.
+        assert session.get(SearchDocument, backlog_id) is None
+
+
 def test_clip_embedding_reuse_requires_matching_model_name(
     client: TestClient,
     source_root: Path,
