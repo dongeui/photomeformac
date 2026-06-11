@@ -552,10 +552,10 @@ def test_media_annotation_updates_display_name_description_and_custom_tags(
         if tag["tag_type"] == "custom"
     } == {("custom", "receipt"), ("custom", "family")}
 
+    # 갤러리 카드/라이트박스 간소화(31e5a71) 이후 설명 텍스트는 HTML에 노출되지
+    # 않는다. 제목은 라이트박스 캡션/aria-label로 남고, 설명은 검색으로 검증한다.
     gallery = client.get("/gallery", params={"q": "receipt"}).text
     assert "Trip receipt" in gallery
-    assert "Dinner receipt from the family trip." in gallery
-    assert "no tags" not in gallery
 
     title_search = client.get("/search", params={"q": "Trip"})
     assert title_search.status_code == 200
@@ -563,7 +563,7 @@ def test_media_annotation_updates_display_name_description_and_custom_tags(
 
     gallery_title_search = client.get("/gallery", params={"q": "Trip"}).text
     assert "Trip receipt" in gallery_title_search
-    assert "Dinner receipt from the family trip." in gallery_title_search
+    assert f"card-{item['file_id']}" in gallery_title_search
 
 
 def test_gallery_recovers_from_transient_thumbnail_load_failures(
@@ -641,8 +641,9 @@ def test_gallery_defaults_to_file_mtime_when_exif_datetime_is_missing(
 
     gallery = client.get("/gallery").text
 
+    # 카드에 날짜 텍스트는 더 이상 노출되지 않으므로(31e5a71 간소화),
+    # mtime 폴백은 최신순 정렬 결과로 검증한다.
     assert gallery.index("newer-no-exif.png") < gallery.index("older-no-exif.png")
-    assert "2024-01-01 12:00" in gallery
 
 
 def test_gallery_asset_missing_response_is_not_cached(
