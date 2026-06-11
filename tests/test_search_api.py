@@ -1904,9 +1904,11 @@ def test_scan_cache_excludes_dirs_with_unstable_files(
     client: TestClient,
     source_root: Path,
 ) -> None:
-    """안정화 대기 파일이 있는 폴더는 dir mtime 캐시에 남기지 않는다.
+    """안정화 대기 파일이 있는 폴더는 dirty 센티널(-1)로 캐시에 남는다.
 
-    남겨두면 다음 스캔이 폴더를 건너뛰어 그 파일이 영영 ingest되지 않는다.
+    실제 mtime으로 남기면 다음 스캔이 폴더를 건너뛰어 그 파일이 영영
+    ingest되지 않고, 키를 아예 빼면 walk 시딩에서 빠져 조상 mtime이 안
+    변한 중첩 폴더가 영영 재방문되지 않는다.
     """
     import json
 
@@ -1915,11 +1917,11 @@ def test_scan_cache_excludes_dirs_with_unstable_files(
 
     cache_path = Path(client.app.state.settings.data_root) / "scan_cache.json"
     assert cache_path.is_file()
-    assert str(source_root) not in json.loads(cache_path.read_text(encoding="utf-8"))
+    assert json.loads(cache_path.read_text(encoding="utf-8")).get(str(source_root)) == -1
 
     time.sleep(SCAN_DELAY_SECONDS)
     client.post("/scan")
 
-    assert str(source_root) in json.loads(cache_path.read_text(encoding="utf-8"))
+    assert json.loads(cache_path.read_text(encoding="utf-8")).get(str(source_root), -1) > 0
     items = client.get("/media", params={"q": "unstable"}).json()["items"]
     assert len(items) == 1

@@ -16,7 +16,7 @@ from app.core.contracts import FileScanRecord, MediaKind, media_kind_from_path
 from app.services.fingerprint.service import FingerprintService
 from app.services.metadata.service import MetadataService
 from app.services.processing.registry import MediaCatalog
-from app.services.scanner.service import DirMtimeCache, ScannerService, _path_exists
+from app.services.scanner.service import _DIRTY_MTIME_SENTINEL, DirMtimeCache, ScannerService, _path_exists
 
 
 logger = logging.getLogger(__name__)
@@ -204,6 +204,9 @@ class IncrementalScanService:
 
         def _fold_completed_dir(dir_key: str) -> None:
             if dir_key in unstable_dirs:
+                # 키를 빼지 않고 dirty 센티널로 남긴다 — walk 시딩 목록에는
+                # 있어야 중단 후 재시작해도 이 디렉터리가 다시 읽힌다.
+                checkpoint_entries[dir_key] = _DIRTY_MTIME_SENTINEL
                 return
             cached_mtime = self._dir_mtime_cache.get(Path(dir_key))
             if cached_mtime is not None:
@@ -329,9 +332,10 @@ class IncrementalScanService:
         session.commit()
         # Persist directory mtime cache so the next backend boot skips unchanged
         # directories instead of treating the whole library as new.
-        # 안정화 대기 파일이 있던 디렉터리는 다음 스캔이 다시 걷도록 제외한다.
+        # 안정화 대기 파일이 있던 디렉터리는 dirty 표시해 다음 스캔이 반드시
+        # 다시 읽게 한다(키를 지우면 walk 시딩에서 빠져 영영 재방문 안 됨).
         for dir_key in unstable_dirs:
-            self._dir_mtime_cache.forget(dir_key)
+            self._dir_mtime_cache.mark_dirty(dir_key)
         self._dir_mtime_cache.save()
         return IncrementalScanSummary(
             scanned=scanned,

@@ -29,6 +29,10 @@ _TRANSIENT_ERRNOS = {
 _TRANSIENT_RETRIES = 3
 _TRANSIENT_RETRY_DELAY_SECONDS = 1.0
 
+# mark_dirty()가 쓰는 mtime 센티널. 실제 mtime_ns(>=0)와 절대 일치하지 않아
+# is_changed()가 항상 True → 다음 스캔이 반드시 다시 읽는다.
+_DIRTY_MTIME_SENTINEL = -1
+
 
 def _path_exists(path: Path) -> bool:
     try:
@@ -74,9 +78,14 @@ class DirMtimeCache:
     def entries(self) -> dict[str, int]:
         return dict(self._mtimes)
 
-    def forget(self, dir_path: Path | str) -> None:
-        """다음 스캔이 이 디렉터리를 다시 걷도록 캐시에서 제거한다."""
-        self._mtimes.pop(str(dir_path), None)
+    def mark_dirty(self, dir_path: Path | str) -> None:
+        """다음 스캔이 이 디렉터리를 반드시 다시 읽도록 표시한다.
+
+        키를 지우지 않고 센티널로 덮는다 — walk가 캐시 키를 시작점(시딩)으로
+        삼기 때문에, 키를 지우면 조상 mtime이 안 변한 중첩 디렉터리는 영영
+        다시 방문되지 않는다.
+        """
+        self._mtimes[str(dir_path)] = _DIRTY_MTIME_SENTINEL
 
     def clear(self) -> None:
         self._mtimes.clear()
@@ -175,6 +184,50 @@ class ScannerService:
                 media_kind=media_kind,
             )
 
+    def _seed_dirs(self, source_root: Path) -> list[Path]:
+        """walk 시작점: 소스 루트 + 캐시에 기록된 그 하위 디렉터리 전부.
+
+        변경 없는 디렉터리는 스킵되면서 하위로도 내려가지 않는다. POSIX에서
+        중첩 폴더에 파일이 생겨도 조상 디렉터리 mtime은 안 바뀌므로, 루트만
+        시작점으로 삼으면 캐시가 생긴 뒤 중첩 폴더의 새 파일을 영영 못 본다.
+        캐시에 있는 모든 디렉터리를 직접 시작점으로 삼아 각자 stat으로
+        변화를 판정한다.
+        """
+        dirs = [source_root]
+        cache = self._dir_mtime_cache
+        if cache is not None:
+            root_key = str(source_root)
+            prefix = root_key + os.sep
+            for key in cache.entries():
+                if key != root_key and key.startswith(prefix):
+                    dirs.append(Path(key))
+        return dirs
+
+    def has_changes(self) -> bool:
+        """스캔 없이 '동기화할 파일 변화가 있는지'만 stat 스윕으로 판정한다.
+
+        스케줄러가 유휴 틱마다 호출하는 저비용 프로브. 캐시에 없는 소스
+        루트(첫 스캔 전), mtime이 달라진 디렉터리(파일 추가/삭제, 새 하위
+        폴더 생성, dirty 센티널)가 하나라도 있으면 True.
+        """
+        cache = self._dir_mtime_cache
+        if cache is None:
+            return True
+        for source_root in self._config.source_roots:
+            # 미마운트 NAS는 변화로 치지 않는다 — 재연결 시점에
+            # nas-reconnect 스캔이 따로 제출된다.
+            if not _path_exists(source_root):
+                continue
+            for dir_path in self._seed_dirs(source_root):
+                try:
+                    mtime_ns = os.stat(dir_path).st_mtime_ns
+                except OSError:
+                    # 삭제된 디렉터리는 부모 mtime 변화로 함께 감지된다.
+                    continue
+                if cache.is_changed(dir_path, mtime_ns):
+                    return True
+        return False
+
     def _walk(self, source_root: Path) -> Iterator[Path]:
         """Walk source_root yielding file paths.
 
@@ -182,12 +235,18 @@ class ScannerService:
         the cached value are skipped — their known-good paths are supplied by
         the caller via _cached_paths (populated by IncrementalScanService).
         Only directories whose mtime changed (new/deleted/renamed files) are
-        re-read from the filesystem.
+        re-read from the filesystem. 캐시에 기록된 하위 디렉터리는 전부
+        시작점으로 시딩되므로(_seed_dirs) 조상이 안 변해도 각자 판정된다.
         """
         cache = self._dir_mtime_cache
-        stack = [source_root]
+        stack = self._seed_dirs(source_root)
+        visited: set[str] = set()
         while stack:
             current_dir = stack.pop()
+            current_key = str(current_dir)
+            if current_key in visited:
+                continue
+            visited.add(current_key)
 
             # --- delta shortcut: skip unchanged directories ---
             if cache is not None:
