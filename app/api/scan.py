@@ -9,6 +9,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
 from sqlalchemy.exc import OperationalError
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import require_state
 from app.core.settings import AppSettings
@@ -32,12 +33,16 @@ async def trigger_scan(
     settings = require_state(request, "settings")
     requested_roots = _parse_source_roots(settings, source_root=source_root, source_roots=source_roots)
     try:
-        summary = pipeline.submit_scan_job(
-            full_scan=full_scan,
-            run_now=True,
-            trigger="api",
-            retry_errors_only=retry_errors_only,
-            source_roots=requested_roots,
+        # 스캔 전체가 끝날 때까지 도는 동기 작업 — 이벤트 루프에서 직접 돌리면
+        # 메뉴바 폴링을 포함한 서버 전체가 멈추므로 워커 스레드로 내린다.
+        summary = await run_in_threadpool(
+            lambda: pipeline.submit_scan_job(
+                full_scan=full_scan,
+                run_now=True,
+                trigger="api",
+                retry_errors_only=retry_errors_only,
+                source_roots=requested_roots,
+            )
         )
     except LibraryJobBusyError as exc:
         _raise_active_job_conflict(exc)
@@ -126,7 +131,7 @@ async def trigger_semantic_backfill(
     """Generate CLIP embeddings for any media that missed the semantic pass."""
     pipeline = require_state(request, "pipeline")
     try:
-        result = pipeline.run_semantic_backfill(batch_size=batch_size)
+        result = await run_in_threadpool(pipeline.run_semantic_backfill, batch_size=batch_size)
     except LibraryJobBusyError as exc:
         _raise_active_job_conflict(exc)
     return result
@@ -161,7 +166,7 @@ async def trigger_semantic_maintenance(
     """Refresh Phase 2 search documents for only stale or missing rows."""
     pipeline = require_state(request, "pipeline")
     try:
-        return pipeline.run_semantic_maintenance(batch_size=batch_size)
+        return await run_in_threadpool(pipeline.run_semantic_maintenance, batch_size=batch_size)
     except LibraryJobBusyError as exc:
         _raise_active_job_conflict(exc)
 
