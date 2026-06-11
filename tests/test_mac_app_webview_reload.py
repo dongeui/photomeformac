@@ -60,11 +60,14 @@ def test_menu_bar_only_app_structure() -> None:
     assert "MenuBarExtra(" in content
     assert "setActivationPolicy(.accessory)" in content
     assert "Window(" not in content
-    # 메인 메뉴: 사진첩 열기(기본 브라우저) + 고급 서브메뉴(폴더 선택 등)
+    # 사진첩 열기(기본 브라우저) + 폴더 선택을 한 단계 평면으로 (중첩 Menu 미사용)
     assert 'Button("사진첩 열기")' in content
     assert "backend.openGallery()" in content
-    assert 'Menu("고급")' in content
+    assert 'Menu("고급")' not in content
     assert "backend.choosePhotoFolder()" in content
     # 동기화/이미지 AI 제어는 웹 "설정" 탭으로 이전 — 메뉴바에서 제거
     assert 'Button("전체 동기화 시작")' not in content
     assert 'Button("이미지 AI 이어서 분석")' not in content
+    # 로그/진단/모델 항목도 메뉴바에서 제거
+    assert "backend.showLogs()" not in content
+    assert "backend.prepareAIModel" not in content

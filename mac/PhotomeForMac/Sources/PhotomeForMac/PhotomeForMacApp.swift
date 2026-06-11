@@ -96,8 +96,9 @@ struct PhotomeForMacApp: App {
     }
 }
 
-/// 메뉴바 아이콘 메뉴. 상태·사진 현황 + 사진첩 열기를 메인에 두고, 자주 안 쓰는
-/// 네이티브 조작(폴더 선택/로그/진단/모델/재시작 등)은 "고급" 서브메뉴에 모은다.
+/// 메뉴바 아이콘 메뉴. 상태·사진 현황·사진첩 열기 + 폴더 선택·설정·재시작·
+/// 업데이트·자동 시작을 한 단계로 평면 배치한다(SwiftUI MenuBarExtra의 중첩
+/// 서브메뉴는 hover 시 포커스가 메인으로 튀는 버그가 있어 Menu를 쓰지 않는다).
 /// 동기화·이미지 AI 등 제어는 웹의 "설정" 탭으로 일원화했다. 상태는 backend가
 /// 2초 폴링으로 갱신하며 메뉴를 열 때마다 최신값으로 평가된다.
 struct MenuBarContent: View {
@@ -124,48 +125,30 @@ struct MenuBarContent: View {
 
         Divider()
 
-        Menu("고급") {
-            Button("사진 폴더 선택") {
-                backend.choosePhotoFolder()
-            }
-            Button("설정 열기") {
-                backend.openDashboard()
-            }
-            .disabled(!backend.isRunning)
-            Button("Photome 다시 시작") {
-                backend.restart()
-            }
-            .disabled(backend.isBusy)
+        Button("사진 폴더 선택") {
+            backend.choosePhotoFolder()
+        }
+        Button("설정 열기") {
+            backend.openDashboard()
+        }
+        .disabled(!backend.isRunning)
+        Button("Photome 다시 시작") {
+            backend.restart()
+        }
+        .disabled(backend.isBusy)
 
-            Divider()
+        Divider()
 
-            Button("모델 준비/재로드") {
-                backend.prepareAIModel(loadCached: backend.offlineMode)
-            }
-            .disabled(!backend.isRunning || backend.aiPackStatus?.modelLoading == true)
-            Button("모델 캐시 폴더 열기") {
-                backend.openModelCache()
-            }
-            Button("로그 보기") {
-                backend.showLogs()
-            }
-            Button("진단 내보내기") {
-                backend.exportDiagnosticsBundle()
-            }
-
-            Divider()
-
-            Button("업데이트 확인…") {
-                updateChecker.checkForUpdates()
-            }
-            .disabled(!updateChecker.canCheck)
-            Button(launchAtLoginEnabled ? "로그인 시 자동 시작 끄기" : "로그인 시 자동 시작 켜기") {
-                onToggleLaunchAtLogin()
-            }
-            .disabled(!isLaunchAtLoginAvailable)
-            Button("Photome에 관하여") {
-                onAbout()
-            }
+        Button("업데이트 확인…") {
+            updateChecker.checkForUpdates()
+        }
+        .disabled(!updateChecker.canCheck)
+        Button(launchAtLoginEnabled ? "로그인 시 자동 시작 끄기" : "로그인 시 자동 시작 켜기") {
+            onToggleLaunchAtLogin()
+        }
+        .disabled(!isLaunchAtLoginAvailable)
+        Button("Photome에 관하여") {
+            onAbout()
         }
 
         Divider()
