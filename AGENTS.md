@@ -43,6 +43,10 @@
 - 사람/인물 데이터도 `file_id` 기준으로 누적 보존한다. source root/NAS/drive/path 변경, 모델 재분석, face row 재생성 때문에 이미 지정한 이름, alias, merge 결과가 초기화되면 안 된다.
 - cache/derived asset은 전부 재생성 가능해야 한다.
 - NAS 오프라인, 파일 이동/이름 변경, 부분 업로드는 정상 시나리오로 취급한다.
+- UI를 줄이거나 제거하는 커밋은 관련 가드 테스트와 빌드 설정(Package.swift 등)을 같은 커밋에서 갱신한다. (2026-06-11 감사에서 3건 재발)
+- 기본값 폴백에 `x or Default()`를 쓰지 않는다 — `__len__`이 있는 객체(빈 캐시/컬렉션)는 falsy라서 멀쩡한 인스턴스가 버려진다. `x if x is not None else Default()`를 쓴다. (DirMtimeCache 영속화가 이 패턴으로 죽어 있었다)
+- 환경변수 캐노니컬은 `PHOTOME_*`다. `PHOTOMINE_*`은 레거시 별칭으로만 읽고 새 코드에 쓰지 않는다.
+- async 핸들러에서 수 초 이상 걸리는 동기 작업(스캔/분석/대량 집계)을 직접 호출하지 않는다 — `run_in_threadpool`로 내린다.
 
 ## 배포 호환성
 

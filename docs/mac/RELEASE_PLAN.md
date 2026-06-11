@@ -76,9 +76,7 @@ SwiftUI `onDrop(of: [.fileURL])` 사용.
 ### S1.5 모델 다운로드 progress UI — `status: DONE`
 
 현재 텍스트만 표시. 진행률 (다운로드 byte / total) → SwiftUI ProgressView.
-
-**제약:** 백엔드 `/ai-pack` API에 progress fraction 노출 여부 확인 필요.
-**Selected as MVP-out** 가능. 필요 시 Stage 3에서 결정.
+백엔드 `/ai-pack`이 progress(bytes_downloaded/bytes_estimated/fraction)를 노출하며 완료됨(2026-06-02 기록 참조).
 
 ---
 
@@ -175,7 +173,8 @@ PHOTOME_NOTARY_PROFILE=photome-notary scripts/notarize_mac_app.sh
 
 ## 진행 기록 (가장 최근부터)
 
-- 2026-06-09: 배포 정책 확정 — 배포 산출물은 ai-pack 단일 빌드(CLIP/venv/weights 항상 번들). `photome-base`는 배포 제외(코드 레벨 import 계약만 유지). 용량(DMG ~540MB)은 인지하고 보류. 문서 일체 정리(AGENTS/AGENTS_LIGHT/CLAUDE/README/docs/DEPLOYMENT_STRATEGY/ARCHITECTURE/RELEASE_CHECKLIST) + 최종 사용자용 `INSTALL.md` 추가. 후속 코드 작업: 빌드 스크립트 weights 누락 hard-fail, 포트 8000 자동 폴백.
+- 2026-06-11: 설계-구현 일치성 감사(`docs/mac/AUDIT_2026-06-11.md`) 수행 및 A/B/D 항목 일괄 수정 — dir mtime 캐시 영속화 버그(매 스캔 전체 재워크 원인), /status·동기 스캔 엔드포인트의 이벤트 루프 블로킹, 수치 단일화(analyzed_current), 설정 탭 다이어트(시작/진행은 메뉴바), 임베딩 우선 maintenance, 메뉴바 리소스 표시, phase2 카드·EXIF 패널 죽은 코드 제거, 환경변수 PHOTOME_* 캐노니컬 통일.
+- 2026-06-09: 배포 정책 확정 — 배포 산출물은 ai-pack 단일 빌드(CLIP/venv/weights 항상 번들). `photome-base`는 배포 제외(코드 레벨 import 계약만 유지). 용량(DMG ~540MB)은 인지하고 보류. 문서 일체 정리(AGENTS/AGENTS_LIGHT/CLAUDE/README/docs/DEPLOYMENT_STRATEGY/ARCHITECTURE/RELEASE_CHECKLIST) + 최종 사용자용 `INSTALL.md` 추가. 후속 코드 작업 완료: 빌드 스크립트 weights 누락 hard-fail(`build_mac_app_bundle.sh`), 포트 8000 자동 폴백(`BackendSupervisor.isPortAvailable`).
 - 2026-06-03: Notarization 준비 — `.entitlements` 추가 (allow-jit, allow-unsigned-executable-memory, disable-library-validation, network.client/server, files.user-selected.read-only). build 스크립트가 Developer ID 서명 시 `--timestamp` + entitlements 자동 적용. DMG 자체도 codesign + stapler staple. notarize 스크립트가 .app까지 staple. GitHub Actions workflow에 시크릿 기반 인증서 import 단계 + 정식 빌드 + notarize 자동화 추가.
 - 2026-06-03: 사용자 컨펌으로 정식 외부 배포 방향 결정 — Developer ID + Notarization. App Store 미경유, GitHub Release 단독 배포.
 - 2026-06-03: First-run UX 폴리시 — 폴더 선택/Drag&Drop 시 자동 시작, source root 폴더명+경로 2줄 표시, 메뉴 라벨 동사화, AI Mode 토글 제거(offlineMode 상수화), 표준 About panel, landing 첫 분석 시간 안내.
@@ -187,6 +186,6 @@ PHOTOME_NOTARY_PROFILE=photome-notary scripts/notarize_mac_app.sh
 - 2026-05-30: S0.2b 완료 — 대시보드에 리소스 설정 카드 추가 (CPU 슬라이더, AI threads, batch sizes). 184 tests pass.
 - 2026-05-30: S1.1-1.4 + S3.4 완료 — drag&drop, notifications, dock badge, quit confirmation, crash recovery. swift build OK.
 - 2026-05-30: photome DB(.recover로 손상 복구) photomeformac data + Mac 앱 Library 양쪽에 배치. 26787 media / 595 people / 10710 faces.
-- 2026-05-29: S0.2a 완료 — performance settings API + 백엔드 infra. Mac shell은 `PHOTOME_ENV_FILE`를 앱 데이터 폴더의 `photome.env`로 주입함. 188 tests pass.
+- 2026-05-29: S0.2a 완료 — performance settings API + 백엔드 infra. Mac 앱은 `scripts/mac_app_backend_env.py`가 구성한 환경으로 백엔드를 띄우며, 거기서 `PHOTOME_ENV_FILE`이 앱 데이터 폴더의 `photome.env`로 지정된다. 188 tests pass.
 - 2026-05-29: S0.1 백포팅 완료 (alias + people UI + preview cache, 184 tests pass).
 - 2026-05-29: 플랜 문서 생성.
