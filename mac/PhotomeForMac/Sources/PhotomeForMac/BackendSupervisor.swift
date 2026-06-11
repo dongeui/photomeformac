@@ -1143,21 +1143,32 @@ final class BackendSupervisor: ObservableObject {
     }
 
     static func parseLibraryJobStatus(payload: [String: Any]?) -> LibraryJobStatus? {
-        guard
-            let payload,
-            let jobs = payload["jobs"] as? [String: Any],
-            let active = jobs["active_library_job"] as? [String: Any],
-            let jobKind = active["job_kind"] as? String,
-            let status = active["status"] as? String
-        else {
-            return nil
+        guard let payload else { return nil }
+        if let jobs = payload["jobs"] as? [String: Any],
+           let active = jobs["active_library_job"] as? [String: Any],
+           let jobKind = active["job_kind"] as? String,
+           let status = active["status"] as? String {
+            return LibraryJobStatus(
+                jobID: active["job_id"] as? String,
+                jobKind: jobKind,
+                status: status,
+                summary: summarizeLibraryJob(active)
+            )
         }
-        return LibraryJobStatus(
-            jobID: active["job_id"] as? String,
-            jobKind: jobKind,
-            status: status,
-            summary: summarizeLibraryJob(active)
-        )
+        // 스케줄러가 직접 돌리는 이미지 AI는 processing_jobs 행 없이
+        // scheduler.background_task로만 보고된다 — 잡이 없으면 이를 폴백으로
+        // 읽어 메뉴바 '지금:' 줄과 타이틀이 백그라운드 분석도 보여주게 한다.
+        if let scheduler = payload["scheduler"] as? [String: Any],
+           let kind = scheduler["background_task_kind"] as? String,
+           (scheduler["background_task_state"] as? String) == "running" {
+            return LibraryJobStatus(
+                jobID: nil,
+                jobKind: kind,
+                status: "running",
+                summary: (scheduler["background_task_message"] as? String) ?? "백그라운드 분석 중"
+            )
+        }
+        return nil
     }
 
     static func parseCoverage(payload: [String: Any]?) -> LibraryCoverage? {
