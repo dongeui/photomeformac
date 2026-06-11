@@ -126,23 +126,39 @@ final class BackendSupervisor: ObservableObject {
         let message: String
     }
 
-    /// 메뉴바에 보여줄 Photome 자체 리소스 사용량(백엔드 python + 이 앱 합산).
+    /// 메뉴바에 보여줄 Photome 자체 리소스 사용량. Photome이 띄운 백엔드
+    /// python 프로세스와 이 메뉴바 앱, 정확히 두 프로세스만 합산한다
+    /// (Activity Monitor에서는 'Python'과 'PhotomeForMac' 두 항목으로 갈라져 보인다).
     struct ResourceUsage {
         /// Activity Monitor와 같은 코어당 % 합산이라 멀티코어 작업 중엔 100을 넘는다.
         let cpuPercent: Double
-        let memoryBytes: UInt64
+        let backendMemoryBytes: UInt64
+        let appMemoryBytes: UInt64
+
+        private static func formatMemory(_ bytes: UInt64) -> String {
+            let gb = Double(bytes) / 1_073_741_824
+            return gb >= 1
+                ? String(format: "%.1fGB", gb)
+                : String(format: "%.0fMB", Double(bytes) / 1_048_576)
+        }
 
         var summary: String {
-            let gb = Double(memoryBytes) / 1_073_741_824
-            let memory = gb >= 1
-                ? String(format: "%.1fGB", gb)
-                : String(format: "%.0fMB", Double(memoryBytes) / 1_048_576)
-            return String(format: "CPU %.0f%% · 메모리 %@", cpuPercent, memory)
+            let total = Self.formatMemory(backendMemoryBytes + appMemoryBytes)
+            guard backendMemoryBytes > 0 else {
+                return String(format: "CPU %.0f%% · 메모리 %@ (앱만, 백엔드 꺼짐)", cpuPercent, total)
+            }
+            return String(
+                format: "CPU %.0f%% · 메모리 %@ (백엔드 %@ · 앱 %@)",
+                cpuPercent,
+                total,
+                Self.formatMemory(backendMemoryBytes),
+                Self.formatMemory(appMemoryBytes)
+            )
         }
     }
 
-    /// proc_pid_rusage 기반 샘플러. CPU%는 두 샘플 간 CPU 시간 차분이라
-    /// 호출 간격(헬스 루프 2초)이 곧 측정 창이 된다.
+    /// proc_pid_rusage 기반 프로세스별 샘플러. CPU%는 두 샘플 간 CPU 시간
+    /// 차분이라 호출 간격(헬스 루프 2초)이 곧 측정 창이 된다.
     private struct ResourceSampler {
         private var lastCPUTicks: [Int32: UInt64] = [:]
         private var lastSampledAt: [Int32: UInt64] = [:]
@@ -153,38 +169,33 @@ final class BackendSupervisor: ObservableObject {
             return info
         }()
 
-        mutating func sample(pids: [Int32]) -> ResourceUsage? {
-            var totalCPUPercent = 0.0
-            var totalMemory: UInt64 = 0
-            var sampledAny = false
-            let now = mach_absolute_time()
-            for pid in pids {
-                var info = rusage_info_current()
-                let result = withUnsafeMutablePointer(to: &info) { pointer in
-                    pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
-                        proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, $0)
-                    }
+        mutating func sample(pid: Int32) -> (cpuPercent: Double, memoryBytes: UInt64)? {
+            var info = rusage_info_current()
+            let result = withUnsafeMutablePointer(to: &info) { pointer in
+                pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
+                    proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, $0)
                 }
-                guard result == 0 else { continue }
-                sampledAny = true
-                totalMemory += info.ri_phys_footprint
-                let cpuTicks = info.ri_user_time + info.ri_system_time
-                if let previousTicks = lastCPUTicks[pid],
-                   let previousAt = lastSampledAt[pid],
-                   now > previousAt, cpuTicks >= previousTicks {
-                    let cpuNanos = Self.ticksToNanos(cpuTicks - previousTicks)
-                    let wallNanos = Self.ticksToNanos(now - previousAt)
-                    if wallNanos > 0 {
-                        totalCPUPercent += Double(cpuNanos) / Double(wallNanos) * 100.0
-                    }
-                }
-                lastCPUTicks[pid] = cpuTicks
-                lastSampledAt[pid] = now
             }
-            lastCPUTicks = lastCPUTicks.filter { pids.contains($0.key) }
-            lastSampledAt = lastSampledAt.filter { pids.contains($0.key) }
-            guard sampledAny else { return nil }
-            return ResourceUsage(cpuPercent: totalCPUPercent, memoryBytes: totalMemory)
+            guard result == 0 else {
+                lastCPUTicks[pid] = nil
+                lastSampledAt[pid] = nil
+                return nil
+            }
+            let now = mach_absolute_time()
+            var cpuPercent = 0.0
+            let cpuTicks = info.ri_user_time + info.ri_system_time
+            if let previousTicks = lastCPUTicks[pid],
+               let previousAt = lastSampledAt[pid],
+               now > previousAt, cpuTicks >= previousTicks {
+                let cpuNanos = Self.ticksToNanos(cpuTicks - previousTicks)
+                let wallNanos = Self.ticksToNanos(now - previousAt)
+                if wallNanos > 0 {
+                    cpuPercent = Double(cpuNanos) / Double(wallNanos) * 100.0
+                }
+            }
+            lastCPUTicks[pid] = cpuTicks
+            lastSampledAt[pid] = now
+            return (cpuPercent, info.ri_phys_footprint)
         }
 
         private static func ticksToNanos(_ ticks: UInt64) -> UInt64 {
@@ -964,13 +975,20 @@ final class BackendSupervisor: ObservableObject {
         }
     }
 
-    /// 백엔드 python + 이 앱의 CPU/메모리를 합산해 메뉴바 표시용으로 갱신한다.
+    /// 백엔드 python + 이 앱의 CPU/메모리를 측정해 메뉴바 표시용으로 갱신한다.
+    /// Photome 소유 프로세스 두 개만 본다 — 시스템 전체 사용량이 아니다.
     private func sampleResourceUsage() {
-        var pids: [Int32] = [ProcessInfo.processInfo.processIdentifier]
-        if let backendPID = process?.processIdentifier {
-            pids.append(backendPID)
+        let appSample = resourceSampler.sample(pid: ProcessInfo.processInfo.processIdentifier)
+        let backendSample = process.flatMap { resourceSampler.sample(pid: $0.processIdentifier) }
+        guard appSample != nil || backendSample != nil else {
+            resourceUsage = nil
+            return
         }
-        resourceUsage = resourceSampler.sample(pids: pids)
+        resourceUsage = ResourceUsage(
+            cpuPercent: (appSample?.cpuPercent ?? 0) + (backendSample?.cpuPercent ?? 0),
+            backendMemoryBytes: backendSample?.memoryBytes ?? 0,
+            appMemoryBytes: appSample?.memoryBytes ?? 0
+        )
     }
 
     private func refreshAIPackStatus() async {
