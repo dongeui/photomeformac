@@ -126,6 +126,72 @@ final class BackendSupervisor: ObservableObject {
         let message: String
     }
 
+    /// 메뉴바에 보여줄 Photome 자체 리소스 사용량(백엔드 python + 이 앱 합산).
+    struct ResourceUsage {
+        /// Activity Monitor와 같은 코어당 % 합산이라 멀티코어 작업 중엔 100을 넘는다.
+        let cpuPercent: Double
+        let memoryBytes: UInt64
+
+        var summary: String {
+            let gb = Double(memoryBytes) / 1_073_741_824
+            let memory = gb >= 1
+                ? String(format: "%.1fGB", gb)
+                : String(format: "%.0fMB", Double(memoryBytes) / 1_048_576)
+            return String(format: "CPU %.0f%% · 메모리 %@", cpuPercent, memory)
+        }
+    }
+
+    /// proc_pid_rusage 기반 샘플러. CPU%는 두 샘플 간 CPU 시간 차분이라
+    /// 호출 간격(헬스 루프 2초)이 곧 측정 창이 된다.
+    private struct ResourceSampler {
+        private var lastCPUTicks: [Int32: UInt64] = [:]
+        private var lastSampledAt: [Int32: UInt64] = [:]
+
+        private static let timebase: mach_timebase_info_data_t = {
+            var info = mach_timebase_info_data_t()
+            mach_timebase_info(&info)
+            return info
+        }()
+
+        mutating func sample(pids: [Int32]) -> ResourceUsage? {
+            var totalCPUPercent = 0.0
+            var totalMemory: UInt64 = 0
+            var sampledAny = false
+            let now = mach_absolute_time()
+            for pid in pids {
+                var info = rusage_info_current()
+                let result = withUnsafeMutablePointer(to: &info) { pointer in
+                    pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
+                        proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, $0)
+                    }
+                }
+                guard result == 0 else { continue }
+                sampledAny = true
+                totalMemory += info.ri_phys_footprint
+                let cpuTicks = info.ri_user_time + info.ri_system_time
+                if let previousTicks = lastCPUTicks[pid],
+                   let previousAt = lastSampledAt[pid],
+                   now > previousAt, cpuTicks >= previousTicks {
+                    let cpuNanos = Self.ticksToNanos(cpuTicks - previousTicks)
+                    let wallNanos = Self.ticksToNanos(now - previousAt)
+                    if wallNanos > 0 {
+                        totalCPUPercent += Double(cpuNanos) / Double(wallNanos) * 100.0
+                    }
+                }
+                lastCPUTicks[pid] = cpuTicks
+                lastSampledAt[pid] = now
+            }
+            lastCPUTicks = lastCPUTicks.filter { pids.contains($0.key) }
+            lastSampledAt = lastSampledAt.filter { pids.contains($0.key) }
+            guard sampledAny else { return nil }
+            return ResourceUsage(cpuPercent: totalCPUPercent, memoryBytes: totalMemory)
+        }
+
+        private static func ticksToNanos(_ ticks: UInt64) -> UInt64 {
+            ticks * UInt64(timebase.numer) / UInt64(timebase.denom)
+        }
+    }
+
     @Published private(set) var state: State = .stopped
     @Published private(set) var statusMessage: String = "백엔드가 아직 실행되지 않았습니다."
     @Published private(set) var lastError: String?
@@ -134,6 +200,7 @@ final class BackendSupervisor: ObservableObject {
     @Published private(set) var aiPackStatus: AIPackStatus?
     @Published private(set) var libraryJobStatus: LibraryJobStatus?
     @Published private(set) var coverage: LibraryCoverage?
+    @Published private(set) var resourceUsage: ResourceUsage?
     @Published var lanEnabled: Bool {
         didSet {
             guard lanEnabled != oldValue else { return }
@@ -154,6 +221,7 @@ final class BackendSupervisor: ObservableObject {
     private(set) var port: Int
 
     private var process: Process?
+    private var resourceSampler = ResourceSampler()
     private var healthTask: Task<Void, Never>?
     private var actionTask: Task<Void, Never>?
     private var outputPipe: Pipe?
@@ -890,9 +958,19 @@ final class BackendSupervisor: ObservableObject {
                         self.libraryJobStatus = nil
                     }
                 }
+                await MainActor.run { self.sampleResourceUsage() }
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
         }
+    }
+
+    /// 백엔드 python + 이 앱의 CPU/메모리를 합산해 메뉴바 표시용으로 갱신한다.
+    private func sampleResourceUsage() {
+        var pids: [Int32] = [ProcessInfo.processInfo.processIdentifier]
+        if let backendPID = process?.processIdentifier {
+            pids.append(backendPID)
+        }
+        resourceUsage = resourceSampler.sample(pids: pids)
     }
 
     private func refreshAIPackStatus() async {

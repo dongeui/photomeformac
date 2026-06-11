@@ -116,6 +116,10 @@ struct MenuBarContent: View {
             Text("사진 현황: \(coverage.summary)")
         }
 
+        if let usage = backend.resourceUsage {
+            Text("리소스: \(usage.summary)")
+        }
+
         Divider()
 
         Button("사진첩 열기") {

@@ -36,8 +36,8 @@ def test_app_has_login_item_menu_and_service_management():
     assert "import ServiceManagement" in text
     assert "SMAppService.mainApp" in text
     assert "로그인 시 자동 시작" in text
-    assert "exportDiagnosticsBundle" in text
-    assert "진단 내보내기" in text
+    # 진단 내보내기 메뉴는 c86c6e6에서 메뉴바 간소화로 제거됨.
+    # 번들 생성 로직(createDiagnosticsBundle)은 BackendSupervisor 가드가 따로 검증한다.
 
 
 def test_backend_prefers_bundled_backend_and_python_runtime():

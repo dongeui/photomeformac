@@ -19,7 +19,8 @@ let package = Package(
             dependencies: [
                 .product(name: "Sparkle", package: "Sparkle")
             ]
-        ),
-        .testTarget(name: "PhotomeForMacTests", dependencies: ["PhotomeForMac"])
+        )
+        // 테스트 타깃은 43ff060에서 Tests/ 삭제와 함께 제거됨. 디렉터리 없이
+        // 선언만 남기면 SwiftPM이 Sources를 중복 소유로 보고 빌드가 깨진다.
     ]
 )
