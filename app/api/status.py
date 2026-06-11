@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re as _re
+import time
 
 _INTERNAL_PERSON_ID_RE = _re.compile(r"^person-\d+$", _re.IGNORECASE)
 import shlex
@@ -17,6 +18,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.api.ai_pack import get_ai_pack_state
 from app.api.deps import require_state
@@ -3982,8 +3984,26 @@ async def dashboard(request: Request) -> HTMLResponse:
     return HTMLResponse(html)
 
 
+_STATUS_CACHE_TTL_SECONDS = 5.0
+
+
 @router.get("/status")
 async def status(request: Request) -> dict[str, Any]:
+    """짧은 TTL 캐시 + 워커 스레드로 상태를 계산한다.
+
+    메뉴바가 2초마다 폴링하는데 본문이 44k+ 미디어 집계 쿼리를 매번 돌리면
+    이벤트 루프가 막히고 GIL 경쟁으로 백그라운드 분석 작업까지 기어간다.
+    """
+    state = request.app.state
+    cached = getattr(state, "status_payload_cache", None)
+    if cached is not None and time.monotonic() < cached[1]:
+        return cached[0]
+    payload = await run_in_threadpool(_compute_status_payload, request)
+    state.status_payload_cache = (payload, time.monotonic() + _STATUS_CACHE_TTL_SECONDS)
+    return payload
+
+
+def _compute_status_payload(request: Request) -> dict[str, Any]:
     settings = require_state(request, "settings")
     database = require_state(request, "database")
     pipeline = require_state(request, "pipeline")
