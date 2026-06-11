@@ -139,13 +139,18 @@ struct MenuBarContent: View {
 
         Divider()
 
+        // 동기화가 도는 동안에는 동기화를 끊을 수 있는 조작을 전부 잠근다
+        // (지금 동기화 재제출, 폴더 변경·재시작은 백엔드를 내려 작업이 끊긴다).
+        // 백엔드가 먹통이 되면 healthLoop이 state=.error + 잡 상태 nil로
+        // 만들어 다시 시작이 다시 활성화된다 — 복구 탈출구는 유지.
         Button("지금 동기화") {
             backend.triggerLibraryScan()
         }
-        .disabled(!backend.isRunning || (backend.libraryJobStatus?.isRunning ?? false))
+        .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
         Button("사진 폴더 선택") {
             backend.choosePhotoFolder()
         }
+        .disabled(backend.hasActiveLibraryJob)
         Button("설정 열기") {
             backend.openDashboard()
         }
@@ -153,7 +158,7 @@ struct MenuBarContent: View {
         Button("Photome 다시 시작") {
             backend.restart()
         }
-        .disabled(backend.isBusy)
+        .disabled(backend.isBusy || backend.hasActiveLibraryJob)
 
         Divider()
 
