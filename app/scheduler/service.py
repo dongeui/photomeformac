@@ -27,8 +27,6 @@ class SchedulerSnapshot:
     enabled: bool
     running: bool
     poll_interval_seconds: int
-    daily_full_scan_hour: int
-    daily_full_scan_minute: int
     semantic_scheduler_enabled: bool
     semantic_scheduler_interval_seconds: int
     phase1_interval_hours: int | None
@@ -144,8 +142,6 @@ class SchedulerService:
             enabled=self._library_interval_hours(config) is not None,
             running=self._running,
             poll_interval_seconds=self._settings.scheduler_poll_interval_seconds,
-            daily_full_scan_hour=self._settings.scheduler_daily_full_scan_hour,
-            daily_full_scan_minute=self._settings.scheduler_daily_full_scan_minute,
             semantic_scheduler_enabled=self._settings.semantic_scheduler_enabled,
             semantic_scheduler_interval_seconds=self._settings.semantic_scheduler_interval_seconds,
             phase1_interval_hours=config.phase1_interval_hours,

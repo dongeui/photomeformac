@@ -869,6 +869,9 @@ class ProcessingPipeline:
                 },
             )
             session.commit()
+            # full_scan의 실제 의미: walk는 어차피 dir mtime 캐시를 쓰므로
+            # "전체를 다시 읽는다"가 아니라 "missing 상태도 재처리 대상에
+            # 포함한다"뿐이다. (missing 부활 재확인은 스캔 자체가 항상 수행)
             processing_statuses = (
                 ("error",)
                 if retry_errors_only

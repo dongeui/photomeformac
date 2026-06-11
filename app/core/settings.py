@@ -140,8 +140,6 @@ class AppSettings:
     stability_window_seconds: int
     scheduler_enabled: bool
     scheduler_poll_interval_seconds: int
-    scheduler_daily_full_scan_hour: int
-    scheduler_daily_full_scan_minute: int
     semantic_scheduler_enabled: bool
     semantic_scheduler_interval_seconds: int
     semantic_ocr_enabled: bool
@@ -242,8 +240,6 @@ def load_settings() -> AppSettings:
         stability_window_seconds=_env_int("PHOTOME_STABILITY_WINDOW_SECONDS", 300),
         scheduler_enabled=_env_bool("PHOTOME_SCHEDULER_ENABLED", False),
         scheduler_poll_interval_seconds=_env_int("PHOTOME_SCHEDULER_POLL_INTERVAL_SECONDS", 900),
-        scheduler_daily_full_scan_hour=_env_int("PHOTOME_SCHEDULER_DAILY_FULL_SCAN_HOUR", 3),
-        scheduler_daily_full_scan_minute=_env_int("PHOTOME_SCHEDULER_DAILY_FULL_SCAN_MINUTE", 0),
         semantic_scheduler_enabled=_env_bool("PHOTOME_SEMANTIC_SCHEDULER_ENABLED", True),
         semantic_scheduler_interval_seconds=_env_int("PHOTOME_SEMANTIC_SCHEDULER_INTERVAL_SECONDS", 600),
         semantic_ocr_enabled=_env_bool("PHOTOME_OCR_ENABLED", True),

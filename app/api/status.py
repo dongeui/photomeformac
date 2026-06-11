@@ -713,8 +713,9 @@ async def dashboard(request: Request) -> HTMLResponse:
         scheduler.get("background_task_kind") in {"semantic_backfill", "semantic_maintenance"}
         and scheduler.get("background_task_state") == "running"
     )
-    ai_summary = performance.get("ai_summary") or {}
-    ai_pending_count = int(ai_summary.get("remaining_clip") or semantic_coverage.get("remaining_for_clip") or 0)
+    # 단일 소스: coverage가 캐노니컬이다. ai_summary.remaining_clip은 같은
+    # 카운트에서 파생된 표시용 사본이라 폴백으로 섞어 읽지 않는다.
+    ai_pending_count = int(semantic_coverage.get("remaining_for_clip") or 0)
     if phase2_active or scheduler_background_semantic_active:
         ai_metric_state_label = "진행 중"
         ai_metric_state_class = "metric-state-badge is-running"
@@ -3102,7 +3103,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       const sched = payload?.scheduler || {{}};
       const perf = payload?.performance || {{}};
       const cov = payload?.semantic?.coverage || {{}};
-      const pending = Number(perf?.ai_summary?.remaining_clip ?? cov.remaining_for_clip ?? 0);
+      const pending = Number(cov.remaining_for_clip ?? perf?.ai_summary?.remaining_clip ?? 0);
       const backgroundActive = ["semantic_backfill", "semantic_maintenance"].includes(sched.background_task_kind) && sched.background_task_state === "running";
       let label = "완료";
       let className = "metric-state-badge is-idle";
@@ -4295,7 +4296,8 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
                 "people_media": people_media_count,
                 "clip_embeddings": clip_embeddings_current,
                 "clip_coverage_percent": clip_coverage_percent,
-                "remaining_clip": max(0, eligible_media_count - clip_embeddings_current),
+                # coverage.remaining_for_clip과 같은 값 — 공식을 한 곳(_ai_summary)에만 둔다.
+                "remaining_clip": ai_summary["remaining_clip"],
                 "ai_summary": ai_summary,
                 "resource_settings": resource_settings,
             },
