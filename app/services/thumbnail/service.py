@@ -12,9 +12,10 @@ from app.services.image_decode import ensure_heif_support
 from app.services.processing.registry import build_derived_asset_location
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageOps
 except ImportError:  # pragma: no cover - optional dependency fallback
     Image = None  # type: ignore[assignment]
+    ImageOps = None  # type: ignore[assignment]
 
 
 @dataclass(frozen=True)
@@ -53,17 +54,25 @@ class ThumbnailService:
             try:
                 ensure_heif_support()
                 with Image.open(source_path) as image:
-                    image.thumbnail((self._config.size, self._config.size))
-                    if image.mode not in {"RGB", "L"}:
-                        converted = image.convert("RGB")
+                    # EXIF orientation을 픽셀에 적용해 똑바로 저장한다. 썸네일
+                    # JPEG에는 EXIF가 빠지므로, 여기서 안 돌리면 회전 촬영
+                    # 사진이 갤러리에 누운 채로 나온다.
+                    oriented = ImageOps.exif_transpose(image)
+                    if oriented is None:
+                        oriented = image
+                    oriented.thumbnail((self._config.size, self._config.size))
+                    if oriented.mode not in {"RGB", "L"}:
+                        converted = oriented.convert("RGB")
                     else:
-                        converted = image
+                        converted = oriented
                     try:
                         converted.save(output_path, format="JPEG", quality=88, optimize=True)
                         return
                     finally:
-                        if converted is not image:
+                        if converted is not oriented:
                             converted.close()
+                        if oriented is not image:
+                            oriented.close()
             except Exception as exc:
                 pillow_error = str(exc)
         else:

@@ -10,6 +10,13 @@ from tempfile import NamedTemporaryFile
 from typing import Any
 
 from app.services.analysis.opencv_zoo import OpenCVFaceModelPaths, OpenCVZooModelResolver
+from app.services.image_decode import ensure_heif_support
+
+try:
+    from PIL import Image, ImageOps
+except ImportError:  # pragma: no cover - optional dependency
+    Image = None  # type: ignore[assignment]
+    ImageOps = None  # type: ignore[assignment]
 
 try:
     import cv2
@@ -191,18 +198,40 @@ def _load_image(image_path: Path) -> Any:
     if cv2 is None or np is None:
         raise FaceAnalysisError("OpenCV runtime dependencies are not available")
 
-    try:
-        encoded = np.fromfile(str(image_path), dtype=np.uint8)
-    except OSError as exc:
-        raise FaceAnalysisError(f"Failed to read image bytes: {image_path}") from exc
-    if encoded.size == 0:
-        raise FaceAnalysisError(f"Image file is empty or unreadable: {image_path}")
-    image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+    # PIL 우선: cv2.imdecode는 EXIF orientation을 무시해 회전 촬영 사진의
+    # 얼굴 검출/임베딩이 깨진다(검출 0 또는 엉뚱한 임베딩 → 인물 클러스터
+    # 분리). PIL은 orientation 적용 + HEIC(pillow-heif)까지 처리한다.
+    image = _load_image_with_pillow(image_path)
+    if image is None:
+        try:
+            encoded = np.fromfile(str(image_path), dtype=np.uint8)
+        except OSError as exc:
+            raise FaceAnalysisError(f"Failed to read image bytes: {image_path}") from exc
+        if encoded.size == 0:
+            raise FaceAnalysisError(f"Image file is empty or unreadable: {image_path}")
+        image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
     if image is None:
         image = _load_image_with_sips(image_path)
     if image is None:
         raise FaceAnalysisError(f"Failed to decode image: {image_path}")
     return image
+
+
+def _load_image_with_pillow(image_path: Path) -> Any:
+    if Image is None or ImageOps is None or np is None:
+        return None
+    try:
+        ensure_heif_support()
+        with Image.open(image_path) as pil_image:
+            oriented = ImageOps.exif_transpose(pil_image)
+            if oriented is None:
+                oriented = pil_image
+            rgb = oriented.convert("RGB")
+            array = np.asarray(rgb)
+        # OpenCV 검출기는 BGR을 기대한다.
+        return array[:, :, ::-1].copy()
+    except Exception:
+        return None
 
 
 def _load_image_with_sips(image_path: Path) -> Any:
