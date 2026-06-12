@@ -43,6 +43,16 @@ from app.services.search.synonyms import load_tag_synonyms
 
 _INTERNAL_PERSON_ID_RE = re.compile(r"^person-\d{6,}$", re.IGNORECASE)
 
+# SQLite 바인딩 변수 한도(기본 32,766)를 넘지 않게 IN 절을 나누는 단위.
+# 갤러리 검색은 후보 한도가 사실상 무제한이라(전 코퍼스 매치) file_id 목록이
+# 수만 개까지 커진다 — 통째로 바인딩하면 "too many SQL variables"로 500.
+_SQL_IN_CHUNK_SIZE = 500
+
+
+def _in_chunks(values: list, size: int = _SQL_IN_CHUNK_SIZE):
+    for index in range(0, len(values), size):
+        yield values[index : index + size]
+
 
 def _clip_model_cache_key() -> str:
     """Keep cached text embeddings isolated by the active CLIP provider."""
@@ -193,14 +203,15 @@ class SqlAlchemyHybridSearchBackend:
             if gram_hits:
                 max_hits = max(count for _, count in gram_hits) or 1
                 hit_counts = {fid: count / max_hits for fid, count in gram_hits}
-                ngram_statement = (
-                    select(MediaFile, MediaOCR, MediaAnalysisSignal)
-                    .join(MediaOCR, MediaOCR.file_id == MediaFile.file_id)
-                    .outerjoin(MediaAnalysisSignal, MediaAnalysisSignal.file_id == MediaFile.file_id)
-                    .where(MediaFile.file_id.in_([fid for fid, _ in gram_hits]))
-                    .where(MediaFile.status.not_in(("missing", "replaced", "excluded")))
-                )
-                ngram_rows = list(self._session.execute(ngram_statement))
+                for chunk in _in_chunks([fid for fid, _ in gram_hits]):
+                    ngram_statement = (
+                        select(MediaFile, MediaOCR, MediaAnalysisSignal)
+                        .join(MediaOCR, MediaOCR.file_id == MediaFile.file_id)
+                        .outerjoin(MediaAnalysisSignal, MediaAnalysisSignal.file_id == MediaFile.file_id)
+                        .where(MediaFile.file_id.in_(chunk))
+                        .where(MediaFile.status.not_in(("missing", "replaced", "excluded")))
+                    )
+                    ngram_rows.extend(self._session.execute(ngram_statement))
 
         all_file_ids = [mf.file_id for mf, _, _ in main_rows + ngram_rows]
         tags_by_file, face_counts, person_counts, _, _ = self._batch_load_supplements(all_file_ids)
@@ -414,17 +425,17 @@ class SqlAlchemyHybridSearchBackend:
         if not scored_ids:
             return []
 
-        statement = select(MediaFile, SearchDocument).join(
-            SearchDocument,
-            SearchDocument.file_id == MediaFile.file_id,
-        ).where(
-            MediaFile.file_id.in_(list(scored_ids)),
-            MediaFile.status.not_in(("missing", "replaced", "excluded")),
-        )
-        by_id: dict[str, tuple[MediaFile, SearchDocument]] = {
-            media_file.file_id: (media_file, document)
-            for media_file, document in self._session.execute(statement)
-        }
+        by_id: dict[str, tuple[MediaFile, SearchDocument]] = {}
+        for chunk in _in_chunks(list(scored_ids)):
+            statement = select(MediaFile, SearchDocument).join(
+                SearchDocument,
+                SearchDocument.file_id == MediaFile.file_id,
+            ).where(
+                MediaFile.file_id.in_(chunk),
+                MediaFile.status.not_in(("missing", "replaced", "excluded")),
+            )
+            for media_file, document in self._session.execute(statement):
+                by_id[media_file.file_id] = (media_file, document)
         all_file_ids = list(scored_ids.keys())
         tags_by_file, face_counts, person_counts, ocr_by_file, analysis_by_file = self._batch_load_supplements(all_file_ids)
         results = []
@@ -814,39 +825,45 @@ class SqlAlchemyHybridSearchBackend:
         if not file_ids:
             return {}, {}, {}, {}, {}
 
-        tag_rows = self._session.execute(
-            select(Tag.file_id, Tag.tag_type, Tag.tag_value)
-            .where(Tag.file_id.in_(file_ids))
-            .order_by(Tag.tag_type.asc(), Tag.tag_value.asc())
-        ).all()
         tags_by_file: dict[str, list[dict]] = {fid: [] for fid in file_ids}
-        for fid, tag_type, tag_value in tag_rows:
-            if fid in tags_by_file:
-                tags_by_file[fid].append({"type": tag_type, "value": tag_value})
+        face_counts: dict[str, int] = {}
+        person_counts: dict[str, int] = {}
+        ocr_by_file: dict[str, MediaOCR] = {}
+        analysis_by_file: dict[str, MediaAnalysisSignal] = {}
 
-        face_rows = self._session.execute(
-            select(Face.file_id, func.count(Face.id).label("cnt"))
-            .where(Face.file_id.in_(file_ids))
-            .group_by(Face.file_id)
-        ).all()
-        face_counts: dict[str, int] = {str(fid): int(cnt) for fid, cnt in face_rows}
+        for chunk in _in_chunks(file_ids):
+            tag_rows = self._session.execute(
+                select(Tag.file_id, Tag.tag_type, Tag.tag_value)
+                .where(Tag.file_id.in_(chunk))
+                .order_by(Tag.tag_type.asc(), Tag.tag_value.asc())
+            ).all()
+            for fid, tag_type, tag_value in tag_rows:
+                if fid in tags_by_file:
+                    tags_by_file[fid].append({"type": tag_type, "value": tag_value})
 
-        person_rows = self._session.execute(
-            select(Face.file_id, func.count(func.distinct(Face.person_id)).label("cnt"))
-            .where(Face.file_id.in_(file_ids), Face.person_id.is_not(None))
-            .group_by(Face.file_id)
-        ).all()
-        person_counts: dict[str, int] = {str(fid): int(cnt) for fid, cnt in person_rows}
+            face_rows = self._session.execute(
+                select(Face.file_id, func.count(Face.id).label("cnt"))
+                .where(Face.file_id.in_(chunk))
+                .group_by(Face.file_id)
+            ).all()
+            face_counts.update({str(fid): int(cnt) for fid, cnt in face_rows})
 
-        ocr_rows = self._session.scalars(
-            select(MediaOCR).where(MediaOCR.file_id.in_(file_ids))
-        ).all()
-        ocr_by_file: dict[str, MediaOCR] = {row.file_id: row for row in ocr_rows}
+            person_rows = self._session.execute(
+                select(Face.file_id, func.count(func.distinct(Face.person_id)).label("cnt"))
+                .where(Face.file_id.in_(chunk), Face.person_id.is_not(None))
+                .group_by(Face.file_id)
+            ).all()
+            person_counts.update({str(fid): int(cnt) for fid, cnt in person_rows})
 
-        analysis_rows = self._session.scalars(
-            select(MediaAnalysisSignal).where(MediaAnalysisSignal.file_id.in_(file_ids))
-        ).all()
-        analysis_by_file: dict[str, MediaAnalysisSignal] = {row.file_id: row for row in analysis_rows}
+            ocr_rows = self._session.scalars(
+                select(MediaOCR).where(MediaOCR.file_id.in_(chunk))
+            ).all()
+            ocr_by_file.update({row.file_id: row for row in ocr_rows})
+
+            analysis_rows = self._session.scalars(
+                select(MediaAnalysisSignal).where(MediaAnalysisSignal.file_id.in_(chunk))
+            ).all()
+            analysis_by_file.update({row.file_id: row for row in analysis_rows})
 
         return tags_by_file, face_counts, person_counts, ocr_by_file, analysis_by_file
 

@@ -1932,3 +1932,27 @@ def test_scan_cache_excludes_dirs_with_unstable_files(
     assert json.loads(cache_path.read_text(encoding="utf-8")).get(str(source_root), -1) > 0
     items = client.get("/media", params={"q": "unstable"}).json()["items"]
     assert len(items) == 1
+
+
+def test_batch_load_supplements_handles_huge_id_lists(client: TestClient) -> None:
+    """갤러리 NL 검색은 후보 한도가 사실상 무제한이라 file_id가 수만 개까지
+    커진다 — IN 절을 통째로 바인딩하면 SQLite 'too many SQL variables'로
+    500이 났다('이한이랑 물에서 찍은 사진' 실사고). 청크 분할 회귀 가드."""
+    from app.services.search.backend import SqlAlchemyHybridSearchBackend
+
+    settings = client.app.state.settings
+    with client.app.state.database.session_factory() as session:
+        backend = SqlAlchemyHybridSearchBackend(
+            session,
+            embeddings_root=settings.embeddings_root,
+            clip_enabled=False,
+            log_events=False,
+        )
+        huge_ids = [f"{index:064d}" for index in range(40000)]
+        tags_by_file, face_counts, person_counts, ocr_by_file, analysis_by_file = (
+            backend._batch_load_supplements(huge_ids)
+        )
+
+    assert len(tags_by_file) == 40000
+    assert face_counts == {} and person_counts == {}
+    assert ocr_by_file == {} and analysis_by_file == {}
