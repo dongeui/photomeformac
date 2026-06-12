@@ -164,3 +164,39 @@ def test_has_changes_probe(tmp_path: Path) -> None:
     # dirty 센티널(안정화 대기 디렉터리)도 할 일로 본다
     cache.mark_dirty(nested)
     assert scanner.has_changes()
+
+
+def test_cache_keys_normalize_unicode_forms_to_nfc(tmp_path: Path) -> None:
+    """파일시스템(NFD)과 DB(NFC)가 같은 한글 경로를 다른 형태로 줘도 한 키로
+    수렴해야 한다 — 형태가 갈리면 prefill이 '변경됨'으로 오판하고 walk는
+    '변경 없음'으로 스킵해 한글 폴더 전체가 거짓 missing 처리된다
+    (2026-06-12 19,643개 실사고 회귀)."""
+    import unicodedata
+
+    nfd = Path(unicodedata.normalize("NFD", "/photos/동의"))
+    nfc = Path(unicodedata.normalize("NFC", "/photos/동의"))
+    assert str(nfd) != str(nfc)
+
+    cache = DirMtimeCache()
+    cache.update(nfd, 100)
+
+    assert cache.get(nfc) == 100
+    assert not cache.is_changed(nfc, 100)
+
+
+def test_legacy_nfd_cache_file_converges_to_nfc(tmp_path: Path) -> None:
+    import json
+    import unicodedata
+
+    nfd_key = unicodedata.normalize("NFD", "/photos/겸")
+    nfc_key = unicodedata.normalize("NFC", "/photos/겸")
+    cache_path = tmp_path / "scan_cache.json"
+    cache_path.write_text(json.dumps({nfd_key: 100}, ensure_ascii=False), encoding="utf-8")
+
+    cache = DirMtimeCache()
+    cache.attach_persistence(cache_path)
+    assert cache.get(Path(nfc_key)) == 100
+
+    cache.save()
+    saved = json.loads(cache_path.read_text(encoding="utf-8"))
+    assert list(saved) == [nfc_key]

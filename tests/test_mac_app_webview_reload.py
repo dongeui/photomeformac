@@ -46,7 +46,10 @@ def test_backend_supervisor_supports_ai_pack_status_prepare_and_library_job_stat
     assert 'var statusURL: URL {' in content
     assert 'func prepareAIModel(loadCached: Bool)' in content
     assert 'func triggerLibraryScan() {' in content
-    assert 'func triggerSemanticMaintenance() {' in content
+    # 통합 동기화: 수동 진입점은 triggerLibraryScan 하나다. 별도 이미지 AI
+    # 트리거와 scheduler.background_task 폴백은 제거됐다.
+    assert 'triggerSemanticMaintenance' not in content
+    assert 'background_task_kind' not in content
     assert 'static func parseLibraryJobStatus(payload: [String: Any]?) -> LibraryJobStatus?' in content
     assert 'static func summarizeLibraryJob(_ job: [String: Any]) -> String {' in content
 

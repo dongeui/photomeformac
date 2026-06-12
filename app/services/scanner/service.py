@@ -9,6 +9,7 @@ import logging
 import os
 from pathlib import Path
 import time
+import unicodedata
 from typing import Iterator
 
 from app.core.contracts import FileScanRecord, MediaKind, media_kind_from_path
@@ -61,19 +62,28 @@ class DirMtimeCache:
     Persisted to JSON on disk so that the next backend boot can skip rewalking
     unchanged directories — without this, every fresh process treats the whole
     library as if it were never scanned.
+
+    키는 항상 NFC로 정규화해 저장/조회한다. 파일시스템(macOS SMB/APFS)은
+    한글 경로를 NFD로 돌려주고 DB는 NFC로 저장하는데, 형태가 섞이면 prefill이
+    "변경됨"으로 오판해 한글 폴더 전체가 거짓 missing 처리된다(2026-06-12에
+    19,643개 실사고). macOS는 stat/scandir에 NFC 경로를 줘도 동작하므로
+    NFC를 캐노니컬로 쓴다.
     """
     _mtimes: dict[str, int] = field(default_factory=dict)
     _persist_path: Path | None = None
 
+    @staticmethod
+    def _norm(dir_path: Path | str) -> str:
+        return unicodedata.normalize("NFC", str(dir_path))
+
     def is_changed(self, dir_path: Path, current_mtime_ns: int) -> bool:
-        key = str(dir_path)
-        return self._mtimes.get(key) != current_mtime_ns
+        return self._mtimes.get(self._norm(dir_path)) != current_mtime_ns
 
     def update(self, dir_path: Path, mtime_ns: int) -> None:
-        self._mtimes[str(dir_path)] = mtime_ns
+        self._mtimes[self._norm(dir_path)] = mtime_ns
 
     def get(self, dir_path: Path) -> int | None:
-        return self._mtimes.get(str(dir_path))
+        return self._mtimes.get(self._norm(dir_path))
 
     def entries(self) -> dict[str, int]:
         return dict(self._mtimes)
@@ -85,7 +95,7 @@ class DirMtimeCache:
         삼기 때문에, 키를 지우면 조상 mtime이 안 변한 중첩 디렉터리는 영영
         다시 방문되지 않는다.
         """
-        self._mtimes[str(dir_path)] = _DIRTY_MTIME_SENTINEL
+        self._mtimes[self._norm(dir_path)] = _DIRTY_MTIME_SENTINEL
 
     def clear(self) -> None:
         self._mtimes.clear()
@@ -108,7 +118,8 @@ class DirMtimeCache:
         loaded: dict[str, int] = {}
         for key, value in payload.items():
             try:
-                loaded[str(key)] = int(value)
+                # 구버전 캐시 파일에 남은 NFD 키를 NFC로 수렴시킨다.
+                loaded[self._norm(key)] = int(value)
             except (TypeError, ValueError):
                 continue
         self._mtimes = loaded
@@ -128,7 +139,9 @@ class DirMtimeCache:
         try:
             self._persist_path.parent.mkdir(parents=True, exist_ok=True)
             tmp_path = self._persist_path.with_suffix(self._persist_path.suffix + ".tmp")
-            tmp_path.write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
+            # 체크포인트 스냅샷에는 walk가 만든 NFD 원형 키가 섞일 수 있다.
+            normalized = {self._norm(key): value for key, value in entries.items()}
+            tmp_path.write_text(json.dumps(normalized, ensure_ascii=False), encoding="utf-8")
             os.replace(tmp_path, self._persist_path)
         except OSError as exc:
             logger.warning("scan cache save failed", extra={"path": str(self._persist_path), "error": str(exc)})
@@ -196,7 +209,7 @@ class ScannerService:
         dirs = [source_root]
         cache = self._dir_mtime_cache
         if cache is not None:
-            root_key = str(source_root)
+            root_key = DirMtimeCache._norm(source_root)
             prefix = root_key + os.sep
             for key in cache.entries():
                 if key != root_key and key.startswith(prefix):
@@ -243,7 +256,8 @@ class ScannerService:
         visited: set[str] = set()
         while stack:
             current_dir = stack.pop()
-            current_key = str(current_dir)
+            # NFC 시드와 scandir이 내놓은 NFD 자식이 같은 디렉터리일 수 있다.
+            current_key = DirMtimeCache._norm(current_dir)
             if current_key in visited:
                 continue
             visited.add(current_key)
