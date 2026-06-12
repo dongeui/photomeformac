@@ -38,10 +38,10 @@ def test_offline_overlay_appears_and_recovers(tmp_path: Path, engine: str) -> No
             overlay = page.locator("#backend-offline")
             expect(overlay).to_be_hidden()
 
-            # 백엔드 사망 → 하트비트(5초 주기, 2회 연속 실패)가 오버레이를 띄운다
+            # 백엔드 사망 → 하트비트(5초 주기, 3회 연속 실패 ≈ 15초)가 오버레이를 띄운다
             backend.send_signal(signal.SIGKILL)
             backend.wait(timeout=10)
-            expect(overlay).to_be_visible(timeout=25_000)
+            expect(overlay).to_be_visible(timeout=30_000)
             expect(overlay).to_contain_text("Photome 연결이 끊겼습니다")
 
             # 백엔드 부활 → 자동 새로고침으로 복귀, 오버레이는 다시 숨김

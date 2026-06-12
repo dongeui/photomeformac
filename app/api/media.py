@@ -24,7 +24,7 @@ router = APIRouter(prefix="/media", tags=["media"])
 
 
 @router.get("/filter")
-async def filter_media(
+def filter_media(
     request: Request,
     status: Optional[str] = Query(default=None),
     media_kind: Optional[str] = Query(default=None),
@@ -39,7 +39,7 @@ async def filter_media(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    return await _list_media(
+    return _list_media(
         request,
         status,
         media_kind,
@@ -57,7 +57,7 @@ async def filter_media(
 
 
 @router.get("")
-async def list_media(
+def list_media(
     request: Request,
     status: Optional[str] = Query(default=None),
     media_kind: Optional[str] = Query(default=None),
@@ -72,7 +72,7 @@ async def list_media(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    return await _list_media(
+    return _list_media(
         request,
         status,
         media_kind,
@@ -90,7 +90,7 @@ async def list_media(
 
 
 @router.get("/{file_id}")
-async def get_media(request: Request, file_id: str) -> dict[str, Any]:
+def get_media(request: Request, file_id: str) -> dict[str, Any]:
     database = require_state(request, "database")
     with database.session_factory() as session:
         catalog = MediaCatalog(session)
@@ -177,7 +177,7 @@ async def update_media_annotation(request: Request, file_id: str):
     return RedirectResponse(next_url, status_code=303)
 
 
-async def _list_media(
+def _list_media(
     request: Request,
     status: Optional[str],
     media_kind: Optional[str],

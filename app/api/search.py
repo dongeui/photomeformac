@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/search")
-async def search_media(
+# 검색 핸들러들은 sync def 유지 — 무거운 동기 검색을 FastAPI가 threadpool로
+# 돌려 이벤트 루프(/healthz, 썸네일 응답)가 막히지 않게 한다.
+def search_media(
     request: Request,
     q: str = Query(default=""),
     mode: str = Query(default="hybrid"),
@@ -53,7 +55,7 @@ async def search_media(
 
 
 @router.get("/search/debug")
-async def search_media_debug(
+def search_media_debug(
     request: Request,
     q: str = Query(default=""),
     mode: str = Query(default="hybrid"),
@@ -79,7 +81,7 @@ async def search_media_debug(
 
 
 @router.get("/search/suggest")
-async def search_suggest(
+def search_suggest(
     request: Request,
     q: str = Query(default=""),
     limit: int = Query(default=8, ge=1, le=20),
@@ -101,7 +103,7 @@ async def search_suggest(
 
 
 @router.get("/search/benchmark")
-async def search_benchmark(
+def search_benchmark(
     request: Request,
     limit: int = Query(default=10, ge=1, le=50),
     w_ocr: Optional[float] = Query(default=None, ge=0),

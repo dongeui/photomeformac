@@ -71,7 +71,7 @@ def _friendly_intent_label(search_meta: dict) -> str:
 
 
 @router.get("/", response_class=HTMLResponse)
-async def home_page(
+def home_page(
     request: Request,
     media_type: Optional[str] = Query(default=None),
     date_from: Optional[str] = Query(default=None),
@@ -83,7 +83,7 @@ async def home_page(
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=DEFAULT_PAGE_SIZE),
 ) -> HTMLResponse:
-    return await gallery_page(
+    return gallery_page(
         request,
         media_type=media_type,
         date_from=date_from,
@@ -98,7 +98,10 @@ async def home_page(
 
 
 @router.get("/gallery", response_class=HTMLResponse)
-async def gallery_page(
+# sync def — DB 조회·하이브리드 검색(CLIP 임베딩 로드)이 무거워서 FastAPI가
+# threadpool에서 돌리게 한다. async def로 두면 이벤트 루프가 통째로 멈춰
+# /healthz까지 막히고 '연결 끊김' 오버레이가 오탐된다.
+def gallery_page(
     request: Request,
     media_type: Optional[str] = Query(default=None),
     date_from: Optional[str] = Query(default=None),
@@ -1235,7 +1238,9 @@ async def gallery_page(
           overlay.hidden = true;
         }} catch (_err) {{
           failures += 1;
-          if (failures >= 2) {{
+          // 3회 연속 실패(약 15초)에만 발동 — 일시적 지연으로 인한
+          // 오탐과 그로 인한 원치 않는 자동 새로고침을 막는다.
+          if (failures >= 3) {{
             overlay.hidden = false;
             wasOffline = true;
           }}
@@ -1252,7 +1257,7 @@ async def gallery_page(
 
 
 @router.get("/media/{file_id}/download")
-async def media_download(request: Request, file_id: str) -> FileResponse:
+def media_download(request: Request, file_id: str) -> FileResponse:
     database = require_state(request, "database")
     with database.session_factory() as session:
         media_file = session.get(MediaFile, file_id)
@@ -1269,7 +1274,7 @@ async def media_download(request: Request, file_id: str) -> FileResponse:
 
 
 @router.get("/gallery/assets/{asset_id}")
-async def gallery_asset(request: Request, asset_id: int) -> FileResponse:
+def gallery_asset(request: Request, asset_id: int) -> FileResponse:
     database = require_state(request, "database")
     settings = require_state(request, "settings")
     with database.session_factory() as session:
