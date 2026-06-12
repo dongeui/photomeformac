@@ -402,6 +402,28 @@ class MediaCatalog:
         media_file.updated_at = datetime.utcnow()
         self._session.flush()
 
+    def retire_missing_source(
+        self,
+        file_id: str,
+        *,
+        source_root: str,
+        active_source_roots: set[str],
+        now: datetime,
+    ) -> str:
+        """원본 파일이 사라진 레코드의 상태 전이 정책. 새 status를 반환한다.
+
+        폴더 전환으로 더 이상 동기화하지 않는 루트의 사진은 archived —
+        썸네일·검색·AI 결과를 보존해 갤러리에 계속 보이되, 처리 큐 선택
+        (thumb_done/analysis_done)에서는 빠져 재분석 시도·오류 반복이 없다.
+        활성 루트의 사진이면 기존대로 missing(스캔·NAS 재연결이 복원 관리).
+        """
+        root = unicodedata.normalize("NFC", source_root)
+        if active_source_roots and root not in active_source_roots:
+            self.set_media_status(file_id, status="archived", now=now)
+            return "archived"
+        self.mark_missing(file_id)
+        return "missing"
+
     def mark_media_error(self, file_id: str, *, stage: str, message: str, now: datetime) -> None:
         media_file = self._session.get(MediaFile, file_id)
         if media_file is None:
@@ -469,8 +491,11 @@ class MediaCatalog:
 
         디렉터리 mtime 캐시가 unchanged 디렉터리를 건너뛰므로, missing 파일이
         디렉터리 변경 없이 되살아난 경우(NAS 재연결 등)는 스캔이 따로
-        재확인해야 한다."""
-        query = select(MediaFile.source_root, MediaFile.current_path).where(MediaFile.status == "missing")
+        재확인해야 한다. archived(폴더 전환으로 보존된 사진)도 포함해,
+        사용자가 옛 폴더를 다시 선택하면 같은 경로로 재편입되게 한다."""
+        query = select(MediaFile.source_root, MediaFile.current_path).where(
+            MediaFile.status.in_(("missing", "archived"))
+        )
         for source_root, current_path in self._session.execute(query):
             if active_source_roots and source_root not in active_source_roots:
                 continue

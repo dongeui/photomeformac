@@ -589,10 +589,11 @@ def _catalog_breakdown(status_counts: dict[str, int]) -> dict[str, Any]:
     hidden_statuses = {"excluded", "missing", "replaced"}
     not_applicable = sum(counts.get(status, 0) for status in hidden_statuses)
     total = sum(count for status, count in counts.items() if status not in hidden_statuses)
-    completed = counts.get("thumb_done", 0) + counts.get("analysis_done", 0)
+    # archived = 폴더 전환으로 더는 동기화하지 않지만 분석 결과를 보존한 사진 — 완료로 센다
+    completed = counts.get("thumb_done", 0) + counts.get("analysis_done", 0) + counts.get("archived", 0)
     scheduled = counts.get("metadata_done", 0) + counts.get("active", 0)
     error = counts.get("error", 0)
-    known = {"thumb_done", "analysis_done", "metadata_done", "active", "missing", "replaced", "error", "excluded"}
+    known = {"thumb_done", "analysis_done", "archived", "metadata_done", "active", "missing", "replaced", "error", "excluded"}
     other = sum(count for status, count in counts.items() if status not in known)
     scheduled += other
     return {
@@ -3853,6 +3854,10 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
         pipeline_snapshot = pipeline.status_snapshot()
         clip_model_identifier = f"{settings.semantic_clip_model_name}/{settings.semantic_clip_pretrained}"
         active_media_status = MediaFile.status.not_in(("missing", "replaced", "excluded"))
+        # 분석 진행률 분모/분자에는 archived(폴더 전환으로 보존만 하는 사진)를
+        # 제외한다 — 처리 큐에서 빠진 사진이 "남은 분석"에 영구히 잡히면
+        # 진행률이 100%에 도달하지 못한다.
+        analysis_target_status = MediaFile.status.not_in(("missing", "replaced", "excluded", "archived"))
         media_with_thumb_asset = select(DerivedAsset.file_id).where(DerivedAsset.asset_kind == "thumb").distinct()
         dashboard_ready_status = or_(
             MediaFile.status.in_(("thumb_done", "analysis_done")),
@@ -3863,7 +3868,7 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
                 select(func.count())
                 .select_from(MediaFile)
                 .where(
-                    active_media_status,
+                    analysis_target_status,
                     dashboard_ready_status,
                     MediaFile.media_kind == "image",
                 )
@@ -3876,7 +3881,7 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
                 .select_from(MediaEmbedding)
                 .join(MediaFile, MediaFile.file_id == MediaEmbedding.file_id)
                 .where(
-                    active_media_status,
+                    analysis_target_status,
                     MediaFile.media_kind == "image",
                     MediaEmbedding.model_name == clip_model_identifier,
                     MediaEmbedding.version == settings.semantic_embedding_version,
@@ -3890,7 +3895,7 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
                 .select_from(MediaAutoTagState)
                 .join(MediaFile, MediaFile.file_id == MediaAutoTagState.file_id)
                 .where(
-                    active_media_status,
+                    analysis_target_status,
                     MediaFile.media_kind == "image",
                     MediaAutoTagState.version == settings.semantic_auto_tag_version,
                 )
@@ -3903,7 +3908,7 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
                 .select_from(SearchDocument)
                 .join(MediaFile, MediaFile.file_id == SearchDocument.file_id)
                 .where(
-                    active_media_status,
+                    analysis_target_status,
                     MediaFile.media_kind == "image",
                     SearchDocument.version == settings.semantic_search_version,
                 )
@@ -3914,7 +3919,7 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
         # 모두 최신인 사진 수. 메뉴바와 설정 페이지가 이 한 수치만 쓰게 해서
         # 화면마다 다른 기준(CLIP vs 검색문서)으로 보이던 불일치를 없앤다.
         analyzed_conditions = [
-            active_media_status,
+            analysis_target_status,
             dashboard_ready_status,
             MediaFile.media_kind == "image",
             MediaFile.file_id.in_(

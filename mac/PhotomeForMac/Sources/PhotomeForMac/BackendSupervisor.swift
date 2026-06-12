@@ -792,7 +792,10 @@ final class BackendSupervisor: ObservableObject {
         panel.message = "읽기 전용으로 스캔할 사진 폴더를 선택하세요."
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = true
+        // 단일 폴더 개념 — 폴더를 바꾸면 기존 사진은 archived로 보존되고
+        // 이후 동기화는 새 폴더만 본다. 백엔드는 다중 루트를 지원하지만
+        // UI는 한 개로 제한한다.
+        panel.allowsMultipleSelection = false
         panel.begin { [weak self] response in
             guard response == .OK else { return }
             let urls = panel.urls

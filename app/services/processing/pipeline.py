@@ -10,6 +10,7 @@ import json
 import logging
 import math
 import time
+import unicodedata
 from pathlib import Path
 from shutil import which
 from threading import Lock
@@ -440,6 +441,14 @@ class ProcessingPipeline:
         """Alias for run_semantic_maintenance — single unified Phase 2 pass."""
         return self.run_semantic_maintenance(batch_size=batch_size, progress_callback=progress_callback)
 
+    def _active_source_roots_nfc(self) -> set[str]:
+        """현재 동기화 대상 소스 루트(NFC 정규화). 폴더 전환 시 옛 루트의
+        사진을 missing 대신 archived로 보존하는 판정에 쓴다."""
+        return {
+            unicodedata.normalize("NFC", str(root))
+            for root in self._scanner.config.source_roots
+        }
+
     def run_semantic_maintenance(
         self,
         *,
@@ -519,6 +528,17 @@ class ProcessingPipeline:
                         media_file = catalog.get_media(file_id)
                         if media_file is None:
                             failed += 1
+                            continue
+                        if not Path(media_file.current_path).exists():
+                            # 원본이 사라진 파일은 상태 전이로 큐에서 내보낸다.
+                            # 그대로 두면 매 사이클 같은 파일이 실패를 반복한다.
+                            catalog.retire_missing_source(
+                                media_file.file_id,
+                                source_root=media_file.source_root,
+                                active_source_roots=self._active_source_roots_nfc(),
+                                now=datetime.utcnow(),
+                            )
+                            session.commit()
                             continue
                         self._try_repair_gps(media_file)
                         self._refresh_place_tags(session, media_file, catalog)
@@ -1284,8 +1304,16 @@ class ProcessingPipeline:
         source_exists = source_path.exists()
         _add_stage_timing(timings, "source_exists", time.perf_counter() - stage_started_at)
         if not source_exists:
-            catalog.mark_missing(media_file.file_id)
-            result["skipped"] = {"reason": "source_missing", "path": media_file.current_path}
+            outcome = catalog.retire_missing_source(
+                media_file.file_id,
+                source_root=media_file.source_root,
+                active_source_roots=self._active_source_roots_nfc(),
+                now=datetime.utcnow(),
+            )
+            result["skipped"] = {
+                "reason": "source_missing" if outcome == "missing" else "inactive_source_root",
+                "path": media_file.current_path,
+            }
             result["timings"] = timings
             return result
 

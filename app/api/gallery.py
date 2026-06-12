@@ -10,7 +10,7 @@ import re
 from typing import Optional
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy import Select, exists, false, func, or_, select
 
@@ -1259,7 +1259,7 @@ def gallery_page(
 
 
 @router.get("/media/{file_id}/download")
-def media_download(request: Request, file_id: str) -> FileResponse:
+def media_download(request: Request, file_id: str) -> Response:
     database = require_state(request, "database")
     with database.session_factory() as session:
         media_file = session.get(MediaFile, file_id)
@@ -1267,7 +1267,23 @@ def media_download(request: Request, file_id: str) -> FileResponse:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
     path = Path(media_file.current_path)
     if not path.is_file():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="file missing")
+        # 폴더 전환·이동으로 원본 경로가 해제된 사진 — 깨진 다운로드 대신 안내
+        return HTMLResponse(
+            f"""<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"><title>원본을 열 수 없음 · Photome</title>
+<style>body{{font-family:-apple-system,sans-serif;background:#0c0e12;color:#e8eaed;display:flex;
+align-items:center;justify-content:center;min-height:100vh;margin:0}}
+.panel{{max-width:440px;padding:32px;text-align:center;background:#16181d;border:1px solid #2a2d34;border-radius:14px}}
+h1{{font-size:1.05rem;margin:0 0 10px}}p{{color:#9aa0a6;font-size:.9rem;line-height:1.6;margin:0}}
+code{{font-size:.78rem;color:#7d8590;word-break:break-all}}</style></head>
+<body><div class="panel">
+<h1>원본을 열 수 없습니다</h1>
+<p>이 사진의 원본이 있던 폴더 연결이 해제되었거나 파일이 이동되었습니다.<br>
+썸네일과 검색은 계속 사용할 수 있습니다.<br><br>
+<code>{escape(media_file.current_path)}</code></p>
+</div></body></html>""",
+            status_code=status.HTTP_410_GONE,
+        )
     return FileResponse(
         path,
         filename=media_file.filename,
