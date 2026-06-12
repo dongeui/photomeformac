@@ -951,6 +951,19 @@ async def gallery_page(
     }}
     .statusbar .cache-note {{ color: var(--accent); font-weight: 500; }}
     .statusbar .pager {{ margin-left: auto; display: flex; gap: 8px; }}
+    .backend-offline {{
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(12, 14, 18, 0.82); backdrop-filter: blur(3px);
+    }}
+    .backend-offline[hidden] {{ display: none; }}
+    .backend-offline .panel {{
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      padding: 28px 34px; max-width: 420px; text-align: center;
+      box-shadow: 0 18px 50px rgba(0,0,0,.35);
+    }}
+    .backend-offline h2 {{ margin: 0 0 10px; font-size: 1.05rem; }}
+    .backend-offline p {{ margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.55; }}
     @media (max-width: 720px) {{
       .layout {{ flex-direction: column; }}
       .sidebar {{ width: auto; flex: none; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--line); }}
@@ -1024,6 +1037,13 @@ async def gallery_page(
       {_render_page_link('다음', _page_url(request, page + 1), enabled=has_next)}
     </span>
   </footer>
+  <div id="backend-offline" class="backend-offline" role="alert" hidden>
+    <div class="panel">
+      <h2>Photome 연결이 끊겼습니다</h2>
+      <p>Photome 앱이 종료되어 이 페이지가 멈췄습니다.<br>
+      앱을 다시 실행하면 자동으로 다시 연결됩니다.</p>
+    </div>
+  </div>
   <script>
     const searchProgress = document.getElementById("search-progress");
     const searchForm = document.getElementById("gallery-search-form");
@@ -1194,6 +1214,36 @@ async def gallery_page(
       document.addEventListener("click", (e) => {{
         if (!list.hidden && !e.target.closest(".search-ac-wrap")) closeList();
       }});
+    }})();
+
+    // Photome 종료 감지 하트비트. 브라우저 탭은 앱이 닫아줄 수 없으므로
+    // (로컬서버+브라우저 UI 앱 공통), 백엔드가 죽으면 깨진 화면 대신 안내
+    // 오버레이를 띄우고 백엔드가 돌아오면 자동으로 새로고침해 복귀한다.
+    (function backendHeartbeat() {{
+      const overlay = document.getElementById("backend-offline");
+      if (!overlay) return;
+      let failures = 0;
+      let wasOffline = false;
+      async function beat() {{
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 4000);
+        try {{
+          const res = await fetch("/healthz", {{ cache: "no-store", signal: controller.signal }});
+          if (!res.ok) throw new Error(String(res.status));
+          failures = 0;
+          if (wasOffline) {{ location.reload(); return; }}
+          overlay.hidden = true;
+        }} catch (_err) {{
+          failures += 1;
+          if (failures >= 2) {{
+            overlay.hidden = false;
+            wasOffline = true;
+          }}
+        }} finally {{
+          clearTimeout(timer);
+        }}
+      }}
+      setInterval(beat, 5000);
     }})();
   </script>
 </body>
