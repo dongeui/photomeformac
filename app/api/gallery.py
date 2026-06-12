@@ -990,7 +990,9 @@ def gallery_page(
       <nav class="side-nav">
         <a class="side-item active" href="/gallery">모든 사진</a>
         <a class="side-item" href="/people/manage">사람</a>
-        <a class="side-item" href="/dashboard">설정</a>
+        <!-- 설정(/dashboard)은 사이드바에서 숨기고 메뉴바 "설정 열기"로만 진입.
+             페이지 자체는 오류 재처리·리소스 설정 등 관리 기능 때문에 유지한다. -->
+
       </nav>
       <form class="side-filters" id="gallery-search-form" method="get" action="/gallery">
         <div class="search-ac-wrap">
