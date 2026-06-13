@@ -22,6 +22,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.ai_pack import get_ai_pack_state
 from app.api.deps import require_state
+from app.api.i18n_web import render_lang_switcher, request_translator
 from app.api.performance_settings import resource_settings_snapshot
 from app.api.serializers import serialize_scheduler_snapshot
 from app.core.settings import AppSettings
@@ -666,6 +667,9 @@ def _ai_summary(
 async def dashboard(request: Request) -> HTMLResponse:
     payload = await status(request)
     settings: AppSettings = require_state(request, "settings")
+    locale, _ = request_translator(request)
+    def _json_t(key: str, **fmt: object) -> str:
+        return json.dumps(_(key, **fmt), ensure_ascii=False)
     scheduler = payload["scheduler"]
     semantic = payload["semantic"]
     performance = payload["performance"]
@@ -758,11 +762,11 @@ async def dashboard(request: Request) -> HTMLResponse:
     people_json = json.dumps([{"id": p["id"], "display_name": p["display_name"]} for p in people])
 
     html = f"""<!doctype html>
-<html lang="ko">
+<html lang="{locale}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Trove 설정</title>
+  <title>Trove {_("nav.settings")}</title>
   <style>
     :root {{
       color-scheme: light dark;
@@ -818,6 +822,10 @@ async def dashboard(request: Request) -> HTMLResponse:
       font-size: 1.05rem;
       padding: 4px 10px 14px;
     }}
+    .side-rail .side-lang {{ margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; gap: 4px; }}
+    .side-rail .lang-link {{ font-size: 0.78rem; color: var(--muted); text-decoration: none; padding: 3px 8px; border-radius: 6px; }}
+    .side-rail .lang-link:hover {{ background: var(--accent-soft); }}
+    .side-rail .lang-link.active {{ color: var(--accent); font-weight: 600; }}
     .side-rail a {{
       padding: 8px 10px;
       border-radius: 8px;
@@ -1988,9 +1996,10 @@ async def dashboard(request: Request) -> HTMLResponse:
 <body>
   <aside class="side-rail">
     <div class="rail-brand">Trove</div>
-    <a href="/gallery">모든 사진</a>
-    <a href="/people/manage">사람</a>
-    <a class="active" href="/dashboard">설정</a>
+    <a href="/gallery">{_("nav.all_photos")}</a>
+    <a href="/people/manage">{_("nav.people")}</a>
+    <a class="active" href="/dashboard">{_("nav.settings")}</a>
+    <div class="side-lang">{render_lang_switcher(locale, request)}</div>
   </aside>
   <main class="shell">
     <section class="hero">
