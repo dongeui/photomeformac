@@ -28,9 +28,6 @@ router = APIRouter(tags=["gallery"])
 
 PERSON_TAG_TYPES = ("person", "people", "face")
 PLACE_TAG_TYPES = ("place", "location", "place_detail", "geo", "geo_detail")
-# person-000123 같은 내부 자동 ID. 인물 콤보에는 대표 이름을 저장한 인물만
-# 노출하므로 이 패턴은 제외한다(사람 정리 페이지의 동일 규칙과 일치).
-_INTERNAL_PERSON_ID_RE = re.compile(r"^person-\d+$", re.IGNORECASE)
 PAGE_SIZE = 48
 PAGE_SIZE_OPTIONS = (50, 100, 200, 300, 500)
 DEFAULT_PAGE_SIZE = 100
@@ -192,11 +189,7 @@ def gallery_page(
             ):
                 annotation_map[annotation.file_id] = annotation
 
-        person_options = [
-            value
-            for value in _list_tag_values(session, PERSON_TAG_TYPES)
-            if not _INTERNAL_PERSON_ID_RE.match(str(value).strip())
-        ]
+        person_options = _list_tag_values(session, PERSON_TAG_TYPES, exclude_internal_person=True)
         place_options = _list_tag_values(session, PLACE_TAG_TYPES)
 
     current_url = request.url.path
@@ -1439,14 +1432,21 @@ def _captured_at_expr():
     return func.coalesce(MediaFile.exif_datetime, mtime_expr, MediaFile.processed_at, MediaFile.last_seen_at)
 
 
-def _list_tag_values(session, tag_types: tuple[str, ...]) -> list[str]:
+def _list_tag_values(
+    session, tag_types: tuple[str, ...], *, exclude_internal_person: bool = False
+) -> list[str]:
     statement = (
         select(Tag.tag_value)
         .where(Tag.tag_type.in_(tag_types))
         .group_by(Tag.tag_value)
         .order_by(func.lower(Tag.tag_value).asc())
-        .limit(200)
     )
+    if exclude_internal_person:
+        # person-000625 같은 내부 자동 ID는 LIMIT 이전에 SQL에서 제외한다.
+        # ASCII 'person-...'가 한글 이름보다 먼저 정렬돼, 파이썬에서 사후
+        # 필터링하면 LIMIT 200이 내부 ID로만 채워져 이름이 한 명도 안 남는다.
+        statement = statement.where(~Tag.tag_value.op("GLOB")("person-[0-9]*"))
+    statement = statement.limit(200)
     return [value for value in session.scalars(statement) if not _is_coordinate_tag(str(value))]
 
 
