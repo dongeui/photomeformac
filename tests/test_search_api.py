@@ -48,15 +48,15 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source_root: Path) -
     derived_root = tmp_path / "derived"
     database_path = data_root / "photome.sqlite3"
 
-    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(source_root))
-    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
-    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
-    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
-    monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
-    monkeypatch.setenv("PHOTOME_SYNC_SCHEDULER_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+    monkeypatch.setenv("TROVE_SOURCE_ROOTS", str(source_root))
+    monkeypatch.setenv("TROVE_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("TROVE_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("TROVE_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("TROVE_STABILITY_WINDOW_SECONDS", "1")
+    monkeypatch.setenv("TROVE_SYNC_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("TROVE_FACE_ANALYSIS_ENABLED", "0")
+    monkeypatch.setenv("TROVE_CLIP_ENABLED", "0")
+    monkeypatch.setenv("TROVE_LOG_LEVEL", "ERROR")
 
     app = create_app(load_settings())
     with TestClient(app) as test_client:
@@ -122,14 +122,14 @@ def test_offline_mode_disables_outbound_features(monkeypatch: pytest.MonkeyPatch
     database_path = data_root / "photome.sqlite3"
     source_root.mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(source_root))
-    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
-    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
-    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
-    monkeypatch.setenv("PHOTOME_OFFLINE_MODE", "1")
-    monkeypatch.setenv("PHOTOME_CAPTION_PROVIDER", "moondream")
-    monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "1")
-    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+    monkeypatch.setenv("TROVE_SOURCE_ROOTS", str(source_root))
+    monkeypatch.setenv("TROVE_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("TROVE_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("TROVE_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("TROVE_OFFLINE_MODE", "1")
+    monkeypatch.setenv("TROVE_CAPTION_PROVIDER", "moondream")
+    monkeypatch.setenv("TROVE_FACE_ANALYSIS_ENABLED", "1")
+    monkeypatch.setenv("TROVE_LOG_LEVEL", "ERROR")
 
     settings = load_settings()
     assert settings.offline_mode is True
@@ -168,12 +168,12 @@ def test_clip_status_degrades_when_local_ai_pack_is_missing(
     database_path = data_root / "photome.sqlite3"
     source_root.mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(source_root))
-    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
-    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
-    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
-    monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "1")
-    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+    monkeypatch.setenv("TROVE_SOURCE_ROOTS", str(source_root))
+    monkeypatch.setenv("TROVE_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("TROVE_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("TROVE_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("TROVE_CLIP_ENABLED", "1")
+    monkeypatch.setenv("TROVE_LOG_LEVEL", "ERROR")
 
     from app.services.embedding import clip as clip_embedding
 
@@ -812,17 +812,17 @@ def test_scan_accepts_host_path_and_maps_it_to_docker_mount(
     derived_root = tmp_path / "derived"
     database_path = data_root / "photome.sqlite3"
 
-    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(mount_root))
-    monkeypatch.setenv("PHOTOME_SOURCE_ROOT_HOST", str(host_root))
-    monkeypatch.setenv("PHOTOME_SOURCE_ROOT_MOUNT", str(mount_root))
-    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
-    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
-    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
-    monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
-    monkeypatch.setenv("PHOTOME_SYNC_SCHEDULER_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+    monkeypatch.setenv("TROVE_SOURCE_ROOTS", str(mount_root))
+    monkeypatch.setenv("TROVE_SOURCE_ROOT_HOST", str(host_root))
+    monkeypatch.setenv("TROVE_SOURCE_ROOT_MOUNT", str(mount_root))
+    monkeypatch.setenv("TROVE_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("TROVE_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("TROVE_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("TROVE_STABILITY_WINDOW_SECONDS", "1")
+    monkeypatch.setenv("TROVE_SYNC_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("TROVE_FACE_ANALYSIS_ENABLED", "0")
+    monkeypatch.setenv("TROVE_CLIP_ENABLED", "0")
+    monkeypatch.setenv("TROVE_LOG_LEVEL", "ERROR")
 
     original_exists = scan_api.os.path.exists
 
@@ -860,15 +860,15 @@ def test_scan_rejects_unmounted_explicit_docker_path_instead_of_falling_back(
     derived_root = tmp_path / "derived"
     database_path = data_root / "photome.sqlite3"
 
-    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(configured_root))
-    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
-    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
-    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
-    monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
-    monkeypatch.setenv("PHOTOME_SYNC_SCHEDULER_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+    monkeypatch.setenv("TROVE_SOURCE_ROOTS", str(configured_root))
+    monkeypatch.setenv("TROVE_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("TROVE_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("TROVE_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("TROVE_STABILITY_WINDOW_SECONDS", "1")
+    monkeypatch.setenv("TROVE_SYNC_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("TROVE_FACE_ANALYSIS_ENABLED", "0")
+    monkeypatch.setenv("TROVE_CLIP_ENABLED", "0")
+    monkeypatch.setenv("TROVE_LOG_LEVEL", "ERROR")
 
     original_exists = scan_api.os.path.exists
 
@@ -1137,7 +1137,7 @@ def test_async_job_dashboard_restores_phase_cards_from_local_storage(client: Tes
     assert "로컬 모델 캐시 사용" in html or "모델" in html
     assert "Load cached model" in html or "로컬 캐시 확인" in html
     assert "/ai-pack/prepare?load_cached=true" in html
-    assert "python -m app.main" in html or "docker compose --env-file .env.docker.example up -d photome" in html
+    assert "python -m app.main" in html or "docker compose --env-file .env.docker.example up -d trove" in html
     assert 'id="phase1-full-scan"' not in html
     assert "function formatElapsed(startedAt, finishedAt)" in html
     assert "async function pollJob(jobId, resultNode, render)" in html
@@ -1373,15 +1373,15 @@ def test_startup_recovers_interrupted_library_jobs(monkeypatch: pytest.MonkeyPat
     derived_root = tmp_path / "derived"
     database_path = data_root / "photome.sqlite3"
 
-    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(source_root))
-    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(data_root))
-    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(derived_root))
-    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(database_path))
-    monkeypatch.setenv("PHOTOME_STABILITY_WINDOW_SECONDS", "1")
-    monkeypatch.setenv("PHOTOME_SYNC_SCHEDULER_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_FACE_ANALYSIS_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_CLIP_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+    monkeypatch.setenv("TROVE_SOURCE_ROOTS", str(source_root))
+    monkeypatch.setenv("TROVE_DATA_ROOT", str(data_root))
+    monkeypatch.setenv("TROVE_DERIVED_ROOT", str(derived_root))
+    monkeypatch.setenv("TROVE_DATABASE_PATH", str(database_path))
+    monkeypatch.setenv("TROVE_STABILITY_WINDOW_SECONDS", "1")
+    monkeypatch.setenv("TROVE_SYNC_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("TROVE_FACE_ANALYSIS_ENABLED", "0")
+    monkeypatch.setenv("TROVE_CLIP_ENABLED", "0")
+    monkeypatch.setenv("TROVE_LOG_LEVEL", "ERROR")
 
     settings = load_settings()
     database = build_database_state(settings)
@@ -1805,8 +1805,8 @@ def test_scan_missing_mapped_source_root_explains_auto_mapping(
         return original_exists(path)
 
     monkeypatch.setattr(scan_api.os.path, "exists", fake_exists)
-    monkeypatch.setenv("PHOTOME_SOURCE_ROOT_HOST", "/Volumes/homes/dejeong/Photos")
-    monkeypatch.setenv("PHOTOME_SOURCE_ROOT_MOUNT", "/photos")
+    monkeypatch.setenv("TROVE_SOURCE_ROOT_HOST", "/Volumes/homes/dejeong/Photos")
+    monkeypatch.setenv("TROVE_SOURCE_ROOT_MOUNT", "/photos")
 
     app = create_app(load_settings())
     with TestClient(app) as mapped_client:

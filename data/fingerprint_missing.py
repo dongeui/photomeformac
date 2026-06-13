@@ -12,8 +12,8 @@ from app.services.fingerprint.service import FingerprintService, FileScanRecord
 from app.services.metadata.service import MetadataService
 from app.core.contracts import MediaKind
 
-DB = "/var/lib/photome/data/photome.sqlite3"
-LIST_FILE = "/var/lib/photome/data/nas_image_list.txt"
+DB = "/var/lib/trove/data/photome.sqlite3"
+LIST_FILE = "/var/lib/trove/data/nas_image_list.txt"
 SOURCE_ROOT = Path("/Volumes/homes/dejeong/Photos")
 BATCH = 100
 

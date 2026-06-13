@@ -21,7 +21,7 @@ NATURAL_EARTH_COUNTRIES = (
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Prepare GeoNames + Natural Earth data for Photome.")
+    parser = argparse.ArgumentParser(description="Prepare GeoNames + Natural Earth data for Trove.")
     parser.add_argument(
         "--root",
         type=Path,
@@ -117,7 +117,7 @@ def _download_natural_earth(output: Path) -> None:
 
 
 def _download(url: str, output: Path) -> None:
-    req = urllib.request.Request(url, headers={"User-Agent": "photome-local-geodata/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "trove-local-geodata/1.0"})
     with urllib.request.urlopen(req, timeout=60) as response, output.open("wb") as fh:
         shutil.copyfileobj(response, fh)
 

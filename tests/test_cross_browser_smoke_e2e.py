@@ -1,6 +1,6 @@
 """크로스브라우저 최소 검증(smoke) — 실브라우저 엔진(Chromium/WebKit) e2e.
 
-Photome UI는 사용자의 기본 브라우저에서 열리므로 최소한 Chrome/Edge/Safari
+Trove UI는 사용자의 기본 브라우저에서 열리므로 최소한 Chrome/Edge/Safari
 에서 깨지지 않아야 한다. Chrome/Edge는 둘 다 Chromium(Blink) 엔진이라
 chromium 한 번이 둘을 대표하고, Safari는 webkit으로 검증한다.
 

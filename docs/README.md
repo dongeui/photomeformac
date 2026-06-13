@@ -1,4 +1,4 @@
-# Photome for Mac Docs
+# Trove for Mac Docs
 
 이 디렉토리는 Mac 앱과 core/runtime 문서를 함께 관리한다. Mac 앱은 Docker판과 기능 차이를 두지 않고, Docker급 기능을 앱 내부 런타임으로 통합한다.
 
@@ -52,7 +52,7 @@
 - GitHub Releases 폴링 기반 업데이트 확인
 
 ### 배포 자동화
-- `PHOTOME_BUNDLE_PYTHON`/`PHOTOME_BUNDLE_WEIGHTS` 기본 1 — DMG에 venv + CLIP weights 동봉
+- `TROVE_BUNDLE_PYTHON`/`TROVE_BUNDLE_WEIGHTS` 기본 1 — DMG에 venv + CLIP weights 동봉
 - Entitlements (allow-jit, library-validation 우회 등) 자동 부착 — hardened runtime에서 PyTorch 실행
 - DMG 자체 codesign + notarize → stapler staple .dmg + 내부 .app
 - GitHub Actions workflow에 시크릿 기반 Developer ID 인증서 import + notarize 자동 단계

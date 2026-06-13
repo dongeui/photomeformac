@@ -743,7 +743,7 @@ final class BackendSupervisor: ObservableObject {
 
     /// Apple Photos 라이브러리 패키지의 `originals` 디렉토리. 시스템 사용자의
     /// 대다수가 여기에 사진을 저장하므로 자동 감지해서 onboarding에서 우선 추천한다.
-    /// 패키지 자체는 read-only 권장이며, photome scanner는 일반 폴더와 동일하게 walk.
+    /// 패키지 자체는 read-only 권장이며, trove scanner는 일반 폴더와 동일하게 walk.
     static func detectedPhotosLibraryURL() -> URL? {
         guard let pictures = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first else {
             return nil
@@ -1302,7 +1302,7 @@ final class BackendSupervisor: ObservableObject {
 
         let formatter = ISO8601DateFormatter()
         let safeStamp = formatter.string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let bundleURL = exportsDirectory.appendingPathComponent("photome-diagnostics-\(safeStamp)", isDirectory: true)
+        let bundleURL = exportsDirectory.appendingPathComponent("trove-diagnostics-\(safeStamp)", isDirectory: true)
         try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
 
         if let logFileURL, FileManager.default.fileExists(atPath: logFileURL.path) {

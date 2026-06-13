@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="${PHOTOME_REPO_ROOT:-/Users/dongeui/Desktop/code/photomeformac}"
+REPO_ROOT="${TROVE_REPO_ROOT:-/Users/dongeui/Desktop/code/photomeformac}"
 cd "$REPO_ROOT"
 
 if command -v python3.11 >/dev/null 2>&1; then
@@ -18,6 +18,6 @@ fi
 
 cat <<MSG
 완료:
-PHOTOME_REPO_ROOT=$REPO_ROOT
-PHOTOME_PYTHON=$REPO_ROOT/.venv/bin/python
+TROVE_REPO_ROOT=$REPO_ROOT
+TROVE_PYTHON=$REPO_ROOT/.venv/bin/python
 MSG

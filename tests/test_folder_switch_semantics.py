@@ -174,12 +174,12 @@ def test_download_of_unavailable_original_shows_friendly_page(monkeypatch, tmp_p
 
     source_root = tmp_path / "source"
     source_root.mkdir()
-    monkeypatch.setenv("PHOTOME_SOURCE_ROOTS", str(source_root))
-    monkeypatch.setenv("PHOTOME_DATA_ROOT", str(tmp_path / "data"))
-    monkeypatch.setenv("PHOTOME_DERIVED_ROOT", str(tmp_path / "derived"))
-    monkeypatch.setenv("PHOTOME_DATABASE_PATH", str(tmp_path / "data" / "test.sqlite3"))
-    monkeypatch.setenv("PHOTOME_SYNC_SCHEDULER_ENABLED", "0")
-    monkeypatch.setenv("PHOTOME_LOG_LEVEL", "ERROR")
+    monkeypatch.setenv("TROVE_SOURCE_ROOTS", str(source_root))
+    monkeypatch.setenv("TROVE_DATA_ROOT", str(tmp_path / "data"))
+    monkeypatch.setenv("TROVE_DERIVED_ROOT", str(tmp_path / "derived"))
+    monkeypatch.setenv("TROVE_DATABASE_PATH", str(tmp_path / "data" / "test.sqlite3"))
+    monkeypatch.setenv("TROVE_SYNC_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("TROVE_LOG_LEVEL", "ERROR")
 
     app = create_app(load_settings())
     with TestClient(app) as client:

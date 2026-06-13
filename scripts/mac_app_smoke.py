@@ -25,13 +25,13 @@ from scripts.mac_app_backend_env import build_backend_env
 
 
 def build_backend_command() -> list[str]:
-    """현재 Python으로 Photome 백엔드 main()을 실행하는 명령을 만든다."""
+    """현재 Python으로 Trove 백엔드 main()을 실행하는 명령을 만든다."""
     return [sys.executable, "-c", "from app.main import main; main()"]
 
 
 def redact_env_for_log(env: Mapping[str, str]) -> dict[str, str]:
-    """로그용으로 PHOTOME_* 값만 남긴다."""
-    return {key: value for key, value in sorted(env.items()) if key.startswith("PHOTOME_")}
+    """로그용으로 TROVE_* 값만 남긴다."""
+    return {key: value for key, value in sorted(env.items()) if key.startswith("TROVE_")}
 
 
 def find_free_port() -> int:
@@ -75,7 +75,7 @@ def run_smoke(app_data_root: Path, *, source_roots: list[str], timeout_seconds: 
             clip_enabled=False,
         )
     )
-    env["PHOTOME_LOG_LEVEL"] = "INFO"
+    env["TROVE_LOG_LEVEL"] = "INFO"
 
     command = build_backend_command()
     process = subprocess.Popen(
@@ -100,7 +100,7 @@ def run_smoke(app_data_root: Path, *, source_roots: list[str], timeout_seconds: 
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Photome Mac 앱 백엔드 스모크 테스트")
+    parser = argparse.ArgumentParser(description="Trove Mac 앱 백엔드 스모크 테스트")
     parser.add_argument("--app-data-root", help="테스트용 앱 데이터 루트. 생략하면 임시 디렉토리 사용")
     parser.add_argument("--source-root", action="append", default=[], help="원본 사진 폴더")
     parser.add_argument("--timeout", type=float, default=30.0)
@@ -109,7 +109,7 @@ def main() -> None:
     if args.app_data_root:
         result = run_smoke(Path(args.app_data_root), source_roots=args.source_root, timeout_seconds=args.timeout)
     else:
-        with tempfile.TemporaryDirectory(prefix="photome-mac-smoke-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="trove-mac-smoke-") as tmp:
             result = run_smoke(Path(tmp), source_roots=args.source_root, timeout_seconds=args.timeout)
 
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))

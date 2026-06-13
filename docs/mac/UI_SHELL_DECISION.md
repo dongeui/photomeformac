@@ -2,7 +2,7 @@
 
 ## 결론
 
-Photome for Mac은 Swift/SwiftUI shell + 기존 웹 대시보드 WebView + 메뉴바 아이콘 조합으로 간다.
+Trove for Mac은 Swift/SwiftUI shell + 기존 웹 대시보드 WebView + 메뉴바 아이콘 조합으로 간다.
 
 1. 기술 스택: Swift/SwiftUI (Tauri/Electron 대비 macOS 권한·서명·앱 크기 측면에서 유리)
 2. 메인 화면: 기존 웹 UI를 WebView로 표시
@@ -26,7 +26,7 @@ Swift/SwiftUI 채택 이유:
 2. 메뉴바, 상태 표시, 자동 시작, 알림, 설정 화면 구현이 쉽다.
 3. 코드서명, notarization, DMG 배포 경로가 표준적이다.
 4. Electron보다 앱 크기와 런타임 부담이 작다.
-5. 기존 Photome web UI는 WebView로 그대로 재사용한다.
+5. 기존 Trove web UI는 WebView로 그대로 재사용한다.
 
 Tauri는 빠른 웹 wrapper 실험이 필요할 때 후보로 남긴다. Electron은 런타임 크기 때문에 마지막 후보로 둔다.
 
@@ -42,7 +42,7 @@ Tauri는 빠른 웹 wrapper 실험이 필요할 때 후보로 남긴다. Electro
 
 ### 메뉴바 아이콘이 필요한 이유
 
-1. Photome는 사진 서버/백그라운드 작업 성격이 강하다.
+1. Trove는 사진 서버/백그라운드 작업 성격이 강하다.
 2. 사용자는 앱 창을 닫아도 스캔/AI 처리 상태를 보고 싶다.
 3. Mac 사용자는 메뉴바에서 “실행 중/동기화 중/오류”를 보는 UX에 익숙하다.
 4. 폴더 선택, LAN 공유 토글, 모델 다운로드, 대시보드 열기 같은 제어는 native 메뉴가 더 편하다.
@@ -70,7 +70,7 @@ Tauri는 빠른 웹 wrapper 실험이 필요할 때 후보로 남긴다. Electro
 
 메뉴 항목:
 
-1. Photome 열기
+1. Trove 열기
 2. 대시보드 열기
 3. 사진 폴더 선택
 4. 스캔 시작

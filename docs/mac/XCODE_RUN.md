@@ -1,4 +1,4 @@
-# Xcode에서 Photome for Mac 실행
+# Xcode에서 Trove for Mac 실행
 
 ## 1. 백엔드 Python 준비
 
@@ -36,11 +36,11 @@ PhotomeForMac > Edit Scheme... > Run > Arguments > Environment Variables
 아래 2개를 추가하고 체크박스를 켠다.
 
 ```text
-PHOTOME_REPO_ROOT=/Users/dongeui/Desktop/code/photomeformac
-PHOTOME_PYTHON=/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python
+TROVE_REPO_ROOT=/Users/dongeui/Desktop/code/photomeformac
+TROVE_PYTHON=/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python
 ```
 
-중요: `source .venv/bin/activate` 같은 활성화 스크립트를 Xcode에 넣는 게 아니다. Xcode에는 `PHOTOME_PYTHON` 값으로 실제 Python 실행 파일 경로를 넣는다.
+중요: `source .venv/bin/activate` 같은 활성화 스크립트를 Xcode에 넣는 게 아니다. Xcode에는 `TROVE_PYTHON` 값으로 실제 Python 실행 파일 경로를 넣는다.
 
 ## 4. Run
 
@@ -61,13 +61,13 @@ cd /Users/dongeui/Desktop/code/photomeformac
 scripts/build_mac_app_bundle.sh
 ```
 
-기본은 로컬 테스트용 ad-hoc 서명이다. Developer ID 배포는 `PHOTOME_MAC_SIGN_IDENTITY="Developer ID Application: ..." scripts/build_mac_app_bundle.sh`로 서명 identity를 지정한 뒤 notarization을 붙인다. 전체 릴리즈 체크리스트는 `docs/mac/RELEASE_CHECKLIST.md`를 따른다.
+기본은 로컬 테스트용 ad-hoc 서명이다. Developer ID 배포는 `TROVE_MAC_SIGN_IDENTITY="Developer ID Application: ..." scripts/build_mac_app_bundle.sh`로 서명 identity를 지정한 뒤 notarization을 붙인다. 전체 릴리즈 체크리스트는 `docs/mac/RELEASE_CHECKLIST.md`를 따른다.
 
 ## 자주 나는 오류
 
 ### Python import 오류
 
-대부분 Xcode가 시스템 Python(`/usr/bin/python3`)을 잡아서 생긴다. `PHOTOME_PYTHON`이 아래 값인지 확인한다.
+대부분 Xcode가 시스템 Python(`/usr/bin/python3`)을 잡아서 생긴다. `TROVE_PYTHON`이 아래 값인지 확인한다.
 
 ```text
 /Users/dongeui/Desktop/code/photomeformac/.venv/bin/python

@@ -28,12 +28,12 @@
 
 ### 1.3 App-Specific Password 생성
 - https://appleid.apple.com → Sign-In and Security → App-Specific Passwords
-- 이름: `photome notary` (임의)
+- 이름: `trove notary` (임의)
 - 생성된 16자 비밀번호 안전한 곳에 저장 (한 번만 보임)
 
 ### 1.4 notarytool keychain profile 저장 (재사용용, 한 번만)
 ```bash
-xcrun notarytool store-credentials photome-notary \
+xcrun notarytool store-credentials trove-notary \
   --apple-id <Apple ID 이메일> \
   --team-id <TEAMID> \
   --password <위에서 만든 16자 비번>
@@ -46,8 +46,8 @@ Team ID는 https://developer.apple.com/account → Membership에서 확인.
 ## 2. 로컬 빌드 (한 번 정상 동작 확인용)
 
 ```bash
-export PHOTOME_MAC_SIGN_IDENTITY="Developer ID Application: <NAME> (<TEAMID>)"
-export PHOTOME_NOTARY_PROFILE=photome-notary
+export TROVE_MAC_SIGN_IDENTITY="Developer ID Application: <NAME> (<TEAMID>)"
+export TROVE_NOTARY_PROFILE=trove-notary
 
 # 1. venv 준비 (한 번만, 이미 있으면 skip)
 python3.11 -m venv .venv311
@@ -60,7 +60,7 @@ scripts/build_mac_app_bundle.sh
 scripts/notarize_mac_app.sh
 ```
 
-결과: `dist/mac/PhotomeForMac.dmg`가 notarized 상태로 만들어짐. 외부 Mac에서 더블클릭만으로 실행 가능.
+결과: `dist/mac/Trove.dmg`가 notarized 상태로 만들어짐. 외부 Mac에서 더블클릭만으로 실행 가능.
 
 ---
 
@@ -111,7 +111,7 @@ git push origin mac-v0.1.0
 ### 4.2 LAN admin guard 크로스 디바이스
 - Mac 앱 메뉴바 [LAN 공유 켜기]
 - 다른 기기 (스마트폰 브라우저 등)에서 `http://<Mac IP>:8000/` 접근
-- 갤러리/대시보드는 표시되지만 `/scan`, `/people` 등 admin API는 401 (X-Photome-Admin-Token 없이) 확인
+- 갤러리/대시보드는 표시되지만 `/scan`, `/people` 등 admin API는 401 (X-Trove-Admin-Token 없이) 확인
 
 ### 4.3 NAS / 대용량 라이브러리
 - 작은 폴더(수백 장) 먼저 동기화/검색 동작 확인
@@ -131,7 +131,7 @@ git push origin mac-v0.1.0
 ## 5. 그 외 사용자 선택 사항
 
 - **App icon 변경:** `mac/PhotomeForMac/Resources/Assets.xcassets/AppIcon.appiconset/` 안 PNG 교체
-- **버전 변경:** 빌드 시 `PHOTOME_MAC_VERSION=0.2.0 scripts/build_mac_app_bundle.sh`
+- **버전 변경:** 빌드 시 `TROVE_MAC_VERSION=0.2.0 scripts/build_mac_app_bundle.sh`
 - **GitHub Release 노트:** workflow의 `--notes` 자동 문구 외 직접 수정 시 release page에서 편집
 ### Sparkle 2 자동 업데이트 셋업
 
@@ -159,8 +159,8 @@ generate_keys
 
 **4. 환경변수 설정해서 빌드:**
 ```bash
-export PHOTOME_SPARKLE_FEED_URL="https://dongeui.github.io/photomeformac/appcast.xml"
-export PHOTOME_SPARKLE_PUBLIC_ED_KEY="MCowB...wI="  # 2번에서 출력된 base64
+export TROVE_SPARKLE_FEED_URL="https://dongeui.github.io/photomeformac/appcast.xml"
+export TROVE_SPARKLE_PUBLIC_ED_KEY="MCowB...wI="  # 2번에서 출력된 base64
 scripts/build_mac_app_bundle.sh
 # Info.plist에 SUFeedURL + SUPublicEDKey가 자동 부착됨
 ```
@@ -191,5 +191,5 @@ generate_appcast /path/to/release_dmgs/   # 이 폴더의 모든 *.dmg를 스캔
 - [ ] 4.4 외부 사용자 테스트
 - [ ] 5. Sparkle CLI 도구 설치 + edDSA key 쌍 생성
 - [ ] 5. appcast.xml 호스팅 위치 결정 (GitHub Pages 추천)
-- [ ] 5. `PHOTOME_SPARKLE_FEED_URL` + `PHOTOME_SPARKLE_PUBLIC_ED_KEY` 환경변수로 첫 빌드
+- [ ] 5. `TROVE_SPARKLE_FEED_URL` + `TROVE_SPARKLE_PUBLIC_ED_KEY` 환경변수로 첫 빌드
 - [ ] 5. 첫 릴리스 후 generate_appcast로 appcast.xml 호스팅 push

@@ -24,9 +24,9 @@ def env(**values: str):
 
 def test_lan_admin_guard_blocks_remote_mutation_without_token(tmp_path):
     with env(
-        PHOTOME_SERVER_HOST="0.0.0.0",
-        PHOTOME_LAN_ADMIN_TOKEN="secret-token",
-        PHOTOME_DATA_ROOT=str(tmp_path / "data"),
+        TROVE_SERVER_HOST="0.0.0.0",
+        TROVE_LAN_ADMIN_TOKEN="secret-token",
+        TROVE_DATA_ROOT=str(tmp_path / "data"),
     ):
         app = create_app(load_settings())
         client = TestClient(app, client=("192.168.1.20", 12345))
@@ -38,9 +38,9 @@ def test_lan_admin_guard_blocks_remote_mutation_without_token(tmp_path):
 
 def test_lan_admin_guard_allows_remote_mutation_with_token(tmp_path):
     with env(
-        PHOTOME_SERVER_HOST="0.0.0.0",
-        PHOTOME_LAN_ADMIN_TOKEN="secret-token",
-        PHOTOME_DATA_ROOT=str(tmp_path / "data"),
+        TROVE_SERVER_HOST="0.0.0.0",
+        TROVE_LAN_ADMIN_TOKEN="secret-token",
+        TROVE_DATA_ROOT=str(tmp_path / "data"),
     ):
         app = create_app(load_settings())
         client = TestClient(app, client=("192.168.1.20", 12345))
@@ -51,9 +51,9 @@ def test_lan_admin_guard_allows_remote_mutation_with_token(tmp_path):
 
 def test_lan_admin_guard_keeps_localhost_unblocked(tmp_path):
     with env(
-        PHOTOME_SERVER_HOST="0.0.0.0",
-        PHOTOME_LAN_ADMIN_TOKEN="secret-token",
-        PHOTOME_DATA_ROOT=str(tmp_path / "data"),
+        TROVE_SERVER_HOST="0.0.0.0",
+        TROVE_LAN_ADMIN_TOKEN="secret-token",
+        TROVE_DATA_ROOT=str(tmp_path / "data"),
     ):
         app = create_app(load_settings())
         client = TestClient(app, client=("127.0.0.1", 12345))

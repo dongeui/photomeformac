@@ -59,8 +59,8 @@ def test_enforce_sweeps_only_same_data_root_backends(
 ) -> None:
     monkeypatch.setattr(si, "_list_backend_pids", lambda: [111, 222, os.getpid()])
     environs = {
-        111: f"PHOTOME_DATA_ROOT={tmp_path} PATH=/usr/bin",
-        222: "PHOTOME_DATA_ROOT=/somewhere/else PATH=/usr/bin",
+        111: f"TROVE_DATA_ROOT={tmp_path} PATH=/usr/bin",
+        222: "TROVE_DATA_ROOT=/somewhere/else PATH=/usr/bin",
     }
     monkeypatch.setattr(si, "_process_environ_text", lambda pid: environs.get(pid, ""))
 
@@ -78,6 +78,6 @@ def test_enforce_never_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_parent_watchdog_requires_supervised_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("PHOTOME_SUPERVISED", raising=False)
+    monkeypatch.delenv("TROVE_SUPERVISED", raising=False)
     si.start_parent_watchdog()
     assert "parent-watchdog" not in [thread.name for thread in threading.enumerate()]

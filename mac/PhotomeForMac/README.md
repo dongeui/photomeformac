@@ -1,10 +1,10 @@
 # PhotomeForMac Swift shell
 
-이 디렉토리는 Photome for Mac의 SwiftUI + WebView shell이다.
+이 디렉토리는 Trove for Mac의 SwiftUI + WebView shell이다.
 
 기능:
 
-1. 앱 창 + WebView로 기존 Photome dashboard 표시
+1. 앱 창 + WebView로 기존 Trove dashboard 표시
 2. Python 백엔드 supervisor 실행/중지/재시작 (Process.terminationHandler로 비정상 종료 1회 자동 복구)
 3. 메뉴바 아이콘 + 상태 표시, Dock badge
 4. 사진 폴더 선택 (NSOpenPanel + Finder Drag&Drop) — 첫 선택 시 백엔드 자동 시작

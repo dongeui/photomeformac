@@ -1,4 +1,4 @@
-# Photome for Mac Release Checklist
+# Trove for Mac Release Checklist
 
 정식 외부 배포(GitHub Release 등)를 위해서는 **Apple Developer Program 가입 + Developer ID 인증서 + Notarization** 이 필요하다. App Store에 올리지 않더라도 macOS Sequoia(15) 이후 외부 사용자가 더블클릭으로 실행하려면 둘 다 있어야 한다.
 
@@ -15,7 +15,7 @@
 4. **notarytool keychain profile** 저장 (재사용 가능):
 
    ```bash
-   xcrun notarytool store-credentials photome-notary \
+   xcrun notarytool store-credentials trove-notary \
      --apple-id <apple-id-email> \
      --team-id <TEAMID> \
      --password <app-specific-password>
@@ -25,10 +25,10 @@
 
 ```bash
 security find-identity -v -p codesigning        # 인증서 확인
-export PHOTOME_MAC_SIGN_IDENTITY="Developer ID Application: <NAME> (<TEAMID>)"
-export PHOTOME_MAC_BUNDLE_ID="com.photome.mac"
-export PHOTOME_MAC_VERSION="0.1.0"
-export PHOTOME_MAC_BUILD="1"
+export TROVE_MAC_SIGN_IDENTITY="Developer ID Application: <NAME> (<TEAMID>)"
+export TROVE_MAC_BUNDLE_ID="com.trove.mac"
+export TROVE_MAC_VERSION="0.1.0"
+export TROVE_MAC_BUILD="1"
 ```
 
 ## 2. notarization
@@ -36,20 +36,20 @@ export PHOTOME_MAC_BUILD="1"
 권장 방식은 Keychain profile이다.
 
 ```bash
-xcrun notarytool store-credentials photome-notary \
+xcrun notarytool store-credentials trove-notary \
   --apple-id <apple-id-email> \
   --team-id <TEAMID> \
   --password <app-specific-password>
 
-PHOTOME_NOTARY_PROFILE=photome-notary scripts/notarize_mac_app.sh
+TROVE_NOTARY_PROFILE=trove-notary scripts/notarize_mac_app.sh
 ```
 
 대체 환경변수:
 
 ```bash
-export PHOTOME_NOTARY_APPLE_ID=<apple-id-email>
-export PHOTOME_NOTARY_TEAM_ID=<TEAMID>
-export PHOTOME_NOTARY_PASSWORD=<app-specific-password>
+export TROVE_NOTARY_APPLE_ID=<apple-id-email>
+export TROVE_NOTARY_TEAM_ID=<TEAMID>
+export TROVE_NOTARY_PASSWORD=<app-specific-password>
 scripts/notarize_mac_app.sh
 ```
 
@@ -57,8 +57,8 @@ scripts/notarize_mac_app.sh
 
 `scripts/build_mac_app_bundle.sh`는 다음을 생성한다.
 
-- `dist/mac/PhotomeForMac.app`
-- `dist/mac/PhotomeForMac.dmg`
+- `dist/mac/Trove.app`
+- `dist/mac/Trove.dmg`
 - DMG 내부 `Applications` symlink
 - ad-hoc 또는 Developer ID codesign
 
@@ -68,7 +68,7 @@ scripts/notarize_mac_app.sh
 
 현재 포함:
 
-- `CFBundleIdentifier`: `PHOTOME_MAC_BUNDLE_ID` 기본값 `com.photome.mac`
+- `CFBundleIdentifier`: `TROVE_MAC_BUNDLE_ID` 기본값 `com.trove.mac`
 - version/build env override
 - `CFBundleIconFile=AppIcon`
 - 사진/문서/다운로드/데스크탑/로컬 네트워크 권한 설명
@@ -84,13 +84,13 @@ scripts/notarize_mac_app.sh
 scripts/build_mac_app_bundle.sh
 ```
 
-- `PHOTOME_BUNDLE_BACKEND=1` (기본) — `app/` Python 소스를 Resources/photome-backend/ 에 복사
-- `PHOTOME_BUNDLE_PYTHON=1` (기본) — venv 자동 탐색해서 Resources/python-runtime/ 에 복사
-- `PHOTOME_BUNDLE_WEIGHTS=1` (기본) — `~/.cache/huggingface/hub`에서 ViT-B-32 가중치를 Resources/preinstalled-models/huggingface/hub/ 에 복사
+- `TROVE_BUNDLE_BACKEND=1` (기본) — `app/` Python 소스를 Resources/trove-backend/ 에 복사
+- `TROVE_BUNDLE_PYTHON=1` (기본) — venv 자동 탐색해서 Resources/python-runtime/ 에 복사
+- `TROVE_BUNDLE_WEIGHTS=1` (기본) — `~/.cache/huggingface/hub`에서 ViT-B-32 가중치를 Resources/preinstalled-models/huggingface/hub/ 에 복사
 
 **배포 산출물은 ai-pack 단일 빌드이므로 venv·weights 번들은 필수다.** CLIP 설치된 venv나 ViT-B-32 weights를 찾지 못하면 빌드 스크립트가 경고가 아닌 **오류로 중단**한다(weights 없는 ai-pack 빌드가 조용히 나가는 것을 막기 위함).
 
-의도적으로 옵트아웃하려면(개발/디버그용) `PHOTOME_BUNDLE_PYTHON=0` 또는 `PHOTOME_BUNDLE_WEIGHTS=0`을 **명시**해야 한다. 명시한 경우에만 중단 없이 진행한다.
+의도적으로 옵트아웃하려면(개발/디버그용) `TROVE_BUNDLE_PYTHON=0` 또는 `TROVE_BUNDLE_WEIGHTS=0`을 **명시**해야 한다. 명시한 경우에만 중단 없이 진행한다.
 
 **venv가 없을 때:**
 
@@ -99,7 +99,7 @@ python3.11 -m venv .venv311
 .venv311/bin/pip install -e ".[clip]"
 ```
 
-이후 빌드 스크립트가 `.venv311`을 자동으로 발견한다. 또는 `PHOTOME_PYTHON_BUNDLE_SRC=/path/to/venv` 명시.
+이후 빌드 스크립트가 `.venv311`을 자동으로 발견한다. 또는 `TROVE_PYTHON_BUNDLE_SRC=/path/to/venv` 명시.
 
 **Entitlements (`mac/PhotomeForMac/Resources/PhotomeForMac.entitlements`):**
 
@@ -115,14 +115,14 @@ python3.11 -m venv .venv311
 
 앱 실행 시 탐색 순서:
 
-1. `PHOTOME_REPO_ROOT` 명시값
-2. 앱 리소스 `Contents/Resources/photome-backend`
+1. `TROVE_REPO_ROOT` 명시값
+2. 앱 리소스 `Contents/Resources/trove-backend`
 3. 현재 작업 디렉토리 상위 탐색
 4. 개발 경로 `/Users/dongeui/Desktop/code/photomeformac`
 
 Python 탐색 순서:
 
-1. `PHOTOME_PYTHON` 명시값
+1. `TROVE_PYTHON` 명시값
 2. bundled backend `.venv` / `.venv311`
 3. 앱 리소스 `python-runtime/bin/python*`
 4. 개발 repo venv
@@ -155,7 +155,7 @@ GUI QA:
 
 ## 8. LAN 공유 보호
 
-LAN 공유를 켜면 백엔드는 `0.0.0.0`에 바인딩한다. 원격 기기의 조회성 화면은 열 수 있지만, 스캔/사람 관리/검색 가중치/원본 다운로드 같은 관리자성 API는 `X-Photome-Admin-Token` 보호를 받는다. Mac 앱은 LAN 모드에서 앱 데이터 폴더의 `lan-admin-token`을 자동 생성해 백엔드에 전달한다.
+LAN 공유를 켜면 백엔드는 `0.0.0.0`에 바인딩한다. 원격 기기의 조회성 화면은 열 수 있지만, 스캔/사람 관리/검색 가중치/원본 다운로드 같은 관리자성 API는 `X-Trove-Admin-Token` 보호를 받는다. Mac 앱은 LAN 모드에서 앱 데이터 폴더의 `lan-admin-token`을 자동 생성해 백엔드에 전달한다.
 
 확인할 점:
 
@@ -179,7 +179,7 @@ LAN 공유를 켜면 백엔드는 `0.0.0.0`에 바인딩한다. 원격 기기의
 - `UpdateChecker.swift`가 `SPUUpdater`를 감싸 24시간마다 백그라운드 폴링.
 - 새 버전 감지 → Sparkle 표준 다이얼로그 → 사용자 [지금 설치] → DMG 백그라운드 다운로드 + edDSA 서명 검증 + 자동 교체 + 앱 재시작.
 - 운영 측 준비물: edDSA key 쌍 + appcast.xml 호스팅(GitHub Pages 등 정적 https).
-- 빌드 시 `PHOTOME_SPARKLE_FEED_URL` + `PHOTOME_SPARKLE_PUBLIC_ED_KEY` 환경변수로 Info.plist에 자동 부착.
+- 빌드 시 `TROVE_SPARKLE_FEED_URL` + `TROVE_SPARKLE_PUBLIC_ED_KEY` 환경변수로 Info.plist에 자동 부착.
 - 새 릴리스마다 `generate_appcast`로 appcast.xml 갱신 + 호스팅에 push.
 
 설정 절차는 `docs/mac/USER_TODO.md`의 Sparkle 섹션 참고.
@@ -209,8 +209,8 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -scheme Phot
 cd ../..
 
 # 2. 패키징
-PHOTOME_MAC_SIGN_IDENTITY="Developer ID Application: <NAME> (<TEAMID>)" scripts/build_mac_app_bundle.sh
+TROVE_MAC_SIGN_IDENTITY="Developer ID Application: <NAME> (<TEAMID>)" scripts/build_mac_app_bundle.sh
 
 # 3. notarization
-PHOTOME_NOTARY_PROFILE=photome-notary scripts/notarize_mac_app.sh
+TROVE_NOTARY_PROFILE=trove-notary scripts/notarize_mac_app.sh
 ```

@@ -23,17 +23,17 @@ def start_backend(tmp_path: Path, port: int) -> subprocess.Popen:
     source_root.mkdir(exist_ok=True)
     env = {
         **os.environ,
-        "PHOTOME_SERVER_HOST": "127.0.0.1",
-        "PHOTOME_SERVER_PORT": str(port),
-        "PHOTOME_SOURCE_ROOTS": str(source_root),
-        "PHOTOME_DATA_ROOT": str(data_root),
-        "PHOTOME_DERIVED_ROOT": str(tmp_path / "derived"),
-        "PHOTOME_DATABASE_PATH": str(data_root / "photome.sqlite3"),
-        "PHOTOME_OFFLINE_MODE": "1",
-        "PHOTOME_CLIP_ENABLED": "0",
-        "PHOTOME_FACE_ANALYSIS_ENABLED": "0",
-        "PHOTOME_SYNC_SCHEDULER_ENABLED": "0",
-        "PHOTOME_LOG_LEVEL": "ERROR",
+        "TROVE_SERVER_HOST": "127.0.0.1",
+        "TROVE_SERVER_PORT": str(port),
+        "TROVE_SOURCE_ROOTS": str(source_root),
+        "TROVE_DATA_ROOT": str(data_root),
+        "TROVE_DERIVED_ROOT": str(tmp_path / "derived"),
+        "TROVE_DATABASE_PATH": str(data_root / "photome.sqlite3"),
+        "TROVE_OFFLINE_MODE": "1",
+        "TROVE_CLIP_ENABLED": "0",
+        "TROVE_FACE_ANALYSIS_ENABLED": "0",
+        "TROVE_SYNC_SCHEDULER_ENABLED": "0",
+        "TROVE_LOG_LEVEL": "ERROR",
     }
     process = subprocess.Popen(
         [sys.executable, "-c", "from app.main import main; main()"],

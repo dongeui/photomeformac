@@ -197,8 +197,8 @@ fi
 
 if [[ "$BUNDLE_WEIGHTS" == "1" ]]; then
   WEIGHTS_DST="$RESOURCES_DIR/preinstalled-models/huggingface/hub"
-  if [[ -n "${PHOTOME_WEIGHTS_SRC:-}" ]]; then
-    WEIGHTS_SRC_CANDIDATES=("$PHOTOME_WEIGHTS_SRC")
+  if [[ -n "${TROVE_WEIGHTS_SRC:-}" ]]; then
+    WEIGHTS_SRC_CANDIDATES=("$TROVE_WEIGHTS_SRC")
   else
     WEIGHTS_SRC_CANDIDATES=(
       "$HOME/.cache/huggingface/hub"
@@ -226,7 +226,7 @@ if [[ "$BUNDLE_WEIGHTS" == "1" ]]; then
     # 의도적으로 weights를 빼려면 TROVE_BUNDLE_WEIGHTS=0 을 명시해야 한다.
     echo "TROVE_BUNDLE_WEIGHTS=1 이지만 CLIP ViT-B-32 weights를 찾지 못했습니다." >&2
     echo "  배포 산출물은 ai-pack 단일 빌드라 weights 번들이 필수입니다." >&2
-    echo "  방법 1: 모델 캐시가 있는 경로를 PHOTOME_WEIGHTS_SRC=/path/to/huggingface/hub 로 지정" >&2
+    echo "  방법 1: 모델 캐시가 있는 경로를 TROVE_WEIGHTS_SRC=/path/to/huggingface/hub 로 지정" >&2
     echo "  방법 2: 한 번 CLIP을 실행해 ~/.cache/huggingface/hub 에 ViT-B-32를 받은 뒤 재실행" >&2
     echo "  (개발/디버그용으로 weights 없이 빌드하려면 TROVE_BUNDLE_WEIGHTS=0 을 명시)" >&2
     exit 2

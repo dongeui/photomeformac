@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${PHOTOME_RUN_UID:=1000}"
-: "${PHOTOME_RUN_GID:=1000}"
-: "${PHOTOME_RUN_USER:=photome}"
-: "${PHOTOME_HOME:=/var/lib/photome}"
+: "${TROVE_RUN_UID:=1000}"
+: "${TROVE_RUN_GID:=1000}"
+: "${TROVE_RUN_USER:=trove}"
+: "${TROVE_HOME:=/var/lib/trove}"
 
-export HOME="${HOME:-$PHOTOME_HOME}"
+export HOME="${HOME:-$TROVE_HOME}"
 
 ensure_runtime_identity() {
   local uid="$1"
@@ -27,13 +27,13 @@ ensure_runtime_identity() {
 }
 
 if [ "$(id -u)" = "0" ]; then
-  mkdir -p "$PHOTOME_HOME" /var/lib/photome/data /var/lib/photome/derived /var/lib/photome/models
-  ensure_runtime_identity "$PHOTOME_RUN_UID" "$PHOTOME_RUN_GID" "$PHOTOME_RUN_USER" "$PHOTOME_HOME"
-  chown -R "$PHOTOME_RUN_UID:$PHOTOME_RUN_GID" "$PHOTOME_HOME" /var/lib/photome/data /var/lib/photome/derived /var/lib/photome/models 2>/dev/null || true
-  exec gosu "$PHOTOME_RUN_UID:$PHOTOME_RUN_GID" "$@"
+  mkdir -p "$TROVE_HOME" /var/lib/trove/data /var/lib/trove/derived /var/lib/trove/models
+  ensure_runtime_identity "$TROVE_RUN_UID" "$TROVE_RUN_GID" "$TROVE_RUN_USER" "$TROVE_HOME"
+  chown -R "$TROVE_RUN_UID:$TROVE_RUN_GID" "$TROVE_HOME" /var/lib/trove/data /var/lib/trove/derived /var/lib/trove/models 2>/dev/null || true
+  exec gosu "$TROVE_RUN_UID:$TROVE_RUN_GID" "$@"
 fi
 
 # If an operator still runs the container with Docker's numeric --user flag,
 # keep HOME explicit so libraries do not need pwd.getpwuid() just to locate a home dir.
-export HOME="${HOME:-$PHOTOME_HOME}"
+export HOME="${HOME:-$TROVE_HOME}"
 exec "$@"

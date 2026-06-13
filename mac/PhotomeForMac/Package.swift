@@ -1,8 +1,12 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
+// 패키지 표시 이름은 Trove(브랜드). 실행 타깃·바이너리 이름은 PhotomeForMac을
+// 유지한다 — 소스 폴더(Sources/PhotomeForMac)와 빌드 스크립트의 PRODUCT_NAME이
+// 이 이름에 묶여 있어, 바꾸면 경로가 대량으로 깨진다. 사용자에게 보이는 .app
+// 표시명은 빌드 스크립트가 CFBundleName=Trove로 따로 정한다.
 let package = Package(
-    name: "PhotomeForMac",
+    name: "Trove",
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "PhotomeForMac", targets: ["PhotomeForMac"])
