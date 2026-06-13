@@ -52,6 +52,7 @@ include-package-data = false
 [tool.setuptools.package-data]
 "app.services.search" = ["vocab_seed.yaml", "tag_synonyms.yaml"]
 "app.services.analysis" = ["clip_concepts.yaml", "filename_tags.yaml"]
+"app.locales" = ["*.json"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
