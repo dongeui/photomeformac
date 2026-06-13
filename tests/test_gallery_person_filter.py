@@ -1,9 +1,9 @@
-"""인물 필터 콤보 옵션 소스(_list_tag_values) 회귀 가드.
+"""인물 필터 콤보 옵션 소스(_list_named_person_display_names) 회귀 가드.
 
-콤보에는 대표 이름을 저장한 인물만 노출하고 person-000123 같은 내부 자동
-ID는 제외한다. 핵심 회귀: 내부 ID('person-...')는 ASCII라 한글 이름보다
-먼저 정렬되므로, 내부 ID가 LIMIT(200)을 넘으면 파이썬 사후 필터링으로는
-이름이 한 명도 안 남는다. 제외는 반드시 LIMIT 이전(SQL)에 일어나야 한다.
+콤보에는 대표 이름(Person.display_name)만 노출한다:
+  - 애칭(alias)은 같은 'person' 태그로 저장되지만 콤보에서는 제외
+  - person-000123 같은 내부 자동 ID 제외
+  - 인물 태그가 달린(사진이 있는) 사람만 노출
 """
 
 from __future__ import annotations
@@ -13,10 +13,11 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api.gallery import PERSON_TAG_TYPES, _list_tag_values
+from app.api.gallery import _list_named_person_display_names
 from app.models import annotation, asset, face, job, media, observation, person, runtime, semantic, tag  # noqa: F401
 from app.models.base import Base
 from app.models.media import MediaFile
+from app.models.person import Person
 from app.models.tag import Tag
 
 
@@ -26,59 +27,62 @@ def _session_factory():
     return sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def test_person_options_keep_named_people_when_internal_ids_exceed_limit() -> None:
+def _add_media(session) -> None:
+    now = datetime.now(timezone.utc)
+    session.add(
+        MediaFile(
+            file_id="f1", current_path="/p/a.jpg", filename="a.jpg", source_root="/p",
+            relative_path="a.jpg", media_kind="image", status="analysis_done",
+            size_bytes=1, mtime_ns=1, partial_hash="h",
+            first_seen_at=now, last_seen_at=now, updated_at=now, processed_at=now,
+        )
+    )
+
+
+def test_combo_lists_only_representative_names_not_aliases() -> None:
     factory = _session_factory()
     with factory() as session:
-        now = datetime.now(timezone.utc)
-        media_file = MediaFile(
-            file_id="f1",
-            current_path="/photos/a.jpg",
-            filename="a.jpg",
-            source_root="/photos",
-            relative_path="a.jpg",
-            media_kind="image",
-            status="analysis_done",
-            size_bytes=1,
-            mtime_ns=1,
-            partial_hash="h",
-            first_seen_at=now,
-            last_seen_at=now,
-            updated_at=now,
-            processed_at=now,
-        )
-        session.add(media_file)
-        # 내부 ID 250개(LIMIT 200 초과) — 전부 'person-...'라 한글 이름보다 먼저 정렬된다
-        for i in range(250):
-            session.add(Tag(file_id="f1", tag_type="person", tag_value=f"person-{i:06d}"))
-        # 대표 이름을 저장한 인물(한글) — 정렬상 내부 ID들보다 뒤에 온다
-        for name in ("정동의", "장윤겸", "김건우"):
+        _add_media(session)
+        # 대표 이름 + 애칭들이 전부 같은 'person' 태그로 저장돼 있다
+        session.add(Person(display_name="정이한", aliases_json=["이한", "아들", "꼬맹이"]))
+        for value in ("정이한", "이한", "아들", "꼬맹이"):
+            session.add(Tag(file_id="f1", tag_type="person", tag_value=value))
+        session.commit()
+
+        options = _list_named_person_display_names(session)
+
+    assert options == ["정이한"]  # 애칭(이한·아들·꼬맹이)은 빠진다
+
+
+def test_combo_excludes_internal_ids_and_orphan_named_people() -> None:
+    factory = _session_factory()
+    with factory() as session:
+        _add_media(session)
+        # 내부 ID 인물(이름 미저장)
+        session.add(Person(display_name="person-000001"))
+        session.add(Tag(file_id="f1", tag_type="person", tag_value="person-000001"))
+        # 이름은 있으나 사진(태그)이 없는 인물 → 콤보에 넣어도 결과 0이므로 제외
+        session.add(Person(display_name="유령이름"))
+        # 정상: 이름 + 태그 둘 다 있음
+        session.add(Person(display_name="김건우"))
+        session.add(Tag(file_id="f1", tag_type="person", tag_value="김건우"))
+        session.commit()
+
+        options = _list_named_person_display_names(session)
+
+    assert options == ["김건우"]
+
+
+def test_combo_orders_by_name_case_insensitive() -> None:
+    factory = _session_factory()
+    with factory() as session:
+        _add_media(session)
+        for name in ("정동의", "김건우", "장윤겸"):
+            session.add(Person(display_name=name))
             session.add(Tag(file_id="f1", tag_type="person", tag_value=name))
         session.commit()
 
-        options = _list_tag_values(session, PERSON_TAG_TYPES, exclude_internal_person=True)
+        options = _list_named_person_display_names(session)
 
-    assert set(options) == {"정동의", "장윤겸", "김건우"}
-    assert not any(value.startswith("person-0") for value in options)
-
-
-def test_person_options_without_exclusion_still_lists_all() -> None:
-    """exclude 플래그가 꺼져 있으면(기존 동작) 내부 ID도 포함된다 — place 등 타 용도 보호."""
-    factory = _session_factory()
-    with factory() as session:
-        now = datetime.now(timezone.utc)
-        session.add(
-            MediaFile(
-                file_id="f1", current_path="/p/a.jpg", filename="a.jpg", source_root="/p",
-                relative_path="a.jpg", media_kind="image", status="analysis_done",
-                size_bytes=1, mtime_ns=1, partial_hash="h",
-                first_seen_at=now, last_seen_at=now, updated_at=now, processed_at=now,
-            )
-        )
-        session.add(Tag(file_id="f1", tag_type="person", tag_value="person-000001"))
-        session.add(Tag(file_id="f1", tag_type="person", tag_value="정동의"))
-        session.commit()
-
-        options = _list_tag_values(session, PERSON_TAG_TYPES)
-
-    assert "person-000001" in options
-    assert "정동의" in options
+    assert options == sorted(options, key=str.lower)
+    assert set(options) == {"정동의", "김건우", "장윤겸"}

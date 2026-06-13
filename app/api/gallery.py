@@ -18,6 +18,7 @@ from app.api.deps import require_state
 from app.models.annotation import MediaAnnotation
 from app.models.asset import DerivedAsset
 from app.models.media import MediaFile
+from app.models.person import Person
 from app.models.tag import Tag
 from app.services.search import HybridSearchService
 from app.services.search.backend import SqlAlchemyHybridSearchBackend
@@ -189,7 +190,7 @@ def gallery_page(
             ):
                 annotation_map[annotation.file_id] = annotation
 
-        person_options = _list_tag_values(session, PERSON_TAG_TYPES, exclude_internal_person=True)
+        person_options = _list_named_person_display_names(session)
         place_options = _list_tag_values(session, PLACE_TAG_TYPES)
 
     current_url = request.url.path
@@ -1432,22 +1433,36 @@ def _captured_at_expr():
     return func.coalesce(MediaFile.exif_datetime, mtime_expr, MediaFile.processed_at, MediaFile.last_seen_at)
 
 
-def _list_tag_values(
-    session, tag_types: tuple[str, ...], *, exclude_internal_person: bool = False
-) -> list[str]:
+def _list_tag_values(session, tag_types: tuple[str, ...]) -> list[str]:
     statement = (
         select(Tag.tag_value)
         .where(Tag.tag_type.in_(tag_types))
         .group_by(Tag.tag_value)
         .order_by(func.lower(Tag.tag_value).asc())
+        .limit(200)
     )
-    if exclude_internal_person:
-        # person-000625 같은 내부 자동 ID는 LIMIT 이전에 SQL에서 제외한다.
-        # ASCII 'person-...'가 한글 이름보다 먼저 정렬돼, 파이썬에서 사후
-        # 필터링하면 LIMIT 200이 내부 ID로만 채워져 이름이 한 명도 안 남는다.
-        statement = statement.where(~Tag.tag_value.op("GLOB")("person-[0-9]*"))
-    statement = statement.limit(200)
     return [value for value in session.scalars(statement) if not _is_coordinate_tag(str(value))]
+
+
+def _list_named_person_display_names(session) -> list[str]:
+    """인물 필터 콤보 옵션. 대표 이름(Person.display_name)만 노출한다 —
+    애칭(alias)과 person-000123 같은 내부 자동 ID는 제외된다. 실제 인물
+    태그가 달린(=사진이 있는) 사람만 보이게 태그 존재를 함께 확인한다.
+    애칭도 같은 'person' 태그로 저장되므로, 태그값이 아니라 Person 테이블의
+    대표 이름을 직접 source로 삼아야 애칭이 섞이지 않는다."""
+    statement = (
+        select(Person.display_name)
+        .where(Person.display_name.not_like("person-%"))
+        .where(
+            Person.display_name.in_(
+                select(Tag.tag_value).where(Tag.tag_type.in_(PERSON_TAG_TYPES))
+            )
+        )
+        .distinct()
+        .order_by(func.lower(Person.display_name).asc())
+        .limit(200)
+    )
+    return list(session.scalars(statement))
 
 
 def _is_coordinate_tag(value: str) -> bool:
