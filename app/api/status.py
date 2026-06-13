@@ -2004,42 +2004,42 @@ async def dashboard(request: Request) -> HTMLResponse:
   <main class="shell">
     <section class="hero">
         <div>
-        <span class="eyebrow">로컬 사진 검색</span>
-        <h1>사진을 가져오고, 바로 찾습니다.</h1>
-        <p>원본은 로컬/NAS에 두고, 이 화면에서는 사진 가져오기와 검색 분석 상태만 확인합니다.</p>
+        <span class="eyebrow">{_("dash.hero_eyebrow")}</span>
+        <h1>{_("dash.hero_title")}</h1>
+        <p>{_("dash.hero_desc")}</p>
         <div class="pill-row" style="margin-top:14px;">
-          <span class="pill"><strong>실행 방식</strong> {escape(security["deployment_label"])}</span>
-          <span class="pill"><strong>보안</strong> {'오프라인 전용' if not security['outbound_network_enabled'] else '온라인 준비 모드'}</span>
+          <span class="pill"><strong>{_("dash.deploy_label")}</strong> {escape(security["deployment_label"])}</span>
+          <span class="pill"><strong>{_("dash.security")}</strong> {_('dash.security_offline') if not security['outbound_network_enabled'] else _('dash.security_online')}</span>
         </div>
         <div class="hero-links">
-          <a class="link-btn" href="/gallery">사진첩 열기</a>
+          <a class="link-btn" href="/gallery">{_("dash.open_gallery")}</a>
         </div>
       </div>
       <div class="metric-grid">
-        <div class="metric clickable" onclick="openDetailPopup('files','파일 현황 기준')">
-          파일 현황
-          <strong id="m-total">{catalog["breakdown"]["total"]}개</strong>
-          <small id="m-total-kinds">사진 {catalog["kind_counts"].get("image", 0)}개</small>
+        <div class="metric clickable" onclick="openDetailPopup('files','{_("dash.metric_files_popup")}')">
+          {_("dash.metric_files")}
+          <strong id="m-total">{_("dash.metric_count", n=catalog["breakdown"]["total"])}</strong>
+          <small id="m-total-kinds">{_("dash.metric_photos_n", n=catalog["kind_counts"].get("image", 0))}</small>
           <small id="m-total-status">{escape(catalog["breakdown"]["summary_text"])}</small>
         </div>
-        <div class="metric clickable" onclick="openDetailPopup('tags','자동 태그 목록')">
-          자동 태그
+        <div class="metric clickable" onclick="openDetailPopup('tags','{_("dash.metric_tags_popup")}')">
+          {_("dash.metric_tags")}
           <strong id="m-tags">{performance["generated_tags"]}</strong>
-          <small id="m-tags-note">{performance["tagged_media"]}개 사진에 적용</small>
+          <small id="m-tags-note">{_("dash.metric_tags_note", n=performance["tagged_media"])}</small>
         </div>
-        <div class="metric clickable" onclick="openDetailPopup('places','장소 정보')">
-          장소 정보
+        <div class="metric clickable" onclick="openDetailPopup('places','{_("dash.metric_places_popup")}')">
+          {_("dash.metric_places")}
           <strong id="m-places">{performance["place_tagged_media"]}</strong>
-          <small>GPS/장소 태그로 찾을 수 있는 사진</small>
+          <small>{_("dash.metric_places_note")}</small>
         </div>
-        <div class="metric clickable" onclick="openDetailPopup('people','인물 목록')">
-          인물 정보
+        <div class="metric clickable" onclick="openDetailPopup('people','{_("dash.metric_people_popup")}')">
+          {_("dash.metric_people")}
           <strong id="m-people">{performance["person_count"]}</strong>
-          <small id="m-people-note">{performance["people_media"]}개 사진에서 얼굴 감지</small>
+          <small id="m-people-note">{_("dash.metric_people_note", n=performance["people_media"])}</small>
         </div>
-        <div class="metric clickable" onclick="openDetailPopup('ai','이미지 AI 태그')">
+        <div class="metric clickable" onclick="openDetailPopup('ai','{_("dash.metric_ai_popup")}')">
           <span class="metric-label-row">
-            <span>이미지 AI</span>
+            <span>{_("dash.metric_ai")}</span>
             <span id="m-ai-state" class="{ai_metric_state_class}">{escape(ai_metric_state_label)}</span>
           </span>
           <strong id="m-ai">{performance["clip_embeddings"]} / {performance["eligible_media"]}</strong>
@@ -2055,7 +2055,7 @@ async def dashboard(request: Request) -> HTMLResponse:
             <button class="detail-close" onclick="closeDetailPopup()">✕</button>
           </div>
           <div class="detail-body" id="detail-body">
-            <div class="detail-loading">불러오는 중...</div>
+            <div class="detail-loading">{_("dash.detail_loading")}</div>
           </div>
         </div>
       </div>
@@ -2063,27 +2063,27 @@ async def dashboard(request: Request) -> HTMLResponse:
 
     <section class="grid">
       <article class="{phase1_card_class}" id="phase1-card">
-        <h2 class="scan-title">라이브러리 동기화 <span id="phase1-state-badge" class="run-badge {'is-running' if phase1_active else ''}">{phase1_state_label}</span> <span id="nas-status-badge" class="nas-badge nas-unknown">NAS 확인 중…</span></h2>
-        <p class="sub">사진 폴더와 자동 실행만 설정합니다. 동기화 시작과 진행 상황은 메뉴 막대의 Trove 아이콘에서 봅니다.</p>
+        <h2 class="scan-title">{_("dash.sync_title")} <span id="phase1-state-badge" class="run-badge {'is-running' if phase1_active else ''}">{phase1_state_label}</span> <span id="nas-status-badge" class="nas-badge nas-unknown">{_("dash.nas_checking")}</span></h2>
+        <p class="sub">{_("dash.sync_sub")}</p>
         <div class="pill-row">
-          <button type="button" class="pill pill-button" id="phase1-schedule-button" title="자동 동기화 켜기/끄기"><strong>자동 동기화</strong> {sync_auto_label}</button>
+          <button type="button" class="pill pill-button" id="phase1-schedule-button" title="{_("dash.auto_sync_toggle_title")}"><strong>{_("dash.auto_sync")}</strong> {sync_auto_label}</button>
         </div>
         <div class="list compact-list" style="margin-top:14px;">
-          <div class="row"><span>다음 확인</span><span id="p1-next-scan">{escape(str(scheduler.get('next_sync_run_at')))}</span></div>
-          <div class="row"><span>마지막 확인</span><span id="p1-last-scan">{escape(str(scheduler.get('last_sync_run_at')))}</span></div>
+          <div class="row"><span>{_("dash.next_check")}</span><span id="p1-next-scan">{escape(str(scheduler.get('next_sync_run_at')))}</span></div>
+          <div class="row"><span>{_("dash.last_check")}</span><span id="p1-last-scan">{escape(str(scheduler.get('last_sync_run_at')))}</span></div>
         </div>
         <form class="scan-form" id="phase1-scan-form" onsubmit="return false">
           <label>
-            사진 폴더
+            {_("dash.photo_folder")}
             <textarea id="phase1-source-roots" name="source_roots" spellcheck="false">{source_roots_text}</textarea>
-            <span class="field-help">{escape(source_root_guidance)} 한 줄에 폴더 하나씩 입력합니다. 선택한 폴더 아래의 모든 하위 폴더까지 재귀적으로 포함합니다.</span>
+            <span class="field-help">{escape(source_root_guidance)} {_("dash.photo_folder_help")}</span>
           </label>
           <div class="scan-actions">
-            <button type="button" id="source-picker-open">폴더 선택</button>
-            <span class="field-help">대부분은 Finder 저장장치에서 NAS/외장하드/USB 폴더를 고르면 됩니다.</span>
+            <button type="button" id="source-picker-open">{_("dash.choose_folder")}</button>
+            <span class="field-help">{_("dash.choose_folder_help")}</span>
           </div>
           <div class="field-help">
-            경로 구분: Finder 저장장치는 macOS에 마운트된 NAS·외장하드·USB입니다. Mac 사용자 폴더는 Desktop/Pictures/Photos 같은 로컬 폴더입니다. Docker 내부 사진 폴더(/photos)는 환경변수로 따로 붙인 호환용 경로라 보통은 선택하지 않아도 됩니다.
+            {_("dash.path_help")}
           </div>
           <div class="source-picker" id="source-picker" hidden>
             <div class="source-picker-bar">
