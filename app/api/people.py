@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from html import escape
 from io import BytesIO
+import json
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy import bindparam, delete, func, or_, select, text, update
 
 from app.api.deps import require_state
+from app.api.i18n_web import render_lang_switcher, request_translator
 from app.models.asset import DerivedAsset
 from app.models.face import Face
 from app.models.media import MediaFile
@@ -158,6 +160,10 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvet
 .side-item{padding:8px 10px;border-radius:8px;color:var(--text);text-decoration:none;font-size:.92rem;}
 .side-item:hover{background:var(--accent-soft);}
 .side-item.active{background:var(--accent-soft);color:var(--accent);font-weight:500;}
+.side-lang{display:flex;gap:4px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);}
+.lang-link{font-size:.78rem;color:var(--muted);text-decoration:none;padding:3px 8px;border-radius:6px;}
+.lang-link:hover{background:var(--accent-soft);}
+.lang-link.active{color:var(--accent);font-weight:600;}
 .content{flex:1;min-width:0;display:flex;flex-direction:column;}
 @media (max-width:720px){.layout{flex-direction:column;}.sidebar{width:auto;flex:none;height:auto;position:static;border-right:none;border-bottom:1px solid var(--line);flex-direction:row;flex-wrap:wrap;gap:4px;}}
 .mergedrow{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
@@ -178,11 +184,11 @@ function onMergeChange(cb){
   mergeOrder.forEach(function(x,i){var r=rowOf(x);if(!r){return;}r.classList.add('merge-on');if(i===0){r.classList.add('merge-primary');}});
   var n=mergeOrder.length;
   var cnt=document.getElementById('merge-count');
-  if(n===0){cnt.textContent='0개 선택됨';}
-  else{cnt.innerHTML=n+'개 선택됨 · 남는 그룹: <b>'+escapeHtml(nameOf(mergeOrder[0]))+'</b>';}
+  if(n===0){cnt.textContent=PT.mergeCountZero;}
+  else{cnt.innerHTML=PT.mergeCountN.replace('{n}',n)+'<b>'+escapeHtml(nameOf(mergeOrder[0]))+'</b>';}
   var btn=document.getElementById('merge-btn');
   btn.disabled=n<2;
-  btn.textContent=n>=2?(n-1)+'개를 '+'"'+nameOf(mergeOrder[0])+'"(으)로 병합':'선택 병합 (첫 선택이 남음)';
+  btn.textContent=n>=2?PT.mergeButtonN.replace('{n}',n-1).replace('{name}',nameOf(mergeOrder[0])):PT.mergeButtonDefault;
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 async function savePerson(id){
@@ -191,29 +197,30 @@ async function savePerson(id){
   var name=row.querySelector('.pm-name').value.trim();
   var aliases=row.querySelector('.pm-aliases').value.split(',').map(function(s){return s.trim();}).filter(Boolean);
   var r=await fetch('/people/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name,aliases:aliases})});
-  if(r.ok){location.reload();}else{var m='저장 실패';try{m=(await r.json()).detail||m;}catch(e){}alert(m);}
+  if(r.ok){location.reload();}else{var m=PT.saveFailed;try{m=(await r.json()).detail||m;}catch(e){}alert(m);}
 }
 function onNameKey(e,id){if(e.isComposing||e.keyCode===229){return;}if(e.key==='Enter'){e.preventDefault();savePerson(id);}}
 async function mergeSelected(){
   if(mergeOrder.length<2){return;}
   var target=mergeOrder[0];
   var sources=mergeOrder.slice(1);
-  if(!confirm(sources.length+'개 그룹을 "'+nameOf(target)+'"(으)로 병합할까요?\\n선택한 다른 그룹은 사라지고 되돌릴 수 없습니다.')){return;}
+  if(!confirm(PT.confirmMerge.replace('{n}',sources.length).replace('{name}',nameOf(target)))){return;}
   var r=await fetch('/people/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target_person_id:target,source_person_ids:sources})});
-  if(r.ok){location.reload();}else{var m='병합 실패';try{m=(await r.json()).detail||m;}catch(e){}alert(m);}
+  if(r.ok){location.reload();}else{var m=PT.mergeFailed;try{m=(await r.json()).detail||m;}catch(e){}alert(m);}
 }
 function filterRows(q){q=q.trim().toLowerCase();[].slice.call(document.querySelectorAll('.row')).forEach(function(r){r.style.display=(!q||(r.dataset.search||'').indexOf(q)>=0)?'':'none';});}
 async function unmergePerson(targetId,sourceId){
-  if(!confirm('이 사람을 병합에서 분리할까요?\\n원래 이름·애칭과 사진이 복원됩니다.')){return;}
+  if(!confirm(PT.confirmUnmerge)){return;}
   var r=await fetch('/people/'+targetId+'/unmerge/'+sourceId,{method:'POST'});
-  if(r.ok){location.reload();}else{var m='분리 실패';try{m=(await r.json()).detail||m;}catch(e){}alert(m);}
+  if(r.ok){location.reload();}else{var m=PT.unmergeFailed;try{m=(await r.json()).detail||m;}catch(e){}alert(m);}
 }
 """
 
 
-def _render_people_manage_html(people: list[dict]) -> str:
+def _render_people_manage_html(people: list[dict], request: Request) -> str:
+    locale, _ = request_translator(request)
     if not people:
-        rows_html = '<div class="empty">5회 이상 감지된 얼굴 그룹이 아직 없습니다.<br>이미지 AI 분석이 끝나면 여기에서 이름을 붙일 수 있어요.</div>'
+        rows_html = f'<div class="empty">{_("people.empty")}</div>'
     else:
         parts = []
         for p in people:
@@ -225,81 +232,95 @@ def _render_people_manage_html(people: list[dict]) -> str:
             gallery_href = "/gallery?person=" + quote(dn)
             face_id = p.get("face_id")
             face_inner = (
-                f'<img src="/people/faces/{int(face_id)}/crop" loading="lazy" decoding="async" alt="대표 얼굴">'
+                f'<img src="/people/faces/{int(face_id)}/crop" loading="lazy" decoding="async" alt="{_("people.face_alt")}">'
                 if face_id is not None
-                else "얼굴"
+                else _("people.face_fallback")
             )
             badge = (
-                '<span class="badge unnamed">이름 필요</span>'
+                f'<span class="badge unnamed">{_("people.badge_unnamed")}</span>'
                 if is_unnamed
-                else '<span class="badge named">이름 있음</span>'
+                else f'<span class="badge named">{_("people.badge_named")}</span>'
             )
             search_attr = escape((dn + " " + " ".join(aliases)).lower())
-            placeholder = "대표 이름 입력" if is_unnamed else "이름"
+            placeholder = _("people.name_placeholder_unnamed") if is_unnamed else _("people.name_placeholder")
             merged_sources = p.get("merged_sources") or []
             merged_chips = "".join(
                 f'<span class="merged-chip">{escape(str(m["label"]))}'
-                f'<button type="button" class="merged-undo" onclick="unmergePerson({pid},{int(m["id"])})" title="병합 해제 (이 사람 분리)">↩</button></span>'
+                f'<button type="button" class="merged-undo" onclick="unmergePerson({pid},{int(m["id"])})" title="{_("people.unmerge_title")}">↩</button></span>'
                 for m in merged_sources
             )
-            merged_row = f'<div class="mergedrow">합쳐짐: {merged_chips}</div>' if merged_chips else ""
+            merged_row = f'<div class="mergedrow">{_("people.merged_label")} {merged_chips}</div>' if merged_chips else ""
             parts.append(
                 f'''
         <div class="row{' unnamed' if is_unnamed else ''}" data-pid="{pid}" data-search="{search_attr}">
-          <input type="checkbox" class="pm-merge" data-pid="{pid}" onchange="onMergeChange(this)" aria-label="병합 선택">
-          <a class="face" href="{gallery_href}" title="이 사람 사진 보기">{face_inner}</a>
+          <input type="checkbox" class="pm-merge" data-pid="{pid}" onchange="onMergeChange(this)" aria-label="{_("people.merge_select_aria")}">
+          <a class="face" href="{gallery_href}" title="{_("people.view_photos")}">{face_inner}</a>
           <div class="meta">
             <div class="titlerow">
-              <input class="pm-name" value="{escape(name_val)}" placeholder="{placeholder}" aria-label="대표 이름" onkeydown="onNameKey(event,{pid})">
+              <input class="pm-name" value="{escape(name_val)}" placeholder="{placeholder}" aria-label="{_("people.name_aria")}" onkeydown="onNameKey(event,{pid})">
               {badge}
-              <span class="keep-tag">병합 시 남음</span>
-              <button class="btn" onclick="savePerson({pid})">저장</button>
+              <span class="keep-tag">{_("people.keep_on_merge")}</span>
+              <button class="btn" onclick="savePerson({pid})">{_("people.save")}</button>
             </div>
             <div class="aliasrow">
-              <input class="pm-aliases" value="{escape(', '.join(aliases))}" placeholder="애칭 (쉼표로 구분)" aria-label="애칭" onkeydown="onNameKey(event,{pid})">
+              <input class="pm-aliases" value="{escape(', '.join(aliases))}" placeholder="{_("people.alias_placeholder")}" aria-label="{_("people.alias_aria")}" onkeydown="onNameKey(event,{pid})">
             </div>
             {merged_row}
           </div>
-          <a class="count" href="{gallery_href}">{int(p.get('media_count') or 0)}장 · 얼굴 {int(p.get('face_count') or 0)}회</a>
+          <a class="count" href="{gallery_href}">{_("people.count", media=int(p.get('media_count') or 0), face=int(p.get('face_count') or 0))}</a>
         </div>'''
             )
         rows_html = "".join(parts)
 
     total = len(people)
+    people_t = {
+        "mergeCountZero": _("people.merge_count_zero"),
+        "mergeCountN": _("people.merge_count_n"),
+        "mergeButtonDefault": _("people.merge_button_default"),
+        "mergeButtonN": _("people.merge_button_n"),
+        "saveFailed": _("people.save_failed"),
+        "mergeFailed": _("people.merge_failed"),
+        "unmergeFailed": _("people.unmerge_failed"),
+        "confirmMerge": _("people.confirm_merge"),
+        "confirmUnmerge": _("people.confirm_unmerge"),
+    }
+    t_json = json.dumps(people_t, ensure_ascii=False)
     return f"""<!DOCTYPE html>
-<html lang="ko">
+<html lang="{locale}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>사람 정리 · Trove</title>
+<title>{_("people.title")} · Trove</title>
 <style>{_PEOPLE_MANAGE_CSS}</style>
 </head>
 <body>
   <div class="layout">
     <aside class="sidebar">
       <div class="side-brand">Trove</div>
-      <a class="side-item" href="/gallery">모든 사진</a>
-      <a class="side-item active" href="/people/manage">사람</a>
+      <a class="side-item" href="/gallery">{_("nav.all_photos")}</a>
+      <a class="side-item active" href="/people/manage">{_("nav.people")}</a>
       <!-- 설정(/dashboard)은 사이드바에서 숨김 — 진입은 메뉴바 "설정 열기" -->
+      <div class="side-lang">{render_lang_switcher(locale, request)}</div>
     </aside>
     <section class="content">
       <div class="hdr">
-        <h1>사람 정리</h1>
-        <span class="sub">반복해서 나온 얼굴에 이름·애칭을 붙이세요 · {total}명</span>
-        <input class="search" placeholder="이름·애칭 검색" oninput="filterRows(this.value)" aria-label="이름·애칭 검색">
+        <h1>{_("people.title")}</h1>
+        <span class="sub">{_("people.header_sub", total=total)}</span>
+        <input class="search" placeholder="{_("people.search_placeholder")}" oninput="filterRows(this.value)" aria-label="{_("people.search_placeholder")}">
       </div>
       <div class="list">
-        <div class="hint">대표 얼굴이나 장수를 누르면 그 사람의 사진을 모아 봅니다. 비슷한 그룹은 선택해 병합하세요.</div>
+        <div class="hint">{_("people.hint")}</div>
         {rows_html}
       </div>
       <div class="footer">
-        <span id="merge-count">0개 선택됨</span>
+        <span id="merge-count">{_("people.merge_count_zero")}</span>
         <span class="sp"></span>
-        <button class="btn danger" id="merge-btn" onclick="mergeSelected()" disabled>선택 병합 (첫 선택이 남음)</button>
+        <button class="btn danger" id="merge-btn" onclick="mergeSelected()" disabled>{_("people.merge_button_default")}</button>
       </div>
     </section>
   </div>
-  <script>{_PEOPLE_MANAGE_JS}</script>
+  <script>const PT = {t_json};
+{_PEOPLE_MANAGE_JS}</script>
 </body>
 </html>"""
 
@@ -367,7 +388,7 @@ def people_manage_page(request: Request) -> HTMLResponse:
                     "merged_sources": merged_by_target.get(int(person.id), []),
                 }
             )
-    return HTMLResponse(_render_people_manage_html(people))
+    return HTMLResponse(_render_people_manage_html(people, request))
 
 
 @router.get("/{person_id}", response_model=PersonResponse)

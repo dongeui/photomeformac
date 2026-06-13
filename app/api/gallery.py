@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy import Select, exists, false, func, or_, select
 
 from app.api.deps import require_state
-from app.api.i18n_web import request_translator
+from app.api.i18n_web import render_lang_switcher, request_translator
 from app.models.annotation import MediaAnnotation
 from app.models.asset import DerivedAsset
 from app.models.media import MediaFile
@@ -1033,7 +1033,7 @@ def gallery_page(
         <!-- 설정(/dashboard)은 사이드바에서 숨기고 메뉴바 "설정 열기"로만 진입.
              페이지 자체는 오류 재처리·리소스 설정 등 관리 기능 때문에 유지한다. -->
       </nav>
-      <div class="side-lang">{_render_lang_switcher(locale, request)}</div>
+      <div class="side-lang">{render_lang_switcher(locale, request)}</div>
     </aside>
     <section class="content">
       <form class="topbar-search" id="gallery-search-form" method="get" action="/gallery">
@@ -1707,20 +1707,6 @@ def _render_search_mode_pill(search_meta: dict[str, str] | None, _) -> str:
     if not search_meta:
         return ""
     return f'<span class="meta-pill">{escape(_friendly_intent_label(search_meta, _))}</span>'
-
-
-def _render_lang_switcher(locale: str, request: Request) -> str:
-    from app.core.i18n import SUPPORTED_LOCALES
-
-    next_url = request.url.path
-    if request.url.query:
-        next_url += f"?{request.url.query}"
-    links = []
-    for code, label in SUPPORTED_LOCALES.items():
-        active = " active" if code == locale else ""
-        href = f"/lang/{code}?next={escape(next_url, quote=True)}"
-        links.append(f'<a class="lang-link{active}" href="{href}">{escape(label)}</a>')
-    return "".join(links)
 
 
 def _page_url(request: Request, page: int) -> str:

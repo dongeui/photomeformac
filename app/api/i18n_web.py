@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from html import escape
+
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
@@ -31,6 +33,19 @@ def request_translator(request: Request):
     """(locale_code, translator) 반환."""
     locale = request_locale(request)
     return locale, translator(locale)
+
+
+def render_lang_switcher(locale: str, request: Request) -> str:
+    """사이드바 언어 전환 링크(한국어 | English). 현재 경로로 되돌아온다."""
+    next_url = request.url.path
+    if request.url.query:
+        next_url += f"?{request.url.query}"
+    links = []
+    for code, label in SUPPORTED_LOCALES.items():
+        active = " active" if code == locale else ""
+        href = f"/lang/{code}?next={escape(next_url, quote=True)}"
+        links.append(f'<a class="lang-link{active}" href="{href}">{escape(label)}</a>')
+    return "".join(links)
 
 
 def _safe_next(value: str | None) -> str:
