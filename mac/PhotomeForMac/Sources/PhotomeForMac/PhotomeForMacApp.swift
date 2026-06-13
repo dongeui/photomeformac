@@ -5,6 +5,8 @@ import ServiceManagement
 @main
 struct PhotomeForMacApp: App {
     @StateObject private var backend = BackendSupervisor()
+    // 메뉴에서 수동 '업데이트 확인'은 없앴지만, 이 인스턴스가 살아 있어야
+    // Sparkle 백그라운드 자동 확인(24h)이 돈다 — 제거하면 업데이트가 멈춘다.
     @StateObject private var updateChecker = UpdateChecker()
     @NSApplicationDelegateAdaptor(PhotomeAppDelegate.self) private var appDelegate
 
@@ -26,37 +28,14 @@ struct PhotomeForMacApp: App {
         MenuBarExtra(backend.menuTitle, systemImage: menuBarIcon) {
             MenuBarContent(
                 backend: backend,
-                updateChecker: updateChecker,
                 // 시스템 설정에서 외부로 바꿔도 반영되도록, 고정값이 아니라
                 // 메뉴가 다시 평가될 때마다 실제 상태를 읽는 클로저를 넘긴다.
                 isLaunchAtLoginEnabled: { Self.currentLaunchAtLoginEnabled() },
                 isLaunchAtLoginAvailable: Self.isLaunchAtLoginAvailable(),
-                onToggleLaunchAtLogin: { toggleLaunchAtLogin() },
-                onAbout: { Self.presentAboutPanel() }
+                onToggleLaunchAtLogin: { toggleLaunchAtLogin() }
             )
             .onAppear { appDelegate.backend = backend }
         }
-    }
-
-    static func presentAboutPanel() {
-        let info = Bundle.main.infoDictionary ?? [:]
-        let version = info["CFBundleShortVersionString"] as? String ?? "?"
-        let build = info["CFBundleVersion"] as? String ?? "?"
-        let credits = NSAttributedString(
-            string: "Docker 없이 실행되는 macOS용 Photome.\n로컬 사진 라이브러리, AI 검색, 사람·장소 태그.\n\nGitHub: https://github.com/dongeui/photomeformac",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 11),
-                .foregroundColor: NSColor.secondaryLabelColor,
-            ]
-        )
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(options: [
-            .applicationName: "Photome",
-            .applicationVersion: version,
-            .version: "Build \(build)",
-            .credits: credits,
-            NSApplication.AboutPanelOptionKey(rawValue: "Copyright"): "© Photome",
-        ])
     }
 
     private func toggleLaunchAtLogin() {
@@ -101,11 +80,9 @@ struct PhotomeForMacApp: App {
 /// 2초 폴링으로 갱신하며 메뉴를 열 때마다 최신값으로 평가된다.
 struct MenuBarContent: View {
     @ObservedObject var backend: BackendSupervisor
-    @ObservedObject var updateChecker: UpdateChecker
     let isLaunchAtLoginEnabled: () -> Bool
     let isLaunchAtLoginAvailable: Bool
     let onToggleLaunchAtLogin: () -> Void
-    let onAbout: () -> Void
 
     var body: some View {
         Text("상태: \(backend.state.rawValue)")
@@ -160,10 +137,8 @@ struct MenuBarContent: View {
 
         Divider()
 
-        Button("업데이트 확인…") {
-            updateChecker.checkForUpdates()
-        }
-        .disabled(!updateChecker.canCheck)
+        // 업데이트는 백그라운드 자동 확인(24h, UpdateChecker)에 맡기고, 수동
+        // '업데이트 확인'과 'Photome에 관하여' 메뉴는 노출하지 않는다.
         // Toggle은 켜졌을 때 메뉴에 체크마크를 표시해 on/off 상태가 한눈에
         // 보인다. isOn getter가 매 평가마다 실제 상태를 읽으므로 시스템 설정
         // 에서 외부로 바꾼 경우에도 메뉴를 다시 열면 반영된다.
@@ -172,9 +147,6 @@ struct MenuBarContent: View {
             set: { _ in onToggleLaunchAtLogin() }
         ))
         .disabled(!isLaunchAtLoginAvailable)
-        Button("Photome에 관하여") {
-            onAbout()
-        }
 
         Divider()
 

@@ -48,8 +48,9 @@ final class UpdateChecker: ObservableObject {
         self.delegate = delegate
     }
 
-    /// 사용자가 메뉴에서 [업데이트 확인] 눌렀을 때 호출. 이미 최신이면 그 다이얼로그까지
-    /// Sparkle이 표준 UI로 표시한다.
+    /// 수동 업데이트 확인. 현재 메뉴에는 노출하지 않으며(자동 24h 확인에 일임),
+    /// 향후 수동 트리거를 다시 붙일 때를 위한 공개 API로 남겨둔다. 이미 최신이면
+    /// 그 다이얼로그까지 Sparkle이 표준 UI로 표시한다.
     func checkForUpdates() {
         guard !isChecking else { return }
         isChecking = true
