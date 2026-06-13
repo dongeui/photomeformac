@@ -345,7 +345,7 @@ def _missing_source_root_detail(path: Path, settings: AppSettings) -> str:
     if os.path.exists("/.dockerenv"):
         if settings.source_root_host is not None and settings.source_root_mount is not None:
             return (
-                f"{message}. Photome can auto-map Finder/NAS paths under {settings.source_root_host} "
+                f"{message}. Trove can auto-map Finder/NAS paths under {settings.source_root_host} "
                 f"to the Docker mount {settings.source_root_mount}, but this path was still not found "
                 "after mapping. Check that the NAS share is mounted on macOS and that Docker Compose "
                 "points to the same host root."
@@ -353,7 +353,7 @@ def _missing_source_root_detail(path: Path, settings: AppSettings) -> str:
         return (
             f"{message}. The server is running in Docker, so Finder/host NAS paths are not visible "
             "unless they are mounted into the container. Mount the NAS share on macOS first, then set "
-            "PHOTOME_SOURCE_ROOT to that host path and PHOTOME_SOURCE_MOUNT to the path Photome should "
+            "TROVE_SOURCE_ROOT to that host path and TROVE_SOURCE_MOUNT to the path Trove should "
             "see inside Docker."
         )
     if str(path).startswith("/Volumes/"):

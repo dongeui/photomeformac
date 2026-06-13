@@ -43,7 +43,7 @@ def _lan_admin_authorized(request: Request, settings: AppSettings) -> bool:
     token = settings.lan_admin_token.strip()
     if not token:
         return False
-    provided = request.headers.get("x-photome-admin-token") or request.query_params.get("admin_token") or ""
+    provided = request.headers.get("x-trove-admin-token") or request.query_params.get("admin_token") or ""
     return provided == token
 
 
@@ -63,7 +63,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
             return JSONResponse(
                 status_code=401,
                 content={
-                    "detail": "LAN 공유 보호가 켜져 있습니다. 관리자 작업은 X-Photome-Admin-Token이 필요합니다."
+                    "detail": "LAN 공유 보호가 켜져 있습니다. 관리자 작업은 X-Trove-Admin-Token이 필요합니다."
                 },
             )
         return await call_next(request)

@@ -23,8 +23,8 @@ _load_error_config: tuple[str, str] | None = None
 
 
 def model_config() -> dict[str, str]:
-    model_name = os.environ.get("PHOTOME_CLIP_MODEL_NAME") or os.environ.get("PHOTOMINE_CLIP_MODEL_NAME") or "ViT-B-32"
-    pretrained = os.environ.get("PHOTOME_CLIP_PRETRAINED") or os.environ.get("PHOTOMINE_CLIP_PRETRAINED") or "openai"
+    model_name = os.environ.get("TROVE_CLIP_MODEL_NAME") or os.environ.get("PHOTOMINE_CLIP_MODEL_NAME") or "ViT-B-32"
+    pretrained = os.environ.get("TROVE_CLIP_PRETRAINED") or os.environ.get("PHOTOMINE_CLIP_PRETRAINED") or "openai"
     return {
         "model_name": model_name,
         "pretrained": pretrained,
@@ -42,8 +42,8 @@ def dependency_status() -> dict:
 def _configure_torch_threads() -> None:
     import torch
 
-    configured = os.environ.get("PHOTOME_TORCH_THREADS")
-    index_workers = max(1, int(os.environ.get("PHOTOME_INDEX_WORKERS", "1")))
+    configured = os.environ.get("TROVE_TORCH_THREADS")
+    index_workers = max(1, int(os.environ.get("TROVE_INDEX_WORKERS", "1")))
     cpu_count = os.cpu_count() or 1
     thread_count = int(configured) if configured else max(1, cpu_count // index_workers)
     torch.set_num_threads(thread_count)
@@ -79,7 +79,7 @@ def ensure_models() -> None:
     if is_ready():
         return
 
-    offline_mode = os.environ.get("PHOTOME_OFFLINE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+    offline_mode = os.environ.get("TROVE_OFFLINE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
     config = model_config()
     config_key = (config["model_name"], config["pretrained"])
     if offline_mode and _load_error and _load_error_config == config_key:
@@ -96,7 +96,7 @@ def ensure_models() -> None:
         _configure_torch_threads()
 
         print(
-            f"[photome] Loading CLIP model {config['model_name']} / {config['pretrained']} ...",
+            f"[trove] Loading CLIP model {config['model_name']} / {config['pretrained']} ...",
             flush=True,
         )
         _model, _, _preprocess = open_clip.create_model_and_transforms(
@@ -107,7 +107,7 @@ def ensure_models() -> None:
             p.requires_grad_(False)
         _tokenizer = open_clip.get_tokenizer(config["model_name"])
         _load_error_config = None
-        print("[photome] Model ready.", flush=True)
+        print("[trove] Model ready.", flush=True)
     except Exception as exc:
         _load_error = str(exc)
         _load_error_config = config_key

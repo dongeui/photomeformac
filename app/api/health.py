@@ -19,7 +19,7 @@ async def readyz(request: Request) -> dict[str, object]:
     database = getattr(request.app.state, "database", None)
     return {
         "status": "ready",
-        "app_name": settings.app_name if settings is not None else "photome",
+        "app_name": settings.app_name if settings is not None else "trove",
         "app_version": settings.app_version if settings is not None else "0.1.0",
         "database_configured": bool(database and database.configured),
     }

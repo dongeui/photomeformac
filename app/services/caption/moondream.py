@@ -3,8 +3,8 @@
 Install: pip install moondream
 Model is downloaded automatically on first use (~1.8 GB for int8 variant).
 
-Set PHOTOME_CAPTION_PROVIDER=moondream to activate.
-Set PHOTOME_MOONDREAM_MODEL to override the model revision (default: 2025-01-09).
+Set TROVE_CAPTION_PROVIDER=moondream to activate.
+Set TROVE_MOONDREAM_MODEL to override the model revision (default: 2025-01-09).
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from app.services.image_decode import ensure_heif_support
 
 logger = logging.getLogger(__name__)
 
-_MOONDREAM_REVISION = os.environ.get("PHOTOME_MOONDREAM_MODEL", "2025-01-09")
+_MOONDREAM_REVISION = os.environ.get("TROVE_MOONDREAM_MODEL", "2025-01-09")
 
 # Guard against model loading more than once
 _model_lock = threading.Lock()

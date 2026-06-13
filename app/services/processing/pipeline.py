@@ -1083,7 +1083,7 @@ class ProcessingPipeline:
         workers = self._asset_processing_workers if total > 1 else 1
         if workers > 1:
             pending_ids = [media_file.file_id for media_file in pending_media]
-            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="photome-assets") as executor:
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="trove-assets") as executor:
                 futures = {
                     executor.submit(self._process_pending_media_item, file_id, trigger_job_id): file_id
                     for file_id in pending_ids

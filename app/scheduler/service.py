@@ -63,7 +63,7 @@ class SchedulerService:
         if self._running:
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run_loop, name="photome-scheduler", daemon=True)
+        self._thread = threading.Thread(target=self._run_loop, name="trove-scheduler", daemon=True)
         self._thread.start()
         self._running = True
         logger.info("scheduler started")

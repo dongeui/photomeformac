@@ -404,8 +404,8 @@ def test_clip_embedding_reuse_requires_matching_model_name(
         )
         session.commit()
 
-    monkeypatch.setenv("PHOTOME_CLIP_MODEL_NAME", "new-model")
-    monkeypatch.setenv("PHOTOME_CLIP_PRETRAINED", "new-pretrained")
+    monkeypatch.setenv("TROVE_CLIP_MODEL_NAME", "new-model")
+    monkeypatch.setenv("TROVE_CLIP_PRETRAINED", "new-pretrained")
 
     def fake_embedding(media_file: MediaFile) -> dict:
         calls["count"] += 1
@@ -466,8 +466,8 @@ def test_embedding_pending_uses_current_model_and_version(
         )
         session.commit()
 
-    monkeypatch.setenv("PHOTOME_CLIP_MODEL_NAME", "new-model")
-    monkeypatch.setenv("PHOTOME_CLIP_PRETRAINED", "new-pretrained")
+    monkeypatch.setenv("TROVE_CLIP_MODEL_NAME", "new-model")
+    monkeypatch.setenv("TROVE_CLIP_PRETRAINED", "new-pretrained")
     calls = {"count": 0}
 
     def fake_embedding(media_file: MediaFile) -> dict:
@@ -1112,11 +1112,11 @@ def test_async_job_dashboard_restores_phase_cards_from_local_storage(client: Tes
     # 통합 동기화: 별도 유휴 이미지 AI 스케줄/백그라운드 작업 표기는 없어야 한다.
     assert "background_task" not in html
     assert "자동 동기화" in html
-    assert 'const phase1StorageKey = "photome.dashboard.phase1.job";' in html
+    assert 'const phase1StorageKey = "trove.dashboard.phase1.job";' in html
     # phase2 카드 제거(B-8): 관련 JS/스토리지 키도 함께 사라져야 한다.
     assert "phase2StorageKey" not in html
     assert 'id="phase2-card"' not in html
-    assert 'const phase1SourceRootsStorageKey = "photome.dashboard.phase1.source_roots";' in html
+    assert 'const phase1SourceRootsStorageKey = "trove.dashboard.phase1.source_roots";' in html
     assert "let activeLibraryJob =" in html
     assert "function updateLibraryJobGuards()" in html
     assert "setInterval(refreshDashboardStatus, 3000);" in html

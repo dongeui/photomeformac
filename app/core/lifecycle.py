@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.offline_mode:
         import os
 
-        os.environ["PHOTOME_OFFLINE_MODE"] = "1"
+        os.environ["TROVE_OFFLINE_MODE"] = "1"
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
     clear_query_cache()

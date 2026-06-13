@@ -173,7 +173,7 @@ def test_person_alias_mapping_updates_tags_search_and_dashboard(
     assert f"/people/faces/{face_id}/crop" in dashboard
     assert "쭈니, 아들" in dashboard
     assert 'class="btn-copy person-preview-trigger"' in dashboard
-    assert "photome.dashboard.people_manager.open" in dashboard
+    assert "trove.dashboard.people_manager.open" in dashboard
     assert 'id="people-filter"' in dashboard
     assert 'id="people-sort"' in dashboard
     assert 'id="person-reassign-filter"' in dashboard

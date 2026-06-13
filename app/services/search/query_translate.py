@@ -411,10 +411,10 @@ def translate_to_english(query: str) -> str | None:
 
     The default path is a small deterministic lexicon, so the app stays fast and
     offline even before optional translation models are installed. Set
-    PHOTOME_TRANSLATOR=opus to use a local HuggingFace MarianMT model when the
+    TROVE_TRANSLATOR=opus to use a local HuggingFace MarianMT model when the
     dependencies and model cache are available.
     """
-    if os.environ.get("PHOTOME_TRANSLATOR", "lexicon").casefold() == "opus":
+    if os.environ.get("TROVE_TRANSLATOR", "lexicon").casefold() == "opus":
         translated = _translate_with_opus(query)
         if translated:
             return translated
@@ -456,7 +456,7 @@ def _expand_english_terms(query: str) -> str | None:
 def _opus_pipeline():
     from transformers import MarianMTModel, MarianTokenizer
 
-    model_name = os.environ.get("PHOTOME_TRANSLATOR_MODEL", "Helsinki-NLP/opus-mt-ko-en")
+    model_name = os.environ.get("TROVE_TRANSLATOR_MODEL", "Helsinki-NLP/opus-mt-ko-en")
     tokenizer = MarianTokenizer.from_pretrained(model_name)
     model = MarianMTModel.from_pretrained(model_name)
     model.eval()

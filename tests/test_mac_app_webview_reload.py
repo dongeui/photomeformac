@@ -10,7 +10,7 @@ def test_backend_supervisor_wires_real_log_file_support() -> None:
 
     assert "@Published private(set) var logFileURL: URL?" in content
     assert "prepareLogFile(appDataRoot:" in content
-    assert "photome-backend.log" in content
+    assert "trove-backend.log" in content
     assert "attachLogStreaming(pipe: pipe, logHandle: logHandle)" in content
     assert "NSWorkspace.shared.open(logFileURL)" in content
     assert "아직 생성된 로그 파일이 없습니다." in content

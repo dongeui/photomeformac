@@ -38,12 +38,12 @@ class NominatimProvider:
     """Free reverse geocoding via OpenStreetMap Nominatim public API.
 
     Rate-limited to 1 req/s per Nominatim usage policy.
-    Set PHOTOME_NOMINATIM_URL to point at a self-hosted instance.
+    Set TROVE_NOMINATIM_URL to point at a self-hosted instance.
     """
 
     _MIN_INTERVAL = 1.1  # seconds between requests
 
-    def __init__(self, user_agent: str = "photome/1.0") -> None:
+    def __init__(self, user_agent: str = "trove/1.0") -> None:
         self._user_agent = user_agent
         self._last_request_time: float = 0.0
 
@@ -53,7 +53,7 @@ class NominatimProvider:
         import json
         import os
 
-        base_url = os.environ.get("PHOTOME_NOMINATIM_URL", "https://nominatim.openstreetmap.org")
+        base_url = os.environ.get("TROVE_NOMINATIM_URL", "https://nominatim.openstreetmap.org")
         params = urllib.parse.urlencode({
             "lat": f"{latitude:.7f}",
             "lon": f"{longitude:.7f}",

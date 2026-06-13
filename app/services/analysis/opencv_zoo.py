@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 def _default_model_root() -> Path:
     from app.core.settings import _env
 
-    data_root = Path(_env("PHOTOME_DATA_ROOT", "./data")).expanduser().resolve()
+    data_root = Path(_env("TROVE_DATA_ROOT", "./data")).expanduser().resolve()
     return data_root / "models"
 
 
@@ -100,7 +100,7 @@ class OpenCVZooModelResolver:
         tmp_path: Path | None = None
         request = Request(
             spec.download_url,
-            headers={"User-Agent": "photome-face-analysis/0.1"},
+            headers={"User-Agent": "trove-face-analysis/0.1"},
         )
         try:
             with urlopen(request, timeout=self._timeout_seconds) as response:

@@ -130,7 +130,7 @@ struct MenuBarContent: View {
             backend.openDashboard()
         }
         .disabled(!backend.isRunning)
-        Button("Photome 다시 시작") {
+        Button("Trove 다시 시작") {
             backend.restart()
         }
         .disabled(backend.isBusy || backend.hasActiveLibraryJob)

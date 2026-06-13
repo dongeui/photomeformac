@@ -4,27 +4,30 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PACKAGE_DIR="$ROOT_DIR/mac/PhotomeForMac"
 DIST_DIR="$ROOT_DIR/dist/mac"
-APP_NAME="PhotomeForMac"
+# PRODUCT_NAME: SwiftPM 실행 타깃/바이너리 이름(소스 폴더 mac/PhotomeForMac 유지).
+# APP_NAME: 사용자에게 보이는 .app·DMG·표시 이름(브랜드).
+PRODUCT_NAME="PhotomeForMac"
+APP_NAME="Trove"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 DMG_STAGING="$DIST_DIR/dmg-staging"
 DMG_PATH="$DIST_DIR/$APP_NAME.dmg"
-SIGN_IDENTITY="${PHOTOME_MAC_SIGN_IDENTITY:--}"
-BUNDLE_BACKEND="${PHOTOME_BUNDLE_BACKEND:-1}"
+SIGN_IDENTITY="${TROVE_MAC_SIGN_IDENTITY:--}"
+BUNDLE_BACKEND="${TROVE_BUNDLE_BACKEND:-1}"
 # CLIP은 정식 배포에서 항상 켜진 상태로 가는 정책이므로 Python venv도 기본 번들.
-BUNDLE_PYTHON="${PHOTOME_BUNDLE_PYTHON:-1}"
+BUNDLE_PYTHON="${TROVE_BUNDLE_PYTHON:-1}"
 # CLIP 모델 weights도 기본 번들 (사용자가 첫 실행 시 인터넷 다운로드 안 해도 됨).
-BUNDLE_WEIGHTS="${PHOTOME_BUNDLE_WEIGHTS:-1}"
-VERSION="${PHOTOME_MAC_VERSION:-0.1.0}"
-BUILD_NUMBER="${PHOTOME_MAC_BUILD:-1}"
-BUNDLE_ID="${PHOTOME_MAC_BUNDLE_ID:-com.photome.mac}"
+BUNDLE_WEIGHTS="${TROVE_BUNDLE_WEIGHTS:-1}"
+VERSION="${TROVE_MAC_VERSION:-0.1.0}"
+BUILD_NUMBER="${TROVE_MAC_BUILD:-1}"
+BUNDLE_ID="${TROVE_MAC_BUNDLE_ID:-com.trove.mac}"
 # Sparkle 2 자동 업데이트 메타데이터. 둘 다 설정되어야 정상 동작한다.
 # - SUFeedURL: appcast.xml의 정식 https URL (GitHub Pages 등 정적 호스팅).
 # - SUPublicEDKey: Sparkle generate_keys로 만든 edDSA public key (base64).
-SPARKLE_FEED_URL="${PHOTOME_SPARKLE_FEED_URL:-}"
-SPARKLE_PUBLIC_ED_KEY="${PHOTOME_SPARKLE_PUBLIC_ED_KEY:-}"
+SPARKLE_FEED_URL="${TROVE_SPARKLE_FEED_URL:-}"
+SPARKLE_PUBLIC_ED_KEY="${TROVE_SPARKLE_PUBLIC_ED_KEY:-}"
 
 mkdir -p "$DIST_DIR"
 rm -rf "$APP_BUNDLE" "$DMG_PATH" "$DMG_STAGING"
@@ -32,11 +35,11 @@ rm -rf "$APP_BUNDLE" "$DMG_PATH" "$DMG_STAGING"
 cd "$PACKAGE_DIR"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" swift build -c release
 SPM_BIN_DIR="$(DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" swift build -c release --show-bin-path)"
-BINARY_PATH="$SPM_BIN_DIR/$APP_NAME"
+BINARY_PATH="$SPM_BIN_DIR/$PRODUCT_NAME"
 
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
-cp "$BINARY_PATH" "$MACOS_DIR/$APP_NAME"
-chmod 755 "$MACOS_DIR/$APP_NAME"
+cp "$BINARY_PATH" "$MACOS_DIR/$PRODUCT_NAME"
+chmod 755 "$MACOS_DIR/$PRODUCT_NAME"
 
 # SwiftPM은 Sparkle 같은 dynamic framework를 자동으로 .app/Contents/Frameworks/
 # 에 embed하지 않는다. 직접 복사하고 rpath를 @executable_path/../Frameworks로
@@ -47,7 +50,7 @@ if [[ -d "$SPM_BIN_DIR/Sparkle.framework" ]]; then
   rsync -a "$SPM_BIN_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/"
   # binary가 @rpath/Sparkle.framework/...로 link됐을 텐데, 그 rpath를
   # @executable_path/../Frameworks 로 정해줘야 한다.
-  install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS_DIR/$APP_NAME" 2>/dev/null || true
+  install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS_DIR/$PRODUCT_NAME" 2>/dev/null || true
 fi
 
 if [[ -d "$PACKAGE_DIR/Resources/Assets.xcassets/AppIcon.appiconset" ]]; then
@@ -73,7 +76,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <key>CFBundleDevelopmentRegion</key>
     <string>ko</string>
     <key>CFBundleDisplayName</key>
-    <string>Photome</string>
+    <string>Trove</string>
     <key>CFBundleExecutable</key>
     <string>PhotomeForMac</string>
     <key>CFBundleIconFile</key>
@@ -83,7 +86,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Photome</string>
+    <string>Trove</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -101,7 +104,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <key>NSSupportsSuddenTermination</key>
     <false/>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Photome가 사용자가 선택한 사진 폴더를 읽기 전용으로 스캔하고 로컬 라이브러리를 만듭니다.</string>
+    <string>Trove가 사용자가 선택한 사진 폴더를 읽기 전용으로 스캔하고 로컬 라이브러리를 만듭니다.</string>
     <key>NSDocumentsFolderUsageDescription</key>
     <string>사용자가 선택한 사진 폴더를 읽기 전용으로 스캔하기 위해 접근합니다.</string>
     <key>NSDownloadsFolderUsageDescription</key>
@@ -109,7 +112,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <key>NSDesktopFolderUsageDescription</key>
     <string>사용자가 선택한 사진 폴더를 읽기 전용으로 스캔하기 위해 접근합니다.</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>LAN 공유를 켠 경우 같은 네트워크의 기기에서 Photome 대시보드에 접근할 수 있게 합니다.</string>
+    <string>LAN 공유를 켠 경우 같은 네트워크의 기기에서 Trove 대시보드에 접근할 수 있게 합니다.</string>
 PLIST
 if [[ -n "$SPARKLE_FEED_URL" ]]; then
   cat >> "$CONTENTS_DIR/Info.plist" <<PLIST
@@ -130,7 +133,7 @@ PLIST
 printf 'APPL????' > "$CONTENTS_DIR/PkgInfo"
 
 if [[ "$BUNDLE_BACKEND" == "1" ]]; then
-  BACKEND_DST="$RESOURCES_DIR/photome-backend"
+  BACKEND_DST="$RESOURCES_DIR/trove-backend"
   mkdir -p "$BACKEND_DST"
   rsync -a --delete \
     --exclude '.git/' \
@@ -148,8 +151,8 @@ if [[ "$BUNDLE_BACKEND" == "1" ]]; then
 fi
 
 if [[ "$BUNDLE_PYTHON" == "1" ]]; then
-  if [[ -n "${PHOTOME_PYTHON_BUNDLE_SRC:-}" ]]; then
-    PY_SRC="$PHOTOME_PYTHON_BUNDLE_SRC"
+  if [[ -n "${TROVE_PYTHON_BUNDLE_SRC:-}" ]]; then
+    PY_SRC="$TROVE_PYTHON_BUNDLE_SRC"
   else
     PY_SRC=""
     for candidate in \
@@ -168,9 +171,9 @@ if [[ "$BUNDLE_PYTHON" == "1" ]]; then
     done
   fi
   if [[ -z "$PY_SRC" || ! -d "$PY_SRC" ]]; then
-    echo "PHOTOME_BUNDLE_PYTHON=1 이지만 CLIP까지 설치된 venv를 찾지 못했습니다." >&2
+    echo "TROVE_BUNDLE_PYTHON=1 이지만 CLIP까지 설치된 venv를 찾지 못했습니다." >&2
     echo "  방법 1: 'python3.11 -m venv .venv311 && .venv311/bin/pip install -e .[clip]' 후 재실행" >&2
-    echo "  방법 2: PHOTOME_PYTHON_BUNDLE_SRC=/path/to/venv 환경변수 지정" >&2
+    echo "  방법 2: TROVE_PYTHON_BUNDLE_SRC=/path/to/venv 환경변수 지정" >&2
     exit 2
   fi
   rsync -a --delete "$PY_SRC/" "$RESOURCES_DIR/python-runtime/"
@@ -220,12 +223,12 @@ if [[ "$BUNDLE_WEIGHTS" == "1" ]]; then
     # 정식 배포 산출물은 ai-pack 단일 빌드이므로 weights 번들은 필수다.
     # weights 없는 빌드가 ai-pack으로 위장해 조용히 나가는 것을 막기 위해
     # (BUNDLE_PYTHON 미발견과 동일하게) 경고가 아닌 hard fail로 중단한다.
-    # 의도적으로 weights를 빼려면 PHOTOME_BUNDLE_WEIGHTS=0 을 명시해야 한다.
-    echo "PHOTOME_BUNDLE_WEIGHTS=1 이지만 CLIP ViT-B-32 weights를 찾지 못했습니다." >&2
+    # 의도적으로 weights를 빼려면 TROVE_BUNDLE_WEIGHTS=0 을 명시해야 한다.
+    echo "TROVE_BUNDLE_WEIGHTS=1 이지만 CLIP ViT-B-32 weights를 찾지 못했습니다." >&2
     echo "  배포 산출물은 ai-pack 단일 빌드라 weights 번들이 필수입니다." >&2
     echo "  방법 1: 모델 캐시가 있는 경로를 PHOTOME_WEIGHTS_SRC=/path/to/huggingface/hub 로 지정" >&2
     echo "  방법 2: 한 번 CLIP을 실행해 ~/.cache/huggingface/hub 에 ViT-B-32를 받은 뒤 재실행" >&2
-    echo "  (개발/디버그용으로 weights 없이 빌드하려면 PHOTOME_BUNDLE_WEIGHTS=0 을 명시)" >&2
+    echo "  (개발/디버그용으로 weights 없이 빌드하려면 TROVE_BUNDLE_WEIGHTS=0 을 명시)" >&2
     exit 2
   fi
 fi

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare and verify Photome's optional local AI pack.
+"""Prepare and verify Trove's optional local AI pack.
 
 This script is intentionally outside app startup. The base package can run
 without PyTorch/OpenCLIP, while this command gives installers and operators a
@@ -17,10 +17,10 @@ from app.services.embedding import clip as clip_embedding
 
 
 def _default_cache_root() -> Path:
-    explicit = os.environ.get("PHOTOME_MODEL_CACHE_ROOT")
+    explicit = os.environ.get("TROVE_MODEL_CACHE_ROOT")
     if explicit:
         return Path(explicit).expanduser()
-    data_root = os.environ.get("PHOTOME_DATA_ROOT")
+    data_root = os.environ.get("TROVE_DATA_ROOT")
     if data_root:
         return Path(data_root).expanduser() / "models"
     return Path.cwd() / "data" / "models"
@@ -37,13 +37,13 @@ def _configure_cache(cache_root: Path, *, offline: bool) -> None:
     os.environ["HF_HOME"] = str(hf_home)
     os.environ["TORCH_HOME"] = str(torch_home)
     os.environ["XDG_CACHE_HOME"] = str(xdg_cache_home)
-    os.environ["PHOTOME_CLIP_ENABLED"] = "1"
+    os.environ["TROVE_CLIP_ENABLED"] = "1"
     if offline:
-        os.environ["PHOTOME_OFFLINE_MODE"] = "1"
+        os.environ["TROVE_OFFLINE_MODE"] = "1"
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
     else:
-        os.environ["PHOTOME_OFFLINE_MODE"] = "0"
+        os.environ["TROVE_OFFLINE_MODE"] = "0"
         os.environ.pop("HF_HUB_OFFLINE", None)
         os.environ.pop("TRANSFORMERS_OFFLINE", None)
 
@@ -116,12 +116,12 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Prepare or verify Photome local AI model cache.")
+    parser = argparse.ArgumentParser(description="Prepare or verify Trove local AI model cache.")
     parser.add_argument(
         "--cache-root",
         type=Path,
         default=_default_cache_root(),
-        help="Model cache root. Defaults to PHOTOME_MODEL_CACHE_ROOT, PHOTOME_DATA_ROOT/models, or ./data/models.",
+        help="Model cache root. Defaults to TROVE_MODEL_CACHE_ROOT, TROVE_DATA_ROOT/models, or ./data/models.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status", help="Print dependency and cache status without loading the model.")

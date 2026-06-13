@@ -8,7 +8,7 @@
 - 시작 시 lockfile에 기록된 이전 인스턴스와, 같은 data_root를 쓰는 떠돌이
   백엔드 프로세스를 모두 종료한 뒤 자기 자신을 lockfile에 기록한다.
 - 맥앱이 비정상 종료해 백엔드가 고아가 되는 경우는 parent watchdog이
-  부모 사망(재부모화)을 감지해 스스로 종료한다(PHOTOME_SUPERVISED=1일 때).
+  부모 사망(재부모화)을 감지해 스스로 종료한다(TROVE_SUPERVISED=1일 때).
 """
 
 from __future__ import annotations
@@ -56,10 +56,10 @@ def start_parent_watchdog() -> None:
     """Shut the backend down when its supervisor (the mac app) dies.
 
     macOS에는 parent-death signal이 없어서, 맥앱이 강제 종료/크래시하면 자식
-    백엔드가 launchd(pid 1)로 재부모화된 채 살아남는다. PHOTOME_SUPERVISED=1로
+    백엔드가 launchd(pid 1)로 재부모화된 채 살아남는다. TROVE_SUPERVISED=1로
     띄워진 경우 ppid 변화를 감시해 스스로 graceful 종료한다.
     """
-    if os.environ.get("PHOTOME_SUPERVISED") != "1":
+    if os.environ.get("TROVE_SUPERVISED") != "1":
         return
     initial_ppid = os.getppid()
     if initial_ppid <= 1:
@@ -99,7 +99,7 @@ def _evict_same_data_root_instances(data_root: Path) -> None:
     """lockfile에 없더라도 같은 data_root를 쓰는 떠돌이 백엔드를 정리한다.
 
     환경변수에 data_root 경로가 들어있는 프로세스만 종료하므로, 병렬로 운영하는
-    다른 Photome 설치본(다른 data_root)은 건드리지 않는다.
+    다른 Trove 설치본(다른 data_root)은 건드리지 않는다.
     """
     needle = str(data_root)
     for pid in _list_backend_pids():

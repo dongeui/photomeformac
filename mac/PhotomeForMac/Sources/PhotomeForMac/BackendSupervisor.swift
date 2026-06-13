@@ -123,7 +123,7 @@ final class BackendSupervisor: ObservableObject {
         let message: String
     }
 
-    /// 메뉴바에 보여줄 Photome 자체 리소스 사용량. Photome이 띄운 백엔드
+    /// 메뉴바에 보여줄 Trove 자체 리소스 사용량. Trove가 띄운 백엔드
     /// python 프로세스와 이 메뉴바 앱, 정확히 두 프로세스만 합산한다
     /// (Activity Monitor에서는 'Python'과 'PhotomeForMac' 두 항목으로 갈라져 보인다).
     struct ResourceUsage {
@@ -377,12 +377,12 @@ final class BackendSupervisor: ObservableObject {
             let previous = lastSourceRootAvailability[path]
             if previous == true && !exists {
                 scheduleNotification(
-                    title: "Photome — 폴더 접근 불가",
+                    title: "Trove — 폴더 접근 불가",
                     body: "'\((path as NSString).lastPathComponent)' 폴더에 접근할 수 없습니다. NAS 마운트가 해제됐는지 확인하세요."
                 )
             } else if previous == false && exists {
                 scheduleNotification(
-                    title: "Photome — 폴더 복구됨",
+                    title: "Trove — 폴더 복구됨",
                     body: "'\((path as NSString).lastPathComponent)' 폴더에 다시 접근할 수 있습니다."
                 )
             }
@@ -442,14 +442,14 @@ final class BackendSupervisor: ObservableObject {
 
     var menuTitle: String {
         if let libraryJobStatus, state == .running, libraryJobStatus.isRunning {
-            return "Photome 동기화 중"
+            return "Trove 동기화 중"
         }
         switch state {
-        case .running: return "Photome 실행 중"
-        case .starting: return "Photome 시작 중"
-        case .stopping: return "Photome 중지 중"
-        case .error: return "Photome 오류"
-        case .stopped: return "Photome 중지됨"
+        case .running: return "Trove 실행 중"
+        case .starting: return "Trove 시작 중"
+        case .stopping: return "Trove 중지 중"
+        case .error: return "Trove 오류"
+        case .stopped: return "Trove 중지됨"
         }
     }
 
@@ -604,14 +604,14 @@ final class BackendSupervisor: ObservableObject {
             state = .error
             lastError = "백엔드가 비정상 종료(코드 \(exitStatus))되어 재시작합니다."
             statusMessage = lastError ?? "백엔드 비정상 종료"
-            scheduleNotification(title: "Photome 백엔드 재시작",
+            scheduleNotification(title: "Trove 백엔드 재시작",
                                  body: "백엔드가 예기치 않게 종료되어 자동으로 다시 시작합니다.")
             start()
         } else {
             state = .error
             lastError = "백엔드가 반복적으로 비정상 종료됩니다(코드 \(exitStatus)). 로그를 확인하세요."
             statusMessage = lastError ?? "백엔드 반복 비정상 종료"
-            scheduleNotification(title: "Photome 백엔드 오류",
+            scheduleNotification(title: "Trove 백엔드 오류",
                                  body: "자동 재시작에 실패했습니다. 메뉴에서 ‘로그 보기’로 원인을 확인하세요.")
         }
         updateDockBadge()
@@ -788,7 +788,7 @@ final class BackendSupervisor: ObservableObject {
 
     func choosePhotoFolder() {
         let panel = NSOpenPanel()
-        panel.title = "Photome 사진 폴더 선택"
+        panel.title = "Trove 사진 폴더 선택"
         panel.message = "읽기 전용으로 스캔할 사진 폴더를 선택하세요."
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -946,7 +946,7 @@ final class BackendSupervisor: ObservableObject {
     }
 
     /// 백엔드 python + 이 앱의 CPU/메모리를 측정해 메뉴바 표시용으로 갱신한다.
-    /// Photome 소유 프로세스 두 개만 본다 — 시스템 전체 사용량이 아니다.
+    /// Trove 소유 프로세스 두 개만 본다 — 시스템 전체 사용량이 아니다.
     private func sampleResourceUsage() {
         let appSample = resourceSampler.sample(pid: ProcessInfo.processInfo.processIdentifier)
         let backendSample = process.flatMap { resourceSampler.sample(pid: $0.processIdentifier) }
@@ -1241,7 +1241,20 @@ final class BackendSupervisor: ObservableObject {
 
     private static func defaultAppDataRoot() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return base.appendingPathComponent("Photome", isDirectory: true)
+        let trove = base.appendingPathComponent("Trove", isDirectory: true)
+        let legacy = base.appendingPathComponent("Photome", isDirectory: true)
+        let fm = FileManager.default
+        // 브랜드 리네임 마이그레이션: 새 Trove 폴더가 없고 옛 Trove 폴더가
+        // 있으면 그대로 이름만 바꿔 이어쓴다(분석 끝난 라이브러리·DB 보존).
+        // 이동이 실패하면 옛 폴더를 계속 사용해 데이터 손실을 막는다.
+        if !fm.fileExists(atPath: trove.path) && fm.fileExists(atPath: legacy.path) {
+            do {
+                try fm.moveItem(at: legacy, to: trove)
+            } catch {
+                return legacy
+            }
+        }
+        return trove
     }
 
     /// 번들에 들어있는 CLIP weights를 사용자 데이터 폴더로 한 번 복사한다.
@@ -1293,7 +1306,7 @@ final class BackendSupervisor: ObservableObject {
         try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
 
         if let logFileURL, FileManager.default.fileExists(atPath: logFileURL.path) {
-            try FileManager.default.copyItem(at: logFileURL, to: bundleURL.appendingPathComponent("photome-backend.log"))
+            try FileManager.default.copyItem(at: logFileURL, to: bundleURL.appendingPathComponent("trove-backend.log"))
         }
 
         let payload: [String: Any] = [
@@ -1320,7 +1333,7 @@ final class BackendSupervisor: ObservableObject {
     private static func prepareLogFile(appDataRoot: URL) throws -> URL {
         let logsDirectory = appDataRoot.appendingPathComponent("logs", isDirectory: true)
         try FileManager.default.createDirectory(at: logsDirectory, withIntermediateDirectories: true)
-        let logFileURL = logsDirectory.appendingPathComponent("photome-backend.log")
+        let logFileURL = logsDirectory.appendingPathComponent("trove-backend.log")
         rotateLogIfNeeded(at: logFileURL)
         if !FileManager.default.fileExists(atPath: logFileURL.path) {
             FileManager.default.createFile(atPath: logFileURL.path, contents: Data())
@@ -1353,7 +1366,7 @@ final class BackendSupervisor: ObservableObject {
 
     private static func appendLogBanner(to handle: FileHandle, port: Int, lanEnabled: Bool) throws {
         let formatter = ISO8601DateFormatter()
-        let banner = "\n[\(formatter.string(from: Date()))] Photome backend start · port=\(port) · lan=\(lanEnabled ? "on" : "off")\n"
+        let banner = "\n[\(formatter.string(from: Date()))] Trove backend start · port=\(port) · lan=\(lanEnabled ? "on" : "off")\n"
         if let data = banner.data(using: .utf8) {
             try handle.write(contentsOf: data)
         }
@@ -1377,12 +1390,12 @@ final class BackendSupervisor: ObservableObject {
 
     private static func findRepoRoot() throws -> URL {
         let env = ProcessInfo.processInfo.environment
-        if let explicit = env["PHOTOME_REPO_ROOT"], !explicit.isEmpty {
+        if let explicit = env["TROVE_REPO_ROOT"] ?? env["PHOTOME_REPO_ROOT"], !explicit.isEmpty {
             return URL(fileURLWithPath: explicit, isDirectory: true)
         }
 
         var candidates: [URL] = []
-        if let bundled = Bundle.main.resourceURL?.appendingPathComponent("photome-backend", isDirectory: true) {
+        if let bundled = Bundle.main.resourceURL?.appendingPathComponent("trove-backend", isDirectory: true) {
             candidates.append(bundled)
         }
         candidates.append(URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true))
@@ -1398,12 +1411,12 @@ final class BackendSupervisor: ObservableObject {
                 current.deleteLastPathComponent()
             }
         }
-        throw NSError(domain: "PhotomeForMac", code: 1, userInfo: [NSLocalizedDescriptionKey: "Photome repo root를 찾지 못했습니다."])
+        throw NSError(domain: "PhotomeForMac", code: 1, userInfo: [NSLocalizedDescriptionKey: "Trove repo root를 찾지 못했습니다."])
     }
 
     private static func findPythonExecutable(repoRoot: URL) throws -> URL {
         let env = ProcessInfo.processInfo.environment
-        if let explicit = env["PHOTOME_PYTHON"], !explicit.isEmpty {
+        if let explicit = env["TROVE_PYTHON"] ?? env["PHOTOME_PYTHON"], !explicit.isEmpty {
             return URL(fileURLWithPath: explicit)
         }
 
@@ -1465,10 +1478,10 @@ final class BackendSupervisor: ObservableObject {
         var env = ProcessInfo.processInfo.environment
         env.merge(decoded) { _, new in new }
         env["PYTHONPATH"] = repoRoot.path
-        env["PHOTOME_REPO_ROOT"] = repoRoot.path
+        env["TROVE_REPO_ROOT"] = repoRoot.path
 
         if let sourceRoots = UserDefaults.standard.stringArray(forKey: Self.sourceRootsDefaultsKey), !sourceRoots.isEmpty {
-            env["PHOTOME_SOURCE_ROOTS"] = sourceRoots.joined(separator: ",")
+            env["TROVE_SOURCE_ROOTS"] = sourceRoots.joined(separator: ",")
         }
         return env
     }

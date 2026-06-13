@@ -42,7 +42,7 @@ def test_offline_overlay_appears_and_recovers(tmp_path: Path, engine: str) -> No
             backend.send_signal(signal.SIGKILL)
             backend.wait(timeout=10)
             expect(overlay).to_be_visible(timeout=30_000)
-            expect(overlay).to_contain_text("Photome 연결이 끊겼습니다")
+            expect(overlay).to_contain_text("Trove 연결이 끊겼습니다")
 
             # 백엔드 부활 → 자동 새로고침으로 복귀, 오버레이는 다시 숨김
             revived = start_backend(tmp_path, port)

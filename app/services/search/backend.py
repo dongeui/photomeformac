@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # CLIP model has a 77-token limit; long queries degrade embedding quality.
 # Truncating at ~200 chars keeps the most relevant content within token budget.
 _CLIP_MAX_CHARS = 200
-_TEXT_EMBEDDING_CACHE_MAX_SIZE = int(os.environ.get("PHOTOME_TEXT_EMBEDDING_CACHE_MAX_SIZE", "512"))
+_TEXT_EMBEDDING_CACHE_MAX_SIZE = int(os.environ.get("TROVE_TEXT_EMBEDDING_CACHE_MAX_SIZE", "512"))
 _text_embedding_cache: "OrderedDict[tuple[str, str], bytes]" = OrderedDict()
 _text_embedding_cache_lock = threading.Lock()
 
@@ -56,8 +56,8 @@ def _in_chunks(values: list, size: int = _SQL_IN_CHUNK_SIZE):
 
 def _clip_model_cache_key() -> str:
     """Keep cached text embeddings isolated by the active CLIP provider."""
-    model_name = os.environ.get("PHOTOME_CLIP_MODEL_NAME", "ViT-B-32")
-    pretrained = os.environ.get("PHOTOME_CLIP_PRETRAINED", "openai")
+    model_name = os.environ.get("TROVE_CLIP_MODEL_NAME", "ViT-B-32")
+    pretrained = os.environ.get("TROVE_CLIP_PRETRAINED", "openai")
     return f"{model_name}/{pretrained}"
 
 
@@ -96,7 +96,7 @@ class SqlAlchemyHybridSearchBackend:
         self._embeddings_root = embeddings_root
         self._clip_enabled = clip_enabled
         self._log_events = log_events
-        _backend_setting = os.environ.get("PHOTOME_VECTOR_BACKEND", "auto")
+        _backend_setting = os.environ.get("TROVE_VECTOR_BACKEND", "auto")
         self._vector_index = vector_index or build_vector_index(
             session, embeddings_root=embeddings_root, backend=_backend_setting
         )

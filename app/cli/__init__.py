@@ -1,1 +1,1 @@
-"""Command line helpers for packaged Photome utilities."""
+"""Command line helpers for packaged Trove utilities."""

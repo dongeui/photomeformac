@@ -1,6 +1,6 @@
 """Korean morphological tokenizer with graceful fallback.
 
-When konlpy is installed (pip install photome[konlpy]), Okt extracts nouns
+When konlpy is installed (pip install trove[konlpy]), Okt extracts nouns
 from Korean text — no dictionary required, handles any word the language
 produces.  When konlpy is not available the module falls back to the
 heuristic compound-token splitter already in planner.py.
@@ -14,10 +14,10 @@ Usage
 
 Environment
 -----------
-    PHOTOME_TOKENIZER=okt     — force Okt (raises if konlpy missing)
-    PHOTOME_TOKENIZER=mecab   — force Mecab (requires mecab-python3 + dict)
-    PHOTOME_TOKENIZER=heuristic — force heuristic fallback (no konlpy needed)
-    PHOTOME_TOKENIZER=auto    — (default) best available
+    TROVE_TOKENIZER=okt     — force Okt (raises if konlpy missing)
+    TROVE_TOKENIZER=mecab   — force Mecab (requires mecab-python3 + dict)
+    TROVE_TOKENIZER=heuristic — force heuristic fallback (no konlpy needed)
+    TROVE_TOKENIZER=auto    — (default) best available
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
-_TOKENIZER_SETTING = os.environ.get("PHOTOME_TOKENIZER", "auto").casefold()
+_TOKENIZER_SETTING = os.environ.get("TROVE_TOKENIZER", "auto").casefold()
 
 # Probe konlpy availability once at import time to avoid per-call warnings
 _KONLPY_AVAILABLE: bool | None = None  # None = not yet checked
@@ -46,7 +46,7 @@ def _check_konlpy() -> bool:
             if _TOKENIZER_SETTING not in ("heuristic",):
                 logger.info(
                     "konlpy not installed — using heuristic tokenizer. "
-                    "Install with: pip install photome[konlpy]"
+                    "Install with: pip install trove[konlpy]"
                 )
     return bool(_KONLPY_AVAILABLE)
 
@@ -197,10 +197,10 @@ def korean_nouns(text: str) -> list[str]:
     planner._tokens() replacement.
 
     Priority:
-      PHOTOME_TOKENIZER=mecab  → Mecab (best quality, requires install)
-      PHOTOME_TOKENIZER=okt    → Okt   (good quality, pure Python)
-      PHOTOME_TOKENIZER=auto   → try Okt, then Mecab, then heuristic
-      PHOTOME_TOKENIZER=heuristic → heuristic only
+      TROVE_TOKENIZER=mecab  → Mecab (best quality, requires install)
+      TROVE_TOKENIZER=okt    → Okt   (good quality, pure Python)
+      TROVE_TOKENIZER=auto   → try Okt, then Mecab, then heuristic
+      TROVE_TOKENIZER=heuristic → heuristic only
     """
     if not text:
         return []

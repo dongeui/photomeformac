@@ -49,38 +49,38 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-RRF_K: float = _env_float("PHOTOME_RRF_K", 60.0)
+RRF_K: float = _env_float("TROVE_RRF_K", 60.0)
 
 # Scoring bonuses (0.0–1.0 scale)
-BOOST_OCR_EXACT: float     = _env_float("PHOTOME_BOOST_OCR_EXACT",     0.22)
-BOOST_OCR_TOKEN: float     = _env_float("PHOTOME_BOOST_OCR_TOKEN",     0.12)
-BOOST_TAG_EXACT: float     = _env_float("PHOTOME_BOOST_TAG_EXACT",     0.9)
-BOOST_PROMOTED: float      = _env_float("PHOTOME_BOOST_PROMOTED",      0.15)
-BOOST_PLACE_MATCH: float   = _env_float("PHOTOME_BOOST_PLACE_MATCH",   0.08)
-BOOST_PERSON_MATCH: float  = _env_float("PHOTOME_BOOST_PERSON_MATCH",  0.06)
-BOOST_DATE_IN_RANGE: float = _env_float("PHOTOME_BOOST_DATE_IN_RANGE", 0.08)
+BOOST_OCR_EXACT: float     = _env_float("TROVE_BOOST_OCR_EXACT",     0.22)
+BOOST_OCR_TOKEN: float     = _env_float("TROVE_BOOST_OCR_TOKEN",     0.12)
+BOOST_TAG_EXACT: float     = _env_float("TROVE_BOOST_TAG_EXACT",     0.9)
+BOOST_PROMOTED: float      = _env_float("TROVE_BOOST_PROMOTED",      0.15)
+BOOST_PLACE_MATCH: float   = _env_float("TROVE_BOOST_PLACE_MATCH",   0.08)
+BOOST_PERSON_MATCH: float  = _env_float("TROVE_BOOST_PERSON_MATCH",  0.06)
+BOOST_DATE_IN_RANGE: float = _env_float("TROVE_BOOST_DATE_IN_RANGE", 0.08)
 
 # Multi-channel agreement multipliers
-CHANNEL_BONUS_2: float = _env_float("PHOTOME_CHANNEL_BONUS_2", 1.15)
-CHANNEL_BONUS_3: float = _env_float("PHOTOME_CHANNEL_BONUS_3", 1.30)
+CHANNEL_BONUS_2: float = _env_float("TROVE_CHANNEL_BONUS_2", 1.15)
+CHANNEL_BONUS_3: float = _env_float("TROVE_CHANNEL_BONUS_3", 1.30)
 
 # Result diversity & dedup
-DIVERSITY_MAX_PER_DAY: int = _env_int("PHOTOME_DIVERSITY_MAX_PER_DAY", 5)
-BURST_DEDUP_SECONDS: int   = _env_int("PHOTOME_BURST_DEDUP_SECONDS",   3)
+DIVERSITY_MAX_PER_DAY: int = _env_int("TROVE_DIVERSITY_MAX_PER_DAY", 5)
+BURST_DEDUP_SECONDS: int   = _env_int("TROVE_BURST_DEDUP_SECONDS",   3)
 
 # Fuzzy correction
-FUZZY_SIMILARITY_THRESHOLD: float = _env_float("PHOTOME_FUZZY_SIMILARITY", 0.5)
-FUZZY_MAX_TAGS: int                = _env_int("PHOTOME_FUZZY_MAX_TAGS",     2000)
+FUZZY_SIMILARITY_THRESHOLD: float = _env_float("TROVE_FUZZY_SIMILARITY", 0.5)
+FUZZY_MAX_TAGS: int                = _env_int("TROVE_FUZZY_MAX_TAGS",     2000)
 
 # NGram scoring multipliers (OCR n-gram bonus)
-BOOST_NGRAM_NO_TEXT: float = _env_float("PHOTOME_BOOST_NGRAM_NO_TEXT", 0.10)
-BOOST_NGRAM_FACTOR: float  = _env_float("PHOTOME_BOOST_NGRAM_FACTOR",  0.08)
+BOOST_NGRAM_NO_TEXT: float = _env_float("TROVE_BOOST_NGRAM_NO_TEXT", 0.10)
+BOOST_NGRAM_FACTOR: float  = _env_float("TROVE_BOOST_NGRAM_FACTOR",  0.08)
 
 # ---------------------------------------------------------------------------
 # Simple TTL query result cache (in-memory, per-process)
 # ---------------------------------------------------------------------------
-_CACHE_TTL_SECONDS: int  = _env_int("PHOTOME_SEARCH_CACHE_TTL",     60)
-_CACHE_MAX_SIZE: int     = _env_int("PHOTOME_SEARCH_CACHE_MAX_SIZE", 256)
+_CACHE_TTL_SECONDS: int  = _env_int("TROVE_SEARCH_CACHE_TTL",     60)
+_CACHE_MAX_SIZE: int     = _env_int("TROVE_SEARCH_CACHE_MAX_SIZE", 256)
 _query_cache: dict[str, tuple[float, list[dict], dict]] = {}  # key → (ts, results, meta)
 _cache_lock = threading.Lock()  # protects _query_cache against concurrent writers
 

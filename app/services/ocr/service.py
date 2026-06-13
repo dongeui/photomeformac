@@ -9,8 +9,8 @@ from PIL import Image, ImageOps
 
 from app.services.image_decode import ensure_heif_support
 
-OCR_LANG = os.environ.get("PHOTOME_OCR_LANG", "kor+eng")
-OCR_ENGINE = os.environ.get("PHOTOME_OCR_ENGINE", "tesseract").casefold()
+OCR_LANG = os.environ.get("TROVE_OCR_LANG", "kor+eng")
+OCR_ENGINE = os.environ.get("TROVE_OCR_ENGINE", "tesseract").casefold()
 
 
 @dataclass

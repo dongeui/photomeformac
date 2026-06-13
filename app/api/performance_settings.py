@@ -24,7 +24,7 @@ class PerformanceSettingsPayload(BaseModel):
 
 
 def env_file_path() -> Path:
-    configured = os.environ.get("PHOTOME_ENV_FILE", ".env")
+    configured = os.environ.get("TROVE_ENV_FILE", ".env")
     path = Path(configured).expanduser()
     if not path.is_absolute():
         path = (Path.cwd() / path).resolve()
@@ -69,10 +69,10 @@ async def update_performance_settings(request: Request, payload: PerformanceSett
     manual_batch = max(50, min(5000, int(payload.semantic_manual_batch_size)))
 
     updates = {
-        "PHOTOME_ASSET_PROCESSING_WORKERS": str(workers),
-        "PHOTOME_TORCH_THREADS": str(torch_threads),
-        "PHOTOME_SEMANTIC_MAINTENANCE_BATCH_SIZE": str(maintenance_batch),
-        "PHOTOME_SEMANTIC_MANUAL_BATCH_SIZE": str(manual_batch),
+        "TROVE_ASSET_PROCESSING_WORKERS": str(workers),
+        "TROVE_TORCH_THREADS": str(torch_threads),
+        "TROVE_SEMANTIC_MAINTENANCE_BATCH_SIZE": str(maintenance_batch),
+        "TROVE_SEMANTIC_MANUAL_BATCH_SIZE": str(manual_batch),
     }
     _update_env_file(env_file_path(), updates)
     for key, value in updates.items():

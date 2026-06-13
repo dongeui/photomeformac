@@ -271,13 +271,13 @@ def _render_people_manage_html(people: list[dict]) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>사람 정리 · Photome</title>
+<title>사람 정리 · Trove</title>
 <style>{_PEOPLE_MANAGE_CSS}</style>
 </head>
 <body>
   <div class="layout">
     <aside class="sidebar">
-      <div class="side-brand">Photome</div>
+      <div class="side-brand">Trove</div>
       <a class="side-item" href="/gallery">모든 사진</a>
       <a class="side-item active" href="/people/manage">사람</a>
       <!-- 설정(/dashboard)은 사이드바에서 숨김 — 진입은 메뉴바 "설정 열기" -->

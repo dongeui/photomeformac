@@ -46,8 +46,8 @@ jobs:
           else
             version="${{ inputs.version }}"
           fi
-          echo "PHOTOME_MAC_VERSION=${version}" >> "$GITHUB_ENV"
-          echo "PHOTOME_MAC_BUILD=${{ inputs.build || github.run_number }}" >> "$GITHUB_ENV"
+          echo "TROVE_MAC_VERSION=${version}" >> "$GITHUB_ENV"
+          echo "TROVE_MAC_BUILD=${{ inputs.build || github.run_number }}" >> "$GITHUB_ENV"
 
       - name: Set up Python (for runtime bundling)
         if: inputs.bundle_python == true
@@ -83,8 +83,8 @@ jobs:
 
       - name: Build app and DMG
         env:
-          PHOTOME_BUNDLE_PYTHON: ${{ inputs.bundle_python && '1' || '0' }}
-          PHOTOME_MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY || '-' }}
+          TROVE_BUNDLE_PYTHON: ${{ inputs.bundle_python && '1' || '0' }}
+          TROVE_MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY || '-' }}
         run: scripts/build_mac_app_bundle.sh
 
       - name: Notarize DMG
@@ -93,16 +93,16 @@ jobs:
           MAC_NOTARY_APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
           MAC_NOTARY_TEAM_ID: ${{ secrets.MAC_NOTARY_TEAM_ID }}
           MAC_NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
-          PHOTOME_NOTARY_APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
-          PHOTOME_NOTARY_TEAM_ID: ${{ secrets.MAC_NOTARY_TEAM_ID }}
-          PHOTOME_NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
+          TROVE_NOTARY_APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
+          TROVE_NOTARY_TEAM_ID: ${{ secrets.MAC_NOTARY_TEAM_ID }}
+          TROVE_NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
         run: scripts/notarize_mac_app.sh
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PhotomeForMac-dmg
-          path: dist/mac/PhotomeForMac.dmg
+          name: Trove-dmg
+          path: dist/mac/Trove.dmg
           if-no-files-found: error
 
       - name: Publish GitHub Release asset
@@ -112,9 +112,9 @@ jobs:
         run: |
           tag="${GITHUB_REF_NAME}"
           if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
-            tag="mac-v${PHOTOME_MAC_VERSION}"
+            tag="mac-v${TROVE_MAC_VERSION}"
             git tag "$tag" || true
             git push origin "$tag" || true
           fi
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "Photome for Mac ${PHOTOME_MAC_VERSION}" --notes "Automated macOS DMG build."
-          gh release upload "$tag" dist/mac/PhotomeForMac.dmg --clobber
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "Trove for Mac ${TROVE_MAC_VERSION}" --notes "Automated macOS DMG build."
+          gh release upload "$tag" dist/mac/Trove.dmg --clobber

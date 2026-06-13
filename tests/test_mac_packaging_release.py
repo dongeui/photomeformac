@@ -12,18 +12,18 @@ WORKFLOW = ROOT / ".github" / "workflows" / "mac-release.yml"
 
 def test_build_script_creates_signed_dmg_with_applications_symlink_and_backend_bundle():
     text = BUILD_SCRIPT.read_text()
-    assert "PHOTOME_MAC_SIGN_IDENTITY" in text
+    assert "TROVE_MAC_SIGN_IDENTITY" in text
     assert "codesign --verify" in text
     assert "ln -s /Applications" in text
-    assert "PHOTOME_BUNDLE_BACKEND" in text
-    assert "photome-backend" in text
-    assert "PHOTOME_BUNDLE_PYTHON" in text
+    assert "TROVE_BUNDLE_BACKEND" in text
+    assert "trove-backend" in text
+    assert "TROVE_BUNDLE_PYTHON" in text
     assert "NSLocalNetworkUsageDescription" in text
 
 
 def test_notarize_script_uses_keychain_profile_or_env_without_committed_secret():
     text = NOTARY_SCRIPT.read_text()
-    assert "PHOTOME_NOTARY_PROFILE" in text
+    assert "TROVE_NOTARY_PROFILE" in text
     assert "notarytool submit" in text
     assert "stapler staple" in text
     assert "app-specific-password" in text
@@ -42,9 +42,9 @@ def test_app_has_login_item_menu_and_service_management():
 
 def test_backend_prefers_bundled_backend_and_python_runtime():
     text = BACKEND_SWIFT.read_text()
-    assert "Bundle.main.resourceURL?.appendingPathComponent(\"photome-backend\"" in text
+    assert "Bundle.main.resourceURL?.appendingPathComponent(\"trove-backend\"" in text
     assert "python-runtime/bin/python" in text
-    assert "PHOTOME_REPO_ROOT" in text
+    assert "TROVE_REPO_ROOT" in text
     assert "createDiagnosticsBundle" in text
     assert "diagnostics.json" in text
 
@@ -79,4 +79,4 @@ def test_mac_release_workflow_uploads_dmg_and_can_publish_release():
     assert "scripts/build_mac_app_bundle.sh" in text
     assert "actions/upload-artifact" in text
     assert "gh release upload" in text
-    assert "PhotomeForMac.dmg" in text
+    assert "Trove.dmg" in text

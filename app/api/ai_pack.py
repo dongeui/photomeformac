@@ -53,7 +53,7 @@ def _model_cache_progress(config: dict[str, Any]) -> dict[str, Any]:
         value = os.environ.get(var)
         if value:
             candidates.append(Path(value).expanduser())
-    model_root = os.environ.get("PHOTOME_MODEL_ROOT") or os.environ.get("PHOTOMINE_MODEL_ROOT")
+    model_root = os.environ.get("TROVE_MODEL_ROOT") or os.environ.get("PHOTOMINE_MODEL_ROOT")
     if model_root:
         candidates.append(Path(model_root).expanduser())
     seen: set[str] = set()
@@ -143,7 +143,7 @@ async def ai_pack_prepare(
         )
     if state["stage"] == "needs_packages":
         return JSONResponse(
-            {"ok": False, "message": "Install photome[clip] packages first."},
+            {"ok": False, "message": "Install trove[clip] packages first."},
             status_code=400,
         )
 

@@ -232,7 +232,7 @@ def _source_root_guidance(settings: AppSettings) -> str:
         if settings.source_root_host is not None and settings.source_root_mount is not None:
             return (
                 "도커 실행이어도 파인더 경로를 그대로 입력하면 됩니다. NAS, 외장하드, USB, 로컬 폴더를 모두 받을 수 있고, "
-                "Photome가 필요하면 해당 경로를 컨테이너 마운트 경로로 자동 변환합니다."
+                "Trove가 필요하면 해당 경로를 컨테이너 마운트 경로로 자동 변환합니다."
             )
         return (
             "도커 실행이어도 파인더 경로를 그대로 입력하면 됩니다. NAS, 외장하드, USB, 로컬 폴더는 /Volumes 와 /Users 마운트로 바로 읽고, "
@@ -478,20 +478,20 @@ def _clip_runtime_commands(settings: AppSettings) -> tuple[str, str, str]:
     hf_home = model_root / "hf"
     torch_home = model_root / "torch"
     if _is_docker_runtime():
-        online_cmd = "PHOTOME_OFFLINE_MODE=0 docker compose --env-file .env.docker.example up -d photome"
-        offline_cmd = "PHOTOME_OFFLINE_MODE=1 docker compose --env-file .env.docker.example up -d photome"
-        activate_cmd = "PHOTOME_OFFLINE_MODE=1 PHOTOME_CLIP_ENABLED=1 docker compose --env-file .env.docker.example up -d photome"
+        online_cmd = "TROVE_OFFLINE_MODE=0 docker compose --env-file .env.docker.example up -d trove"
+        offline_cmd = "TROVE_OFFLINE_MODE=1 docker compose --env-file .env.docker.example up -d trove"
+        activate_cmd = "TROVE_OFFLINE_MODE=1 TROVE_CLIP_ENABLED=1 docker compose --env-file .env.docker.example up -d trove"
         return online_cmd, offline_cmd, activate_cmd
 
     env_prefix = " ".join(
         [
             f"HF_HOME={shlex.quote(str(hf_home))}",
             f"TORCH_HOME={shlex.quote(str(torch_home))}",
-            "PHOTOME_CLIP_ENABLED=1",
+            "TROVE_CLIP_ENABLED=1",
         ]
     )
-    online_cmd = f"{env_prefix} PHOTOME_OFFLINE_MODE=0 python -m app.main"
-    offline_cmd = f"{env_prefix} PHOTOME_OFFLINE_MODE=1 python -m app.main"
+    online_cmd = f"{env_prefix} TROVE_OFFLINE_MODE=0 python -m app.main"
+    offline_cmd = f"{env_prefix} TROVE_OFFLINE_MODE=1 python -m app.main"
     activate_cmd = offline_cmd
     return online_cmd, offline_cmd, activate_cmd
 
@@ -762,7 +762,7 @@ async def dashboard(request: Request) -> HTMLResponse:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>photome dashboard</title>
+  <title>Trove 설정</title>
   <style>
     :root {{
       color-scheme: light dark;
@@ -1987,7 +1987,7 @@ async def dashboard(request: Request) -> HTMLResponse:
 </head>
 <body>
   <aside class="side-rail">
-    <div class="rail-brand">Photome</div>
+    <div class="rail-brand">Trove</div>
     <a href="/gallery">모든 사진</a>
     <a href="/people/manage">사람</a>
     <a class="active" href="/dashboard">설정</a>
@@ -2055,7 +2055,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     <section class="grid">
       <article class="{phase1_card_class}" id="phase1-card">
         <h2 class="scan-title">라이브러리 동기화 <span id="phase1-state-badge" class="run-badge {'is-running' if phase1_active else ''}">{phase1_state_label}</span> <span id="nas-status-badge" class="nas-badge nas-unknown">NAS 확인 중…</span></h2>
-        <p class="sub">사진 폴더와 자동 실행만 설정합니다. 동기화 시작과 진행 상황은 메뉴 막대의 Photome 아이콘에서 봅니다.</p>
+        <p class="sub">사진 폴더와 자동 실행만 설정합니다. 동기화 시작과 진행 상황은 메뉴 막대의 Trove 아이콘에서 봅니다.</p>
         <div class="pill-row">
           <button type="button" class="pill pill-button" id="phase1-schedule-button" title="자동 동기화 켜기/끄기"><strong>자동 동기화</strong> {sync_auto_label}</button>
         </div>
@@ -2089,7 +2089,7 @@ async def dashboard(request: Request) -> HTMLResponse:
             <button type="button" id="phase1-retry-button"{phase1_scan_disabled}>오류 항목만 재처리</button>
           </div>
           <div class="field-help">
-            동기화는 자동으로 돌고, 수동 시작은 메뉴 막대 Photome 아이콘의 "지금 동기화"를 씁니다. 오류 항목만 재처리는 지난 처리에서 실패한 사진만 다시 시도합니다.
+            동기화는 자동으로 돌고, 수동 시작은 메뉴 막대 Trove 아이콘의 "지금 동기화"를 씁니다. 오류 항목만 재처리는 지난 처리에서 실패한 사진만 다시 시도합니다.
           </div>
           <pre class="scan-result" id="phase1-scan-result" aria-live="polite"></pre>
         </form>
@@ -2161,7 +2161,7 @@ async def dashboard(request: Request) -> HTMLResponse:
 
       <article class="card full" id="resource-settings-card">
         <h2>리소스 설정</h2>
-        <p class="sub">이 Mac의 CPU/메모리 자원을 포토미가 얼마나 세게 쓸지 정합니다. CPU는 동시 처리 수와 AI 스레드, 메모리는 한 번에 잡아먹는 분석 묶음 크기로 조절합니다.</p>
+        <p class="sub">이 Mac의 CPU/메모리 자원을 트로브가 얼마나 세게 쓸지 정합니다. CPU는 동시 처리 수와 AI 스레드, 메모리는 한 번에 잡아먹는 분석 묶음 크기로 조절합니다.</p>
         <div class="pill-row">
           <span class="pill"><strong>CPU 강도</strong> <span id="resource-cpu-profile">{escape(str(resource_settings.get("cpu_profile_label") or "균형"))}</span></span>
           <span class="pill"><strong>메모리 압력</strong> <span id="resource-memory-profile">{escape(str(resource_settings.get("memory_profile_label") or "보통"))}</span></span>
@@ -2198,7 +2198,7 @@ async def dashboard(request: Request) -> HTMLResponse:
 
       <article class="card full admin-only">
         <h2>System Tools</h2>
-        <p class="sub">Status of local tools and AI models required by photome.</p>
+        <p class="sub">Status of local tools and AI models required by Trove.</p>
         <div class="pill-row">
           <span class="pill"><strong>Mode</strong> {escape(security["runtime_mode"])}</span>
           <span class="pill"><strong>Deployment</strong> {escape(security["deployment_label"])}</span>
@@ -2308,9 +2308,9 @@ async def dashboard(request: Request) -> HTMLResponse:
     const resourceManualBatch = document.getElementById("resource-manual-batch");
     const resourceCpuProfile = document.getElementById("resource-cpu-profile");
     const resourceMemoryProfile = document.getElementById("resource-memory-profile");
-    const phase1StorageKey = "photome.dashboard.phase1.job";
-    const phase1SourceRootsStorageKey = "photome.dashboard.phase1.source_roots";
-    const peopleManagerOpenStorageKey = "photome.dashboard.people_manager.open";
+    const phase1StorageKey = "trove.dashboard.phase1.job";
+    const phase1SourceRootsStorageKey = "trove.dashboard.phase1.source_roots";
+    const peopleManagerOpenStorageKey = "trove.dashboard.people_manager.open";
     let isPeopleMergeInProgress = false;
     let isPeopleSaveInProgress = false;
     const faceSamplePlaceholder = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";

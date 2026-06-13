@@ -33,7 +33,7 @@ def test_lan_admin_guard_blocks_remote_mutation_without_token(tmp_path):
         response = client.post("/scan")
 
     assert response.status_code == 401
-    assert "X-Photome-Admin-Token" in response.json()["detail"]
+    assert "X-Trove-Admin-Token" in response.json()["detail"]
 
 
 def test_lan_admin_guard_allows_remote_mutation_with_token(tmp_path):
@@ -44,7 +44,7 @@ def test_lan_admin_guard_allows_remote_mutation_with_token(tmp_path):
     ):
         app = create_app(load_settings())
         client = TestClient(app, client=("192.168.1.20", 12345))
-        response = client.post("/scan", headers={"X-Photome-Admin-Token": "secret-token"})
+        response = client.post("/scan", headers={"X-Trove-Admin-Token": "secret-token"})
 
     assert response.status_code != 401
 

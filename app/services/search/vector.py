@@ -144,7 +144,7 @@ class FaissVectorIndex:
     The index is built lazily on first search and cached in memory.
     Call invalidate() after bulk embedding changes to trigger a rebuild.
 
-    Install: pip install photome[faiss]
+    Install: pip install trove[faiss]
     """
 
     def __init__(self, session: Session, *, embeddings_root: Path) -> None:

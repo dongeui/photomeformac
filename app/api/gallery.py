@@ -238,7 +238,7 @@ def gallery_page(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>photome 사진첩</title>
+  <title>Trove 사진첩</title>
   <style>
     :root {{
       color-scheme: light dark;
@@ -1012,7 +1012,7 @@ def gallery_page(
   </div>
   <main class="layout">
     <aside class="sidebar">
-      <div class="side-brand">Photome</div>
+      <div class="side-brand">Trove</div>
       <nav class="side-nav">
         <a class="side-item active" href="/gallery">모든 사진</a>
         <a class="side-item" href="/people/manage">사람</a>
@@ -1075,8 +1075,8 @@ def gallery_page(
   </footer>
   <div id="backend-offline" class="backend-offline" role="alert" hidden>
     <div class="panel">
-      <h2>Photome 연결이 끊겼습니다</h2>
-      <p>Photome 앱이 종료되어 이 페이지가 멈췄습니다.<br>
+      <h2>Trove 연결이 끊겼습니다</h2>
+      <p>Trove 앱이 종료되어 이 페이지가 멈췄습니다.<br>
       앱을 다시 실행하면 자동으로 다시 연결됩니다.</p>
     </div>
   </div>
@@ -1273,7 +1273,7 @@ def gallery_page(
       }});
     }})();
 
-    // Photome 종료 감지 하트비트. 브라우저 탭은 앱이 닫아줄 수 없으므로
+    // Trove 종료 감지 하트비트. 브라우저 탭은 앱이 닫아줄 수 없으므로
     // (로컬서버+브라우저 UI 앱 공통), 백엔드가 죽으면 깨진 화면 대신 안내
     // 오버레이를 띄우고 백엔드가 돌아오면 자동으로 새로고침해 복귀한다.
     (function backendHeartbeat() {{
@@ -1322,7 +1322,7 @@ def media_download(request: Request, file_id: str) -> Response:
         # 폴더 전환·이동으로 원본 경로가 해제된 사진 — 깨진 다운로드 대신 안내
         return HTMLResponse(
             f"""<!DOCTYPE html>
-<html lang="ko"><head><meta charset="utf-8"><title>원본을 열 수 없음 · Photome</title>
+<html lang="ko"><head><meta charset="utf-8"><title>원본을 열 수 없음 · Trove</title>
 <style>body{{font-family:-apple-system,sans-serif;background:#0c0e12;color:#e8eaed;display:flex;
 align-items:center;justify-content:center;min-height:100vh;margin:0}}
 .panel{{max-width:440px;padding:32px;text-align:center;background:#16181d;border:1px solid #2a2d34;border-radius:14px}}
