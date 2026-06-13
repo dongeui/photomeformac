@@ -5,16 +5,18 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, datetime, time
 from html import escape
+import json as _jsonlib
 from pathlib import Path
 import re
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy import Select, exists, false, func, or_, select
 
 from app.api.deps import require_state
+from app.api.i18n_web import request_translator
 from app.models.annotation import MediaAnnotation
 from app.models.asset import DerivedAsset
 from app.models.media import MediaFile
@@ -66,8 +68,12 @@ _INTENT_REASON_LABELS: dict[str, str] = {
 }
 
 
-def _friendly_intent_label(search_meta: dict) -> str:
+def _friendly_intent_label(search_meta: dict, translate=None) -> str:
     reason = search_meta.get("fallback") or search_meta.get("intent_reason", "")
+    if translate is not None:
+        label = translate(f"intent.{reason}")
+        if label != f"intent.{reason}":
+            return label
     return _INTENT_REASON_LABELS.get(reason, reason)
 
 
@@ -117,6 +123,10 @@ def gallery_page(
     database = require_state(request, "database")
     settings = require_state(request, "settings")
     pipeline = require_state(request, "pipeline")
+    locale, _ = request_translator(request)
+    # JS에 안전하게 박을 수 있게 번역 문자열을 JSON(따옴표 포함)으로 인코딩.
+    def _json(key: str, **fmt: object) -> str:
+        return _jsonlib.dumps(_(key, **fmt), ensure_ascii=False)
     log_events = not pipeline.has_active_library_job()
     page_size = _normalize_page_size(per_page)
     offset = (page - 1) * page_size
@@ -219,7 +229,7 @@ def gallery_page(
         1 for value in (date_from, date_to, person) if value and str(value).strip()
     )
     per_page_options = "".join(
-        f'<option value="{escape(_per_page_url(request, n))}"{" selected" if n == page_size else ""}>{n}개씩</option>'
+        f'<option value="{escape(_per_page_url(request, n))}"{" selected" if n == page_size else ""}>{_("gallery.per_page", n=n)}</option>'
         for n in PAGE_SIZE_OPTIONS
     )
     active_filter_summary = _render_active_filter_summary(
@@ -234,11 +244,11 @@ def gallery_page(
     )
 
     html = f"""<!doctype html>
-<html lang="ko">
+<html lang="{locale}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Trove 사진첩</title>
+  <title>{_("gallery.title")}</title>
   <style>
     :root {{
       color-scheme: light dark;
@@ -944,6 +954,10 @@ def gallery_page(
     .side-item:hover {{ background: var(--accent-soft); }}
     .side-item.active {{ background: var(--accent-soft); color: var(--accent); font-weight: 500; }}
     .side-label {{ font-size: 0.76rem; color: var(--muted); margin-top: 4px; }}
+    .side-lang {{ display: flex; gap: 4px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }}
+    .lang-link {{ font-size: 0.78rem; color: var(--muted); text-decoration: none; padding: 3px 8px; border-radius: 6px; }}
+    .lang-link:hover {{ background: var(--accent-soft); }}
+    .lang-link.active {{ color: var(--accent); font-weight: 600; }}
     .content {{ flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 18px 22px 0; }}
     /* 상단 검색바: 자유 검색 입력 + 필터 팝오버 토글 */
     .topbar-search {{ display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }}
@@ -1003,8 +1017,8 @@ def gallery_page(
 <body>
   <div id="search-progress" class="search-progress" aria-live="polite" aria-atomic="true" hidden>
     <div class="search-progress-row">
-      <span>사진을 찾는 중입니다</span>
-      <span>검색 중</span>
+      <span>{_("gallery.searching")}</span>
+      <span>{_("gallery.searching_short")}</span>
     </div>
     <div class="search-progress-track" aria-hidden="true">
       <div class="search-progress-fill"></div>
@@ -1014,32 +1028,32 @@ def gallery_page(
     <aside class="sidebar">
       <div class="side-brand">Trove</div>
       <nav class="side-nav">
-        <a class="side-item active" href="/gallery">모든 사진</a>
-        <a class="side-item" href="/people/manage">사람</a>
+        <a class="side-item active" href="/gallery">{_("nav.all_photos")}</a>
+        <a class="side-item" href="/people/manage">{_("nav.people")}</a>
         <!-- 설정(/dashboard)은 사이드바에서 숨기고 메뉴바 "설정 열기"로만 진입.
              페이지 자체는 오류 재처리·리소스 설정 등 관리 기능 때문에 유지한다. -->
-
       </nav>
+      <div class="side-lang">{_render_lang_switcher(locale, request)}</div>
     </aside>
     <section class="content">
       <form class="topbar-search" id="gallery-search-form" method="get" action="/gallery">
         <div class="search-ac-wrap">
-          <input type="search" id="gallery-search-input" name="q" value="{escape(q or '')}" placeholder="검색: 작년 바다, 아기…" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="search-ac-list">
+          <input type="search" id="gallery-search-input" name="q" value="{escape(q or '')}" placeholder="{_('gallery.search_placeholder')}" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="search-ac-list">
           <ul id="search-ac-list" class="search-ac-list" role="listbox" hidden></ul>
         </div>
         <div class="filter-pop-wrap">
-          <button type="button" id="filter-toggle" class="button secondary filter-toggle{' has-active' if filter_active_count else ''}" aria-expanded="false" aria-controls="filter-pop" aria-haspopup="true">필터{f' · {filter_active_count}' if filter_active_count else ''} ▾</button>
+          <button type="button" id="filter-toggle" class="button secondary filter-toggle{' has-active' if filter_active_count else ''}" aria-expanded="false" aria-controls="filter-pop" aria-haspopup="true">{_("gallery.filter")}{f' · {filter_active_count}' if filter_active_count else ''} ▾</button>
           <div id="filter-pop" class="filter-pop" hidden>
-            <div class="side-label">기간</div>
-            <input type="date" name="date_from" value="{escape(date_from or '')}" aria-label="시작일">
-            <input type="date" name="date_to" value="{escape(date_to or '')}" aria-label="종료일">
-            <div class="side-label">인물</div>
-            <select name="person"{" disabled" if not person_available else ""} aria-label="인물">
-              {_render_person_options(person_options, person)}
+            <div class="side-label">{_("gallery.period")}</div>
+            <input type="date" name="date_from" value="{escape(date_from or '')}" aria-label="{_('gallery.start_date')}">
+            <input type="date" name="date_to" value="{escape(date_to or '')}" aria-label="{_('gallery.end_date')}">
+            <div class="side-label">{_("gallery.person")}</div>
+            <select name="person"{" disabled" if not person_available else ""} aria-label="{_('gallery.person')}">
+              {_render_person_options(person_options, person, _)}
             </select>
             <div class="filter-pop-actions">
-              <button id="gallery-search-button" class="button" type="submit">적용</button>
-              <a class="button secondary" href="/gallery">초기화</a>
+              <button id="gallery-search-button" class="button" type="submit">{_("gallery.apply")}</button>
+              <a class="button secondary" href="/gallery">{_("gallery.reset")}</a>
             </div>
           </div>
         </div>
@@ -1047,40 +1061,48 @@ def gallery_page(
       </form>
       <div class="content-toolbar">
         <div class="meta-pillset">
-          <span class="meta-pill">{total}장{_render_filter_hint(person, place)}</span>
-          {_render_search_mode_pill(search_meta)}
-          <span class="meta-pill">{page} / {page_count}페이지</span>
+          <span class="meta-pill">{_("gallery.count_photos", count=total)}{_render_filter_hint(person, place, _)}</span>
+          {_render_search_mode_pill(search_meta, _)}
+          <span class="meta-pill">{_("gallery.page_of", page=page, total=page_count)}</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
-          <select aria-label="페이지당 사진 수" onchange="if(this.value)location.href=this.value;" style="font-size:0.85rem;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:4px 8px;cursor:pointer;">{per_page_options}</select>
+          <select aria-label="{_('gallery.per_page_label')}" onchange="if(this.value)location.href=this.value;" style="font-size:0.85rem;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:4px 8px;cursor:pointer;">{per_page_options}</select>
           <div class="sort-toggle">
-            <a href="{escape(_sort_url(request, SORT_NEWEST))}" class="sort-btn{'  active' if sort_order == SORT_NEWEST else ''}">최신순</a>
-            <a href="{escape(_sort_url(request, SORT_OLDEST))}" class="sort-btn{'  active' if sort_order == SORT_OLDEST else ''}">오래된순</a>
+            <a href="{escape(_sort_url(request, SORT_NEWEST))}" class="sort-btn{'  active' if sort_order == SORT_NEWEST else ''}">{_("gallery.sort_newest")}</a>
+            <a href="{escape(_sort_url(request, SORT_OLDEST))}" class="sort-btn{'  active' if sort_order == SORT_OLDEST else ''}">{_("gallery.sort_oldest")}</a>
           </div>
         </div>
       </div>
       <section id="gallery" class="gallery">
-        {''.join(cards) if cards else _render_empty_state(q, person, place)}
+        {''.join(cards) if cards else _render_empty_state(q, person, place, _, locale)}
       </section>
     </section>
   </main>
   <footer class="statusbar">
-    <span>{total}장</span>
-    <span>{str(offset + 1) + '–' + str(offset + len(items)) + '번째' if items else '표시할 항목 없음'}</span>
-    <span class="cache-note">로컬 캐시 · 즉시 표시</span>
+    <span>{_("gallery.count_photos", count=total)}</span>
+    <span>{_("gallery.range", start=offset + 1, end=offset + len(items)) if items else _("gallery.empty")}</span>
+    <span class="cache-note">{_("gallery.cache_note")}</span>
     <span class="pager">
-      {_render_page_link('이전', _page_url(request, page - 1), enabled=has_prev)}
-      {_render_page_link('다음', _page_url(request, page + 1), enabled=has_next)}
+      {_render_page_link(_("gallery.prev"), _page_url(request, page - 1), enabled=has_prev)}
+      {_render_page_link(_("gallery.next"), _page_url(request, page + 1), enabled=has_next)}
     </span>
   </footer>
   <div id="backend-offline" class="backend-offline" role="alert" hidden>
     <div class="panel">
-      <h2>Trove 연결이 끊겼습니다</h2>
-      <p>Trove 앱이 종료되어 이 페이지가 멈췄습니다.<br>
-      앱을 다시 실행하면 자동으로 다시 연결됩니다.</p>
+      <h2>{_("gallery.offline_title")}</h2>
+      <p>{_("gallery.offline_body")}</p>
     </div>
   </div>
   <script>
+    // 서버에서 현재 로케일로 미리 번역해 넣은 JS용 문자열.
+    const T = {{
+      searching: {_json('gallery.searching')},
+      loadingResults: {_json('gallery.loading_results')},
+      sorting: {_json('gallery.sorting')},
+      applying: {_json('gallery.applying')},
+      apply: {_json('gallery.apply')},
+      previewPending: {_json('gallery.preview_pending')},
+    }};
     const searchProgress = document.getElementById("search-progress");
     const searchForm = document.getElementById("gallery-search-form");
     const searchButton = document.getElementById("gallery-search-button");
@@ -1093,7 +1115,7 @@ def gallery_page(
       document.body.classList.add("is-searching");
       if (searchButton) {{
         searchButton.disabled = true;
-        searchButton.textContent = "적용 중...";
+        searchButton.textContent = T.applying;
       }}
     }}
 
@@ -1119,15 +1141,15 @@ def gallery_page(
     }})();
 
     if (searchForm) {{
-      searchForm.addEventListener("submit", () => showSearchProgress("사진을 찾는 중입니다"));
+      searchForm.addEventListener("submit", () => showSearchProgress(T.searching));
     }}
 
     document.querySelectorAll(".quick-chip, .pagination a").forEach((link) => {{
-      link.addEventListener("click", () => showSearchProgress("결과를 불러오는 중입니다"));
+      link.addEventListener("click", () => showSearchProgress(T.loadingResults));
     }});
 
     document.querySelectorAll(".sort-btn").forEach((link) => {{
-      link.addEventListener("click", () => showSearchProgress("정렬 중입니다"));
+      link.addEventListener("click", () => showSearchProgress(T.sorting));
     }});
 
     function attachThumbnailRecovery() {{
@@ -1153,7 +1175,7 @@ def gallery_page(
           if (thumb && !thumb.querySelector(".thumb-status")) {{
             const status = document.createElement("span");
             status.className = "thumb-status";
-            status.textContent = "미리보기 준비 중";
+            status.textContent = T.previewPending;
             thumb.appendChild(status);
           }}
         }});
@@ -1173,7 +1195,7 @@ def gallery_page(
       document.body.classList.remove("is-searching");
       if (searchButton) {{
         searchButton.disabled = false;
-        searchButton.textContent = "적용";
+        searchButton.textContent = T.apply;
       }}
       attachThumbnailRecovery();
     }});
@@ -1320,18 +1342,18 @@ def media_download(request: Request, file_id: str) -> Response:
     path = Path(media_file.current_path)
     if not path.is_file():
         # 폴더 전환·이동으로 원본 경로가 해제된 사진 — 깨진 다운로드 대신 안내
+        locale, _ = request_translator(request)
         return HTMLResponse(
             f"""<!DOCTYPE html>
-<html lang="ko"><head><meta charset="utf-8"><title>원본을 열 수 없음 · Trove</title>
+<html lang="{locale}"><head><meta charset="utf-8"><title>{_('gallery.download_unavailable_title')} · Trove</title>
 <style>body{{font-family:-apple-system,sans-serif;background:#0c0e12;color:#e8eaed;display:flex;
 align-items:center;justify-content:center;min-height:100vh;margin:0}}
 .panel{{max-width:440px;padding:32px;text-align:center;background:#16181d;border:1px solid #2a2d34;border-radius:14px}}
 h1{{font-size:1.05rem;margin:0 0 10px}}p{{color:#9aa0a6;font-size:.9rem;line-height:1.6;margin:0}}
 code{{font-size:.78rem;color:#7d8590;word-break:break-all}}</style></head>
 <body><div class="panel">
-<h1>원본을 열 수 없습니다</h1>
-<p>이 사진의 원본이 있던 폴더 연결이 해제되었거나 파일이 이동되었습니다.<br>
-썸네일과 검색은 계속 사용할 수 있습니다.<br><br>
+<h1>{_('gallery.download_unavailable_title')}</h1>
+<p>{_('gallery.download_unavailable_body')}<br><br>
 <code>{escape(media_file.current_path)}</code></p>
 </div></body></html>""",
             status_code=status.HTTP_410_GONE,
@@ -1575,30 +1597,30 @@ def _render_datalist_options(values: list[str]) -> str:
     return "".join(f'<option value="{escape(value)}"></option>' for value in values)
 
 
-def _render_empty_state(q: str | None, person: str | None, place: str | None) -> str:
+# 빈 검색 결과에 보여줄 예시 검색어(칩). 검색 렉시콘은 한/영 별명을 모두
+# 매핑하므로 로케일에 맞는 단어를 보여주되, 어느 쪽이든 검색은 동작한다.
+_EMPTY_EXAMPLE_TERMS = {
+    "ko": ["바다", "산", "케이크", "카페", "벚꽃", "단풍", "음식", "서울"],
+    "en": ["beach", "mountain", "cake", "cafe", "cherry blossom", "autumn leaves", "food", "Seoul"],
+}
+
+
+def _render_empty_state(q: str | None, person: str | None, place: str | None, _, locale: str = "ko") -> str:
     if q or person or place:
-        message = f"\"{q or person or place}\"(으)로 일치하는 사진을 찾지 못했어요."
-        hint = (
-            "다른 키워드 예시: <strong>바다, 산, 케이크, 강아지, 카페, 벚꽃, 단풍, "
-            "비행기, 휴대폰</strong> 같은 사물·장소·시즌 키워드를 한국어로 그대로 입력할 수 있습니다."
+        message = _("gallery.empty_no_results", query=q or person or place)
+        terms = _EMPTY_EXAMPLE_TERMS.get(locale, _EMPTY_EXAMPLE_TERMS["ko"])
+        hint = _("gallery.empty_hint", examples=", ".join(terms[:6]))
+        chips = "".join(
+            f'<a class="quick-chip" href="/gallery?q={escape(quote(term), quote=True)}">{escape(term)}</a>'
+            for term in terms
         )
-        examples_html = """
-          <p class="detail" style="margin-top:8px">현재 121개 카테고리(사람·사물·장면·이벤트)에 한국어/영어 별명이 매핑되어 있습니다.
-          OCR + 사람 이름 태그 + 장소 지오코드(예: 서울, 제주)도 함께 검색합니다.</p>
-          <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
-            <a class="quick-chip" href="/gallery?q=%EB%B0%94%EB%8B%A4">바다</a>
-            <a class="quick-chip" href="/gallery?q=%EC%82%B0">산</a>
-            <a class="quick-chip" href="/gallery?q=%EC%BC%80%EC%9D%B4%ED%81%AC">케이크</a>
-            <a class="quick-chip" href="/gallery?q=%EC%B9%B4%ED%8E%98">카페</a>
-            <a class="quick-chip" href="/gallery?q=%EB%B2%9A%EA%BD%83">벚꽃</a>
-            <a class="quick-chip" href="/gallery?q=%EB%8B%A8%ED%92%8D">단풍</a>
-            <a class="quick-chip" href="/gallery?q=%EC%9D%8C%EC%8B%9D">음식</a>
-            <a class="quick-chip" href="/gallery?q=%EC%84%9C%EC%9A%B8">서울</a>
-          </div>
+        examples_html = f"""
+          <p class="detail" style="margin-top:8px">{_("gallery.empty_note")}</p>
+          <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">{chips}</div>
         """
     else:
-        message = "아직 보여줄 사진이나 영상이 없습니다."
-        hint = "메뉴바 아이콘에서 사진 가져오기가 끝났는지 확인할 수 있습니다."
+        message = _("gallery.empty_none")
+        hint = _("gallery.empty_none_hint")
         examples_html = ""
     return f"""
       <article class="card">
@@ -1633,12 +1655,12 @@ def _quick_search_url(request: Request, term: str) -> str:
     return f"/gallery?{urlencode(params)}"
 
 
-def _render_filter_hint(person: str | None, place: str | None) -> str:
+def _render_filter_hint(person: str | None, place: str | None, _) -> str:
     hints: list[str] = []
     if person:
-        hints.append(f"인물: {escape(person)}")
+        hints.append(_("gallery.hint_person", value=escape(person)))
     if place:
-        hints.append(f"장소: {escape(place)}")
+        hints.append(_("gallery.hint_place", value=escape(place)))
     if not hints:
         return ""
     return " · " + ", ".join(hints)
@@ -1681,10 +1703,24 @@ def _render_active_filter_summary(
     )
 
 
-def _render_search_mode_pill(search_meta: dict[str, str] | None) -> str:
+def _render_search_mode_pill(search_meta: dict[str, str] | None, _) -> str:
     if not search_meta:
         return ""
-    return f'<span class="meta-pill">{escape(_friendly_intent_label(search_meta))}</span>'
+    return f'<span class="meta-pill">{escape(_friendly_intent_label(search_meta, _))}</span>'
+
+
+def _render_lang_switcher(locale: str, request: Request) -> str:
+    from app.core.i18n import SUPPORTED_LOCALES
+
+    next_url = request.url.path
+    if request.url.query:
+        next_url += f"?{request.url.query}"
+    links = []
+    for code, label in SUPPORTED_LOCALES.items():
+        active = " active" if code == locale else ""
+        href = f"/lang/{code}?next={escape(next_url, quote=True)}"
+        links.append(f'<a class="lang-link{active}" href="{href}">{escape(label)}</a>')
+    return "".join(links)
 
 
 def _page_url(request: Request, page: int) -> str:
@@ -1700,9 +1736,9 @@ def _per_page_url(request: Request, size: int) -> str:
     return f"/gallery?{urlencode(params)}"
 
 
-def _render_person_options(values: list[str], selected: str | None) -> str:
+def _render_person_options(values: list[str], selected: str | None, _) -> str:
     chosen = selected or ""
-    options = [f'<option value=""{"" if chosen else " selected"}>전체</option>']
+    options = [f'<option value=""{"" if chosen else " selected"}>{_("gallery.person_all")}</option>']
     for value in values:
         sel = " selected" if value == chosen else ""
         options.append(f'<option value="{escape(value)}"{sel}>{escape(value)}</option>')

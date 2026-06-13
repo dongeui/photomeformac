@@ -208,8 +208,9 @@ def load_settings() -> AppSettings:
         app_name=_env("TROVE_APP_NAME", "trove"),
         app_version=_env("TROVE_APP_VERSION", "0.1.0"),
         # 기본 표시 언어. mac 앱 첫 실행 시 선택값을 TROVE_LOCALE로 넘긴다.
-        # 웹은 쿠키 > 이 기본값 > Accept-Language 순으로 로케일을 정한다.
-        default_locale=_env("TROVE_LOCALE", "ko"),
+        # 비워두면(웹/도커 단독 실행 등) 웹이 쿠키 > Accept-Language > ko 순으로
+        # 정한다. 명시 설정 시 그 값이 Accept-Language보다 우선한다.
+        default_locale=_env("TROVE_LOCALE", ""),
         server_host=_env("TROVE_SERVER_HOST", "127.0.0.1"),
         server_port=_env_int("TROVE_SERVER_PORT", 8000),
         log_level=_env("TROVE_LOG_LEVEL", "INFO").upper(),

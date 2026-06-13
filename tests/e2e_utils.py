@@ -34,6 +34,9 @@ def start_backend(tmp_path: Path, port: int) -> subprocess.Popen:
         "TROVE_FACE_ANALYSIS_ENABLED": "0",
         "TROVE_SYNC_SCHEDULER_ENABLED": "0",
         "TROVE_LOG_LEVEL": "ERROR",
+        # 헤드리스 브라우저는 Accept-Language: en을 보내므로, 한국어 문구를
+        # 검증하는 e2e가 흔들리지 않게 로케일을 ko로 고정한다.
+        "TROVE_LOCALE": "ko",
     }
     process = subprocess.Popen(
         [sys.executable, "-c", "from app.main import main; main()"],
