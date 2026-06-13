@@ -497,11 +497,11 @@ def _clip_runtime_commands(settings: AppSettings) -> tuple[str, str, str]:
     return online_cmd, offline_cmd, activate_cmd
 
 
-def _render_people_manager(people: list[dict[str, Any]]) -> str:
+def _render_people_manager(people: list[dict[str, Any]], _) -> str:
     if not people:
-        return """
+        return f"""
         <div class="empty-panel">
-          5회 이상 감지된 얼굴 그룹이 아직 없습니다. 이름과 애칭 매핑은 반복해서 나온 얼굴만 표시합니다.
+          {_("pplm.empty")}
         </div>
         """
     rows = []
@@ -527,27 +527,27 @@ def _render_people_manager(people: list[dict[str, Any]]) -> str:
             if sample.get("face_id") is not None
         ) or '<span class="face-empty">No face preview</span>'
         alias_chips = "".join(
-            f'<span class="alias-chip">{escape(a)}<button type="button" class="alias-remove" data-alias="{escape(a)}" title="{escape(a)} 제거">×</button></span>'
+            f'<span class="alias-chip">{escape(a)}<button type="button" class="alias-remove" data-alias="{escape(a)}" title="{_("pplm.alias_remove_title", alias=escape(a))}">×</button></span>'
             for a in alias_list
-        ) or '<span class="alias-chips-empty-hint">병합 시 여기에 표시</span>'
+        ) or f'<span class="alias-chips-empty-hint">{_("pplm.alias_empty_hint")}</span>'
         is_unnamed = display_name.startswith("person-") and not has_aliases
-        row_title = "이름 없음" if is_unnamed else display_name
+        row_title = _("pplm.row_unnamed") if is_unnamed else display_name
         row_hint = (
-            "대표 이름을 비워 두고 애칭만 적으면 첫 애칭이 대표 이름으로 저장됩니다."
+            _("pplm.hint_unnamed")
             if is_unnamed
-            else "검색에 쓸 이름과 애칭을 함께 관리합니다."
+            else _("pplm.hint_named")
         )
-        name_placeholder = "대표 이름 입력" if is_unnamed else "이름 입력"
-        save_label = "이름 저장" if is_unnamed else "저장"
+        name_placeholder = _("pplm.name_placeholder_unnamed") if is_unnamed else _("pplm.name_placeholder")
+        save_label = _("pplm.save_unnamed") if is_unnamed else _("pplm.save")
         status_badge = (
-            '<span class="person-status-badge unnamed">이름 필요</span>'
+            f'<span class="person-status-badge unnamed">{_("pplm.badge_unnamed")}</span>'
             if is_unnamed
-            else '<span class="person-status-badge named">이름 있음</span>'
+            else f'<span class="person-status-badge named">{_("pplm.badge_named")}</span>'
         )
         rows.append(
             f"""
             <form class="person-row{'  has-aliases' if has_aliases else ''}{'  unnamed' if is_unnamed else ''}" data-person-id="{int(person['id'])}" data-person-label="{escape(str(person['display_name']))}" data-person-search="{escape(search_text)}" data-media-count="{int(person.get('media_count') or 0)}" data-face-count="{int(person.get('face_count') or 0)}" data-named="{0 if is_unnamed else 1}">
-              <label class="person-select" title="병합할 인물 선택">
+              <label class="person-select" title="{_("pplm.select_title")}">
                 <input type="checkbox" class="person-merge-checkbox" aria-label="Select {escape(str(person['display_name']))} for merge">
               </label>
               <div class="face-samples">{face_samples}</div>
@@ -557,18 +557,18 @@ def _render_people_manager(people: list[dict[str, Any]]) -> str:
                   {status_badge}
                 </div>
                 <div class="person-metrics">
-                  <span class="person-photo-count">{int(person.get('media_count') or 0)}장</span>
-                  <span class="person-face-count">얼굴 {int(person.get('face_count') or 0)}회</span>
-                  <small class="person-id-hint" title="내부 ID">person-{int(person['id']):06d}</small>
+                  <span class="person-photo-count">{_("pplm.photo_count", n=int(person.get('media_count') or 0))}</span>
+                  <span class="person-face-count">{_("pplm.face_count", n=int(person.get('face_count') or 0))}</span>
+                  <small class="person-id-hint" title="{_("pplm.id_hint_title")}">person-{int(person['id']):06d}</small>
                 </div>
                 <small class="person-row-hint">{escape(row_hint)}</small>
               </div>
               <input name="display_name" value="{escape('' if is_unnamed else display_name)}" placeholder="{name_placeholder}">
               <div class="alias-editor">
-                <input class="person-alias-input" name="aliases" value="{escape(aliases_csv)}" placeholder="애칭 입력, 쉼표로 구분">
-                <div class="alias-chips-container{' empty' if not has_aliases else ''}" title="저장된 애칭/병합된 다른 이름들">{alias_chips}</div>
+                <input class="person-alias-input" name="aliases" value="{escape(aliases_csv)}" placeholder="{_("pplm.alias_input_placeholder")}">
+                <div class="alias-chips-container{' empty' if not has_aliases else ''}" title="{_("pplm.alias_container_title")}">{alias_chips}</div>
               </div>
-              <button class="btn-copy person-preview-trigger" type="button" data-person-id="{int(person['id'])}" data-person-label="{escape(str(person['display_name']))}">사진 보기</button>
+              <button class="btn-copy person-preview-trigger" type="button" data-person-id="{int(person['id'])}" data-person-label="{escape(str(person['display_name']))}">{_("pplm.view_photos")}</button>
               <button class="btn-sm" type="submit">{save_label}</button>
               <small class="person-save-state" aria-live="polite"></small>
             </form>
@@ -577,12 +577,12 @@ def _render_people_manager(people: list[dict[str, Any]]) -> str:
     return "".join(rows)
 
 
-def _people_manager_summary(total_count: int, named_count: int) -> str:
+def _people_manager_summary(total_count: int, named_count: int, _) -> str:
     count = total_count
     named = named_count
     if count == 0:
-        return "5회 이상 0명"
-    return f"{count}명 · 이름 지정 {named}명"
+        return _("pplm.summary_empty")
+    return _("pplm.summary", count=count, named=named)
 
 
 def _catalog_breakdown(status_counts: dict[str, int]) -> dict[str, Any]:
@@ -754,10 +754,11 @@ async def dashboard(request: Request) -> HTMLResponse:
     online_ai_cmd, offline_ai_cmd, activate_ai_cmd = _clip_runtime_commands(settings)
     people = payload.get("people", [])
     people_stats = payload.get("people_stats") or {}
-    people_manager_html = _render_people_manager(people)
+    people_manager_html = _render_people_manager(people, _)
     people_manager_summary = _people_manager_summary(
         int(people_stats.get("total") or len(people)),
         int(people_stats.get("named") or 0),
+        _,
     )
     people_json = json.dumps([{"id": p["id"], "display_name": p["display_name"]} for p in people])
 
@@ -2107,45 +2108,45 @@ async def dashboard(request: Request) -> HTMLResponse:
       <details class="card full manager-disclosure" id="people-manager-card">
         <summary>
           <div>
-            <h2>사람 이름</h2>
-            <p class="sub">이름이 필요한 얼굴부터 빠르게 정리하고, 저장한 이름과 애칭은 바로 검색에 반영됩니다.</p>
+            <h2>{_("ppl.title")}</h2>
+            <p class="sub">{_("ppl.sub")}</p>
           </div>
-          <span class="disclosure-pill">{escape(people_manager_summary)} · 열기</span>
+          <span class="disclosure-pill">{escape(people_manager_summary)} · {_("ppl.open")}</span>
         </summary>
         <div class="manager-body">
-          <p class="sub">반복해서 나온 얼굴만 올리고, 이름이 비어 있으면 첫 애칭을 대표 이름으로 바로 승격합니다.</p>
+          <p class="sub">{_("ppl.body_sub")}</p>
           <div class="people-queue-summary">
-            <span class="people-queue-pill">전체 <strong id="people-total-count">{int(people_stats.get("total") or len(people))}명</strong></span>
-            <span class="people-queue-pill">이름 필요 <strong id="people-unnamed-count">{int(people_stats.get("unnamed") or 0)}명</strong></span>
-            <span class="people-queue-pill">이름 있음 <strong id="people-named-count">{int(people_stats.get("named") or 0)}명</strong></span>
+            <span class="people-queue-pill">{_("ppl.q_total")} <strong id="people-total-count">{_("ppl.count_people", n=int(people_stats.get("total") or len(people)))}</strong></span>
+            <span class="people-queue-pill">{_("ppl.q_unnamed")} <strong id="people-unnamed-count">{_("ppl.count_people", n=int(people_stats.get("unnamed") or 0))}</strong></span>
+            <span class="people-queue-pill">{_("ppl.q_named")} <strong id="people-named-count">{_("ppl.count_people", n=int(people_stats.get("named") or 0))}</strong></span>
           </div>
           <div class="people-mode-switch" id="people-mode-switch">
-            <button type="button" class="people-mode-btn active" data-mode="unnamed">이름 필요만</button>
-            <button type="button" class="people-mode-btn" data-mode="named">이름 있는 사람</button>
-            <button type="button" class="people-mode-btn" data-mode="all">전체</button>
+            <button type="button" class="people-mode-btn active" data-mode="unnamed">{_("ppl.mode_unnamed")}</button>
+            <button type="button" class="people-mode-btn" data-mode="named">{_("ppl.mode_named")}</button>
+            <button type="button" class="people-mode-btn" data-mode="all">{_("ppl.mode_all")}</button>
           </div>
           <div class="people-tools">
-            <input id="people-filter" type="search" placeholder="이름, 애칭, person id로 찾기">
+            <input id="people-filter" type="search" placeholder="{_("ppl.filter_placeholder")}">
             <select id="people-sort" aria-label="Sort people">
-              <option value="photos">사진 많은 순</option>
-              <option value="faces">얼굴 많은 순</option>
-              <option value="named">이름 있음 먼저</option>
-              <option value="unnamed">이름 없음 먼저</option>
-              <option value="name">이름순</option>
+              <option value="photos">{_("ppl.sort_photos")}</option>
+              <option value="faces">{_("ppl.sort_faces")}</option>
+              <option value="named">{_("ppl.sort_named")}</option>
+              <option value="unnamed">{_("ppl.sort_unnamed")}</option>
+              <option value="name">{_("ppl.sort_name")}</option>
             </select>
-            <small id="people-visible-count">0명</small>
+            <small id="people-visible-count">{_("ppl.count_people", n=0)}</small>
           </div>
           <div class="people-merge-bar" id="people-merge-bar" hidden>
-            <span id="people-merge-count">0개 선택</span>
-            <label>남길 사람 <select id="people-merge-target"></select></label>
-            <button type="button" class="btn-sm" id="people-merge-button">선택 병합</button>
+            <span id="people-merge-count">{_("ppl.merge_count")}</span>
+            <label>{_("ppl.merge_keep")} <select id="people-merge-target"></select></label>
+            <button type="button" class="btn-sm" id="people-merge-button">{_("ppl.merge_button")}</button>
             <small id="people-merge-state" aria-live="polite"></small>
           </div>
           <div class="person-list" id="people-manager">
             {people_manager_html}
           </div>
           <div class="people-more-row">
-            <button type="button" class="btn-copy" id="people-load-more" hidden>더 보기</button>
+            <button type="button" class="btn-copy" id="people-load-more" hidden>{_("ppl.load_more")}</button>
           </div>
         </div>
       </details>
@@ -2169,37 +2170,37 @@ async def dashboard(request: Request) -> HTMLResponse:
            상태는 상단 "이미지 AI" 지표 타일에서 확인한다. -->
 
       <article class="card full" id="resource-settings-card">
-        <h2>리소스 설정</h2>
-        <p class="sub">이 Mac의 CPU/메모리 자원을 트로브가 얼마나 세게 쓸지 정합니다. CPU는 동시 처리 수와 AI 스레드, 메모리는 한 번에 잡아먹는 분석 묶음 크기로 조절합니다.</p>
+        <h2>{_("resource.title")}</h2>
+        <p class="sub">{_("resource.sub")}</p>
         <div class="pill-row">
-          <span class="pill"><strong>CPU 강도</strong> <span id="resource-cpu-profile">{escape(str(resource_settings.get("cpu_profile_label") or "균형"))}</span></span>
-          <span class="pill"><strong>메모리 압력</strong> <span id="resource-memory-profile">{escape(str(resource_settings.get("memory_profile_label") or "보통"))}</span></span>
-          <span class="pill"><strong>설정 파일</strong> <code>{escape(str(resource_settings.get("env_file") or ".env"))}</code></span>
+          <span class="pill"><strong>{_("resource.cpu_profile")}</strong> <span id="resource-cpu-profile">{escape(str(resource_settings.get("cpu_profile_label") or "균형"))}</span></span>
+          <span class="pill"><strong>{_("resource.mem_pressure")}</strong> <span id="resource-memory-profile">{escape(str(resource_settings.get("memory_profile_label") or "보통"))}</span></span>
+          <span class="pill"><strong>{_("resource.config_file")}</strong> <code>{escape(str(resource_settings.get("env_file") or ".env"))}</code></span>
         </div>
         <form class="scan-form" id="resource-settings-form" onsubmit="return false">
           <label>
-            CPU 병렬 처리
+            {_("resource.cpu_parallel")}
             <input type="range" id="resource-workers" min="1" max="{int(resource_settings.get('asset_processing_workers_cap') or 1)}" value="{int(resource_settings.get('asset_processing_workers') or 1)}">
-            <span class="field-help">동시 처리 수 <strong id="resource-workers-value">{int(resource_settings.get('asset_processing_workers') or 1)}</strong> / {int(resource_settings.get('asset_processing_workers_cap') or 1)}. 높일수록 전체 동기화 때 CPU를 더 세게 씁니다.</span>
+            <span class="field-help">{_("resource.workers_help", value=int(resource_settings.get('asset_processing_workers') or 1), cap=int(resource_settings.get('asset_processing_workers_cap') or 1))}</span>
           </label>
           <label>
-            AI CPU 스레드
+            {_("resource.ai_threads")}
             <input type="range" id="resource-torch-threads" min="1" max="{int(resource_settings.get('torch_threads_cap') or 1)}" value="{int(resource_settings.get('torch_threads') or 1)}">
-            <span class="field-help">CLIP/OCR 쪽 스레드 <strong id="resource-torch-threads-value">{int(resource_settings.get('torch_threads') or 1)}</strong> / {int(resource_settings.get('torch_threads_cap') or 1)}. 높일수록 이미지 AI가 CPU를 더 적극적으로 씁니다.</span>
+            <span class="field-help">{_("resource.threads_help", value=int(resource_settings.get('torch_threads') or 1), cap=int(resource_settings.get('torch_threads_cap') or 1))}</span>
           </label>
           <label>
-            백그라운드 AI 묶음 크기
+            {_("resource.bg_batch")}
             <input type="number" id="resource-maintenance-batch" min="50" max="5000" step="50" value="{int(resource_settings.get('semantic_maintenance_batch_size') or 500)}">
-            <span class="field-help">자동으로 뒤에서 도는 이미지 AI 묶음입니다. 클수록 빠르지만 메모리를 더 씁니다.</span>
+            <span class="field-help">{_("resource.bg_batch_help")}</span>
           </label>
           <label>
-            수동 AI 묶음 크기
+            {_("resource.manual_batch")}
             <input type="number" id="resource-manual-batch" min="50" max="5000" step="50" value="{int(resource_settings.get('semantic_manual_batch_size') or 1000)}">
-            <span class="field-help">"지금 분석" 눌렀을 때 한 번에 처리할 양입니다.</span>
+            <span class="field-help">{_("resource.manual_batch_help")}</span>
           </label>
           <div class="scan-actions">
-            <button type="button" id="resource-settings-save">저장</button>
-            <span class="field-help">저장하면 다음 동기화/이미지 AI 작업부터 반영됩니다. 이미 돌고 있는 작업은 끝날 때까지 기존 값으로 갑니다.</span>
+            <button type="button" id="resource-settings-save">{_("resource.save")}</button>
+            <span class="field-help">{_("resource.save_help")}</span>
           </div>
           <pre class="scan-result" id="resource-settings-result" aria-live="polite"></pre>
         </form>
@@ -2270,25 +2271,25 @@ async def dashboard(request: Request) -> HTMLResponse:
     <section class="person-preview-panel" role="dialog" aria-modal="true" aria-labelledby="person-preview-title">
       <header class="person-preview-head">
         <div>
-          <h2 id="person-preview-title">사진 확인</h2>
-          <p class="sub" id="person-preview-subtitle">불러오는 중</p>
+          <h2 id="person-preview-title">{_("preview.title")}</h2>
+          <p class="sub" id="person-preview-subtitle">{_("preview.loading")}</p>
         </div>
-        <button type="button" class="btn-copy" id="person-preview-close">닫기</button>
+        <button type="button" class="btn-copy" id="person-preview-close">{_("preview.close")}</button>
       </header>
       <div class="person-preview-tools">
-        <input id="person-reassign-filter" type="search" placeholder="옮길 이름 또는 애칭 찾기">
-        <small id="person-reassign-count">0명</small>
+        <input id="person-reassign-filter" type="search" placeholder="{_("preview.reassign_filter")}">
+        <small id="person-reassign-count">{_("ppl.count_people", n=0)}</small>
       </div>
       <div class="person-preview-grid" id="person-preview-grid"></div>
       <div class="preview-bulk-bar" id="preview-bulk-bar" hidden>
-        <strong id="preview-bulk-count">0장 선택</strong>
-        <select id="preview-bulk-target" title="이동할 인물 선택">
-          <option value="">— 인물 선택 —</option>
+        <strong id="preview-bulk-count">{_("preview.bulk_count")}</strong>
+        <select id="preview-bulk-target" title="{_("preview.bulk_target_title")}">
+          <option value="">{_("preview.bulk_target_placeholder")}</option>
         </select>
-        <button type="button" class="preview-bulk-move" id="preview-bulk-move" disabled>이동</button>
-        <button type="button" class="preview-bulk-unassign" id="preview-bulk-unassign">할당 해제</button>
+        <button type="button" class="preview-bulk-move" id="preview-bulk-move" disabled>{_("preview.bulk_move")}</button>
+        <button type="button" class="preview-bulk-unassign" id="preview-bulk-unassign">{_("preview.bulk_unassign")}</button>
         <span class="preview-bulk-state" id="preview-bulk-state"></span>
-        <button type="button" class="btn-copy" id="preview-bulk-cancel" style="margin-left:auto">선택 해제</button>
+        <button type="button" class="btn-copy" id="preview-bulk-cancel" style="margin-left:auto">{_("preview.bulk_cancel")}</button>
       </div>
     </section>
   </div>
