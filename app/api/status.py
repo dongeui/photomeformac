@@ -2087,18 +2087,18 @@ async def dashboard(request: Request) -> HTMLResponse:
           </div>
           <div class="source-picker" id="source-picker" hidden>
             <div class="source-picker-bar">
-              <button type="button" id="source-picker-home">바로가기</button>
-              <button type="button" id="source-picker-up">위로</button>
-              <span class="source-picker-path" id="source-picker-path">바로가기</span>
+              <button type="button" id="source-picker-home">{_("dash.picker_shortcut")}</button>
+              <button type="button" id="source-picker-up">{_("dash.picker_up")}</button>
+              <span class="source-picker-path" id="source-picker-path">{_("dash.picker_shortcut")}</span>
             </div>
             <div class="source-picker-list" id="source-picker-list" aria-live="polite"></div>
             <span class="field-help" id="source-picker-note"></span>
           </div>
           <div class="scan-actions">
-            <button type="button" id="phase1-retry-button"{phase1_scan_disabled}>오류 항목만 재처리</button>
+            <button type="button" id="phase1-retry-button"{phase1_scan_disabled}>{_("dash.retry_errors")}</button>
           </div>
           <div class="field-help">
-            동기화는 자동으로 돌고, 수동 시작은 메뉴 막대 Trove 아이콘의 "지금 동기화"를 씁니다. 오류 항목만 재처리는 지난 처리에서 실패한 사진만 다시 시도합니다.
+            {_("dash.sync_help")}
           </div>
           <pre class="scan-result" id="phase1-scan-result" aria-live="polite"></pre>
         </form>

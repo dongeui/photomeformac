@@ -126,6 +126,10 @@
   "dash.choose_folder": "Choose folder",
   "dash.choose_folder_help": "Most users pick a NAS/external/USB folder from Finder storage.",
   "dash.path_help": "Path types: Finder storage is NAS/external/USB mounted on macOS. Mac user folders are local folders like Desktop/Pictures/Photos. The Docker-internal photo folder (/photos) is a compatibility path mounted via env vars and usually need not be selected.",
+  "dash.picker_shortcut": "Shortcuts",
+  "dash.picker_up": "Up",
+  "dash.retry_errors": "Retry errored items only",
+  "dash.sync_help": "Sync runs automatically; for a manual start use \"Sync now\" in the Trove menu bar icon. Retry errored items only re-tries photos that failed last time.",
   "lang.label": "Language",
   "lang.korean": "한국어",
   "lang.english": "English"

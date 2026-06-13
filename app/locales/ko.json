@@ -126,6 +126,10 @@
   "dash.choose_folder": "폴더 선택",
   "dash.choose_folder_help": "대부분은 Finder 저장장치에서 NAS/외장하드/USB 폴더를 고르면 됩니다.",
   "dash.path_help": "경로 구분: Finder 저장장치는 macOS에 마운트된 NAS·외장하드·USB입니다. Mac 사용자 폴더는 Desktop/Pictures/Photos 같은 로컬 폴더입니다. Docker 내부 사진 폴더(/photos)는 환경변수로 따로 붙인 호환용 경로라 보통은 선택하지 않아도 됩니다.",
+  "dash.picker_shortcut": "바로가기",
+  "dash.picker_up": "위로",
+  "dash.retry_errors": "오류 항목만 재처리",
+  "dash.sync_help": "동기화는 자동으로 돌고, 수동 시작은 메뉴 막대 Trove 아이콘의 \"지금 동기화\"를 씁니다. 오류 항목만 재처리는 지난 처리에서 실패한 사진만 다시 시도합니다.",
   "lang.label": "언어",
   "lang.korean": "한국어",
   "lang.english": "English"
