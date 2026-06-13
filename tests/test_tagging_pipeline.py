@@ -193,6 +193,44 @@ def test_person_alias_mapping_updates_tags_search_and_dashboard(
     assert preview["items"][0]["asset_id"] is not None
 
 
+def test_gallery_person_filter_lists_only_named_people(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    """인물 콤보박스에는 대표 이름을 저장한 인물만 노출되고, person-000001
+    같은 내부 자동 ID는 제외된다."""
+    TagVocabularyCache.invalidate()
+    image_path = source_root / "unnamed-portrait.jpg"
+    create_image(image_path)
+
+    scan_twice(client)
+    item = get_media_item(client, filename="unnamed-portrait.jpg")
+    persist_fake_face_analysis(
+        client,
+        item["file_id"],
+        FakeFaceAnalyzer(
+            build_face_analysis_result(
+                image_path,
+                [{"name": "person-000001", "bbox": (6, 8, 18, 18), "confidence": 0.99, "embedding": (0.1, 0.2, 0.3)}],
+            )
+        ),
+    )
+
+    # 이름을 붙이기 전: 내부 ID뿐이라 콤보에 인물 옵션이 없다
+    gallery_before = client.get("/gallery").text
+    assert 'value="person-000001"' not in gallery_before
+
+    with client.app.state.database.session_factory() as session:
+        person_id = session.scalars(select(Person)).first().id
+    update = client.patch(f"/people/{person_id}", json={"display_name": "민준", "aliases": []})
+    assert update.status_code == 200
+
+    # 이름을 붙인 뒤: 대표 이름이 콤보에 노출되고 내부 ID는 여전히 숨겨진다
+    gallery_after = client.get("/gallery").text
+    assert 'value="민준"' in gallery_after
+    assert 'value="person-000001"' not in gallery_after
+
+
 def test_people_merge_reassigns_faces_and_rebuilds_person_search(
     client: TestClient,
     source_root: Path,

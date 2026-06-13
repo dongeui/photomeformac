@@ -28,6 +28,9 @@ router = APIRouter(tags=["gallery"])
 
 PERSON_TAG_TYPES = ("person", "people", "face")
 PLACE_TAG_TYPES = ("place", "location", "place_detail", "geo", "geo_detail")
+# person-000123 같은 내부 자동 ID. 인물 콤보에는 대표 이름을 저장한 인물만
+# 노출하므로 이 패턴은 제외한다(사람 정리 페이지의 동일 규칙과 일치).
+_INTERNAL_PERSON_ID_RE = re.compile(r"^person-\d+$", re.IGNORECASE)
 PAGE_SIZE = 48
 PAGE_SIZE_OPTIONS = (50, 100, 200, 300, 500)
 DEFAULT_PAGE_SIZE = 100
@@ -189,7 +192,11 @@ def gallery_page(
             ):
                 annotation_map[annotation.file_id] = annotation
 
-        person_options = _list_tag_values(session, PERSON_TAG_TYPES)
+        person_options = [
+            value
+            for value in _list_tag_values(session, PERSON_TAG_TYPES)
+            if not _INTERNAL_PERSON_ID_RE.match(str(value).strip())
+        ]
         place_options = _list_tag_values(session, PLACE_TAG_TYPES)
 
     current_url = request.url.path
