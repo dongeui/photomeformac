@@ -6,7 +6,6 @@ import ServiceManagement
 struct PhotomeForMacApp: App {
     @StateObject private var backend = BackendSupervisor()
     @StateObject private var updateChecker = UpdateChecker()
-    @State private var launchAtLoginEnabled = PhotomeForMacApp.currentLaunchAtLoginEnabled()
     @NSApplicationDelegateAdaptor(PhotomeAppDelegate.self) private var appDelegate
 
     /// SwiftPM의 bare executable로 실행하면 mainBundle이 .app이 아니어서
@@ -28,7 +27,9 @@ struct PhotomeForMacApp: App {
             MenuBarContent(
                 backend: backend,
                 updateChecker: updateChecker,
-                launchAtLoginEnabled: launchAtLoginEnabled,
+                // 시스템 설정에서 외부로 바꿔도 반영되도록, 고정값이 아니라
+                // 메뉴가 다시 평가될 때마다 실제 상태를 읽는 클로저를 넘긴다.
+                isLaunchAtLoginEnabled: { Self.currentLaunchAtLoginEnabled() },
                 isLaunchAtLoginAvailable: Self.isLaunchAtLoginAvailable(),
                 onToggleLaunchAtLogin: { toggleLaunchAtLogin() },
                 onAbout: { Self.presentAboutPanel() }
@@ -66,15 +67,12 @@ struct PhotomeForMacApp: App {
         do {
             if SMAppService.mainApp.status == .enabled {
                 try SMAppService.mainApp.unregister()
-                launchAtLoginEnabled = false
                 backend.updateStatusMessage("로그인 시 자동 시작을 껐습니다.")
             } else {
                 try SMAppService.mainApp.register()
-                launchAtLoginEnabled = true
                 backend.updateStatusMessage("로그인 시 자동 시작을 켰습니다.")
             }
         } catch {
-            launchAtLoginEnabled = Self.currentLaunchAtLoginEnabled()
             backend.updateStatusMessage("로그인 자동 시작 변경 실패: \(error.localizedDescription)")
         }
     }
@@ -104,7 +102,7 @@ struct PhotomeForMacApp: App {
 struct MenuBarContent: View {
     @ObservedObject var backend: BackendSupervisor
     @ObservedObject var updateChecker: UpdateChecker
-    let launchAtLoginEnabled: Bool
+    let isLaunchAtLoginEnabled: () -> Bool
     let isLaunchAtLoginAvailable: Bool
     let onToggleLaunchAtLogin: () -> Void
     let onAbout: () -> Void
@@ -166,9 +164,13 @@ struct MenuBarContent: View {
             updateChecker.checkForUpdates()
         }
         .disabled(!updateChecker.canCheck)
-        Button(launchAtLoginEnabled ? "로그인 시 자동 시작 끄기" : "로그인 시 자동 시작 켜기") {
-            onToggleLaunchAtLogin()
-        }
+        // Toggle은 켜졌을 때 메뉴에 체크마크를 표시해 on/off 상태가 한눈에
+        // 보인다. isOn getter가 매 평가마다 실제 상태를 읽으므로 시스템 설정
+        // 에서 외부로 바꾼 경우에도 메뉴를 다시 열면 반영된다.
+        Toggle("로그인 시 자동 시작", isOn: Binding(
+            get: { isLaunchAtLoginEnabled() },
+            set: { _ in onToggleLaunchAtLogin() }
+        ))
         .disabled(!isLaunchAtLoginAvailable)
         Button("Photome에 관하여") {
             onAbout()
