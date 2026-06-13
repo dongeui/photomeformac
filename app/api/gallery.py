@@ -219,6 +219,11 @@ def gallery_page(
     has_next = offset + len(items) < total
     person_available = bool(person_options)
     place_available = bool(place_options)
+    # '필터' 버튼에 활성 필터 개수를 표시해, 팝오버를 닫아둬도 기간·인물
+    # 필터가 걸려 있는지 한눈에 알 수 있게 한다.
+    filter_active_count = sum(
+        1 for value in (date_from, date_to, person) if value and str(value).strip()
+    )
     per_page_options = "".join(
         f'<option value="{escape(_per_page_url(request, n))}"{" selected" if n == page_size else ""}>{n}개씩</option>'
         for n in PAGE_SIZE_OPTIONS
@@ -944,12 +949,32 @@ def gallery_page(
     .side-item {{ padding: 8px 10px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 0.92rem; }}
     .side-item:hover {{ background: var(--accent-soft); }}
     .side-item.active {{ background: var(--accent-soft); color: var(--accent); font-weight: 500; }}
-    .side-filters {{ display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: auto; }}
-    .side-filters input, .side-filters select {{ width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-strong); color: var(--text); font-size: 0.88rem; }}
     .side-label {{ font-size: 0.76rem; color: var(--muted); margin-top: 4px; }}
-    .side-actions {{ display: flex; gap: 6px; margin-top: 4px; }}
-    .side-actions .button {{ flex: 1; text-align: center; }}
     .content {{ flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 18px 22px 0; }}
+    /* 상단 검색바: 자유 검색 입력 + 필터 팝오버 토글 */
+    .topbar-search {{ display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }}
+    .topbar-search .search-ac-wrap {{ flex: 1 1 auto; min-width: 0; }}
+    .topbar-search input[type="search"] {{
+      width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px;
+      background: var(--panel-strong); color: var(--text); font-size: 0.95rem;
+    }}
+    .filter-pop-wrap {{ position: relative; flex: none; }}
+    .filter-toggle {{ white-space: nowrap; }}
+    .filter-toggle.has-active {{ border-color: var(--accent); color: var(--accent); }}
+    .filter-pop {{
+      position: absolute; top: calc(100% + 6px); right: 0; z-index: 45;
+      display: flex; flex-direction: column; gap: 8px;
+      min-width: 220px; padding: 14px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+    }}
+    .filter-pop[hidden] {{ display: none; }}
+    .filter-pop input, .filter-pop select {{
+      width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px;
+      background: var(--panel-strong); color: var(--text); font-size: 0.88rem;
+    }}
+    .filter-pop-actions {{ display: flex; gap: 6px; margin-top: 6px; }}
+    .filter-pop-actions .button {{ flex: 1; text-align: center; }}
     .content-toolbar {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }}
     .statusbar {{
       position: sticky; bottom: 0;
@@ -977,7 +1002,7 @@ def gallery_page(
     @media (max-width: 720px) {{
       .layout {{ flex-direction: column; }}
       .sidebar {{ width: auto; flex: none; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--line); }}
-      .side-filters {{ margin-top: 0; }}
+      .filter-pop {{ left: 0; right: auto; }}
     }}
   </style>
 </head>
@@ -1001,26 +1026,31 @@ def gallery_page(
              페이지 자체는 오류 재처리·리소스 설정 등 관리 기능 때문에 유지한다. -->
 
       </nav>
-      <form class="side-filters" id="gallery-search-form" method="get" action="/gallery">
+    </aside>
+    <section class="content">
+      <form class="topbar-search" id="gallery-search-form" method="get" action="/gallery">
         <div class="search-ac-wrap">
           <input type="search" id="gallery-search-input" name="q" value="{escape(q or '')}" placeholder="검색: 작년 바다, 아기…" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="search-ac-list">
           <ul id="search-ac-list" class="search-ac-list" role="listbox" hidden></ul>
         </div>
-        <div class="side-label">기간</div>
-        <input type="date" name="date_from" value="{escape(date_from or '')}" aria-label="시작일">
-        <input type="date" name="date_to" value="{escape(date_to or '')}" aria-label="종료일">
-        <div class="side-label">인물</div>
-        <select name="person"{" disabled" if not person_available else ""} aria-label="인물">
-          {_render_person_options(person_options, person)}
-        </select>
-        <input type="hidden" name="sort" value="{escape(sort_order)}">
-        <div class="side-actions">
-          <button id="gallery-search-button" class="button" type="submit">적용</button>
-          <a class="button secondary" href="/gallery">초기화</a>
+        <div class="filter-pop-wrap">
+          <button type="button" id="filter-toggle" class="button secondary filter-toggle{' has-active' if filter_active_count else ''}" aria-expanded="false" aria-controls="filter-pop" aria-haspopup="true">필터{f' · {filter_active_count}' if filter_active_count else ''} ▾</button>
+          <div id="filter-pop" class="filter-pop" hidden>
+            <div class="side-label">기간</div>
+            <input type="date" name="date_from" value="{escape(date_from or '')}" aria-label="시작일">
+            <input type="date" name="date_to" value="{escape(date_to or '')}" aria-label="종료일">
+            <div class="side-label">인물</div>
+            <select name="person"{" disabled" if not person_available else ""} aria-label="인물">
+              {_render_person_options(person_options, person)}
+            </select>
+            <div class="filter-pop-actions">
+              <button id="gallery-search-button" class="button" type="submit">적용</button>
+              <a class="button secondary" href="/gallery">초기화</a>
+            </div>
+          </div>
         </div>
+        <input type="hidden" name="sort" value="{escape(sort_order)}">
       </form>
-    </aside>
-    <section class="content">
       <div class="content-toolbar">
         <div class="meta-pillset">
           <span class="meta-pill">{total}장{_render_filter_hint(person, place)}</span>
@@ -1069,9 +1099,30 @@ def gallery_page(
       document.body.classList.add("is-searching");
       if (searchButton) {{
         searchButton.disabled = true;
-        searchButton.textContent = "검색 중...";
+        searchButton.textContent = "적용 중...";
       }}
     }}
+
+    // 필터 팝오버: 토글 + 바깥 클릭 시 닫기
+    (function setupFilterPopover() {{
+      const toggle = document.getElementById("filter-toggle");
+      const pop = document.getElementById("filter-pop");
+      if (!toggle || !pop) return;
+      function setOpen(open) {{
+        pop.hidden = !open;
+        toggle.setAttribute("aria-expanded", String(open));
+      }}
+      toggle.addEventListener("click", (e) => {{
+        e.stopPropagation();
+        setOpen(pop.hidden);
+      }});
+      document.addEventListener("click", (e) => {{
+        if (!pop.hidden && !e.target.closest(".filter-pop-wrap")) setOpen(false);
+      }});
+      document.addEventListener("keydown", (e) => {{
+        if (e.key === "Escape" && !pop.hidden) setOpen(false);
+      }});
+    }})();
 
     if (searchForm) {{
       searchForm.addEventListener("submit", () => showSearchProgress("사진을 찾는 중입니다"));
@@ -1128,7 +1179,7 @@ def gallery_page(
       document.body.classList.remove("is-searching");
       if (searchButton) {{
         searchButton.disabled = false;
-        searchButton.textContent = "검색";
+        searchButton.textContent = "적용";
       }}
       attachThumbnailRecovery();
     }});

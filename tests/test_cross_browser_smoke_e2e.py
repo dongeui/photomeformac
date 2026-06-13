@@ -54,3 +54,41 @@ def test_gallery_smoke(tmp_path: Path, engine: str) -> None:
     finally:
         if backend.poll() is None:
             backend.kill()
+
+
+@pytest.mark.parametrize("engine", ["chromium", "webkit"])
+def test_gallery_filter_popover(tmp_path: Path, engine: str) -> None:
+    """상단 검색바의 '필터' 팝오버: 기본 숨김 → 클릭 시 기간·인물 노출 →
+    바깥 클릭 시 닫힘."""
+    port = free_port()
+    backend = start_backend(tmp_path, port)
+    try:
+        with sync_playwright() as playwright:
+            try:
+                browser = getattr(playwright, engine).launch()
+            except Exception as exc:  # 엔진 바이너리 미설치 환경
+                pytest.skip(f"{engine} launch unavailable: {exc}")
+            page = browser.new_page()
+            page_errors: list[str] = []
+            page.on("pageerror", lambda err: page_errors.append(str(err)))
+
+            page.goto(f"http://127.0.0.1:{port}/gallery")
+            pop = page.locator("#filter-pop")
+            expect(page.locator("#filter-toggle")).to_be_visible()
+            expect(pop).to_be_hidden()
+
+            page.click("#filter-toggle")
+            expect(pop).to_be_visible()
+            expect(pop.locator("input[name='date_from']")).to_be_visible()
+            expect(pop.locator("input[name='date_to']")).to_be_visible()
+            expect(pop.locator("select[name='person']")).to_have_count(1)
+
+            # 바깥(갤러리 영역) 클릭 시 닫힌다
+            page.click("section.content", position={"x": 5, "y": 5})
+            expect(pop).to_be_hidden()
+
+            assert not page_errors, f"{engine} JS 미처리 예외: {page_errors}"
+            browser.close()
+    finally:
+        if backend.poll() is None:
+            backend.kill()
