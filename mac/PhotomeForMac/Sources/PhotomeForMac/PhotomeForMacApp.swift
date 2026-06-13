@@ -40,16 +40,16 @@ struct PhotomeForMacApp: App {
 
     private func toggleLaunchAtLogin() {
         guard Self.isLaunchAtLoginAvailable() else {
-            backend.updateStatusMessage("자동 시작은 .app 번들로 실행할 때만 사용 가능합니다.")
+            backend.updateStatusMessage(Localized.s("자동 시작은 .app 번들로 실행할 때만 사용 가능합니다."))
             return
         }
         do {
             if SMAppService.mainApp.status == .enabled {
                 try SMAppService.mainApp.unregister()
-                backend.updateStatusMessage("로그인 시 자동 시작을 껐습니다.")
+                backend.updateStatusMessage(Localized.s("로그인 시 자동 시작을 껐습니다."))
             } else {
                 try SMAppService.mainApp.register()
-                backend.updateStatusMessage("로그인 시 자동 시작을 켰습니다.")
+                backend.updateStatusMessage(Localized.s("로그인 시 자동 시작을 켰습니다."))
             }
         } catch {
             backend.updateStatusMessage("로그인 자동 시작 변경 실패: \(error.localizedDescription)")
@@ -85,29 +85,29 @@ struct MenuBarContent: View {
     let onToggleLaunchAtLogin: () -> Void
 
     var body: some View {
-        Text("상태: \(backend.state.rawValue)")
+        Text("\(Localized.s("상태")): \(backend.state.displayLabel)")
 
         // 작업이 도는 동안 "무엇을 어디까지" 했는지 메뉴에서 바로 보여준다.
         // 이게 없으면 누적 현황(남음 N장)만 보여서 분석이 멈춘 것처럼 읽힌다.
         if let job = backend.libraryJobStatus, job.isRunning {
-            Text("지금: \(job.badgeTitle) · \(job.summary)")
+            Text("\(Localized.s("지금")): \(job.badgeTitle) · \(job.summary)")
         }
 
         if let coverage = backend.coverage {
             if let job = backend.libraryJobStatus, job.isRunning, job.jobKind == "scan", coverage.remaining > 0 {
-                Text("사진 현황: \(coverage.summary) · 동기화 후 분석 계속")
+                Text("\(Localized.s("사진 현황")): \(coverage.summary) · \(Localized.s("동기화 후 분석 계속"))")
             } else {
-                Text("사진 현황: \(coverage.summary)")
+                Text("\(Localized.s("사진 현황")): \(coverage.summary)")
             }
         }
 
         if let usage = backend.resourceUsage {
-            Text("리소스: \(usage.summary)")
+            Text("\(Localized.s("리소스")): \(usage.summary)")
         }
 
         Divider()
 
-        Button("사진첩 열기") {
+        Button(Localized.s("사진첩 열기")) {
             backend.openGallery()
         }
         .disabled(!backend.isRunning)
@@ -118,19 +118,19 @@ struct MenuBarContent: View {
         // (지금 동기화 재제출, 폴더 변경·재시작은 백엔드를 내려 작업이 끊긴다).
         // 백엔드가 먹통이 되면 healthLoop이 state=.error + 잡 상태 nil로
         // 만들어 다시 시작이 다시 활성화된다 — 복구 탈출구는 유지.
-        Button("지금 동기화") {
+        Button(Localized.s("지금 동기화")) {
             backend.triggerLibraryScan()
         }
         .disabled(!backend.isRunning || backend.hasActiveLibraryJob)
-        Button("사진 폴더 선택") {
+        Button(Localized.s("사진 폴더 선택")) {
             backend.choosePhotoFolder()
         }
         .disabled(backend.hasActiveLibraryJob)
-        Button("설정 열기") {
+        Button(Localized.s("설정 열기")) {
             backend.openDashboard()
         }
         .disabled(!backend.isRunning)
-        Button("Trove 다시 시작") {
+        Button(Localized.s("Trove 다시 시작")) {
             backend.restart()
         }
         .disabled(backend.isBusy || backend.hasActiveLibraryJob)
@@ -142,7 +142,7 @@ struct MenuBarContent: View {
         // Toggle은 켜졌을 때 메뉴에 체크마크를 표시해 on/off 상태가 한눈에
         // 보인다. isOn getter가 매 평가마다 실제 상태를 읽으므로 시스템 설정
         // 에서 외부로 바꾼 경우에도 메뉴를 다시 열면 반영된다.
-        Toggle("로그인 시 자동 시작", isOn: Binding(
+        Toggle(Localized.s("로그인 시 자동 시작"), isOn: Binding(
             get: { isLaunchAtLoginEnabled() },
             set: { _ in onToggleLaunchAtLogin() }
         ))
@@ -150,7 +150,7 @@ struct MenuBarContent: View {
 
         Divider()
 
-        Button("종료") {
+        Button(Localized.s("종료")) {
             backend.stop()
             NSApp.terminate(nil)
         }
@@ -164,15 +164,37 @@ final class PhotomeAppDelegate: NSObject, NSApplicationDelegate {
         // 창 없는 메뉴바 전용 앱: Dock 아이콘과 화면 상단 메뉴 막대를 숨기고
         // 우측 상단 메뉴바 아이콘만 남긴다.
         NSApp.setActivationPolicy(.accessory)
+        // 설치 후 첫 실행: 아직 언어를 고르지 않았으면 한 번 물어본다.
+        // 선택값은 UserDefaults에 저장되고, 백엔드 env(TROVE_LOCALE)로도 전달돼
+        // 웹 UI 기본 언어까지 맞춘다.
+        promptForLanguageIfNeeded()
+    }
+
+    @MainActor
+    private func promptForLanguageIfNeeded() {
+        guard !Localized.isChosen else { return }
+        let alert = NSAlert()
+        alert.messageText = Localized.s("언어를 선택하세요")  // 시스템 추정 언어로 표기
+        alert.informativeText = Localized.s("나중에 설정에서 바꿀 수 있습니다.")
+        // 추정 언어를 기본(첫) 버튼으로 올려 한 번에 진행하기 쉽게.
+        let ordered = Localized.supported.sorted { lhs, _ in lhs.code == Localized.systemSuggested }
+        for option in ordered {
+            alert.addButton(withTitle: option.label)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+        let index = response.rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
+        let chosen = ordered.indices.contains(index) ? ordered[index].code : Localized.systemSuggested
+        Localized.set(chosen)
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let backend, backend.hasActiveLibraryJob else { return .terminateNow }
         let alert = NSAlert()
-        alert.messageText = "백그라운드 작업이 진행 중입니다"
-        alert.informativeText = "지금 종료하면 진행 중인 동기화가 중단됩니다. 계속 종료할까요?"
-        alert.addButton(withTitle: "종료")
-        alert.addButton(withTitle: "취소")
+        alert.messageText = Localized.s("백그라운드 작업이 진행 중입니다")
+        alert.informativeText = Localized.s("지금 종료하면 진행 중인 동기화가 중단됩니다. 계속 종료할까요?")
+        alert.addButton(withTitle: Localized.s("종료"))
+        alert.addButton(withTitle: Localized.s("취소"))
         alert.alertStyle = .warning
         let response = alert.runModal()
         return response == .alertFirstButtonReturn ? .terminateNow : .terminateCancel

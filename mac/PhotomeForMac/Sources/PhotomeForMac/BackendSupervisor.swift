@@ -10,6 +10,9 @@ final class BackendSupervisor: ObservableObject {
         case running = "실행 중"
         case stopping = "중지 중"
         case error = "오류"
+
+        /// rawValue(한국어)는 안정적인 키로 두고, 표시값만 현재 로케일로 번역한다.
+        var displayLabel: String { Localized.s(rawValue) }
     }
 
     struct AIPackProgress: Decodable {
@@ -91,7 +94,7 @@ final class BackendSupervisor: ObservableObject {
         var badgeTitle: String {
             // 사용자에게 보이는 작업 종류는 "동기화" 하나다 — 스캔이든 이미지
             // AI든 같은 통합 동기화의 단계일 뿐, 종류를 구분해 보여주지 않는다.
-            "동기화"
+            Localized.s("동기화")
         }
     }
 
@@ -377,12 +380,12 @@ final class BackendSupervisor: ObservableObject {
             let previous = lastSourceRootAvailability[path]
             if previous == true && !exists {
                 scheduleNotification(
-                    title: "Trove — 폴더 접근 불가",
+                    title: Localized.s("Trove — 폴더 접근 불가"),
                     body: "'\((path as NSString).lastPathComponent)' 폴더에 접근할 수 없습니다. NAS 마운트가 해제됐는지 확인하세요."
                 )
             } else if previous == false && exists {
                 scheduleNotification(
-                    title: "Trove — 폴더 복구됨",
+                    title: Localized.s("Trove — 폴더 복구됨"),
                     body: "'\((path as NSString).lastPathComponent)' 폴더에 다시 접근할 수 있습니다."
                 )
             }
@@ -442,14 +445,14 @@ final class BackendSupervisor: ObservableObject {
 
     var menuTitle: String {
         if let libraryJobStatus, state == .running, libraryJobStatus.isRunning {
-            return "Trove 동기화 중"
+            return Localized.s("Trove 동기화 중")
         }
         switch state {
-        case .running: return "Trove 실행 중"
-        case .starting: return "Trove 시작 중"
-        case .stopping: return "Trove 중지 중"
-        case .error: return "Trove 오류"
-        case .stopped: return "Trove 중지됨"
+        case .running: return Localized.s("Trove 실행 중")
+        case .starting: return Localized.s("Trove 시작 중")
+        case .stopping: return Localized.s("Trove 중지 중")
+        case .error: return Localized.s("Trove 오류")
+        case .stopped: return Localized.s("Trove 중지됨")
         }
     }
 
@@ -604,14 +607,14 @@ final class BackendSupervisor: ObservableObject {
             state = .error
             lastError = "백엔드가 비정상 종료(코드 \(exitStatus))되어 재시작합니다."
             statusMessage = lastError ?? "백엔드 비정상 종료"
-            scheduleNotification(title: "Trove 백엔드 재시작",
+            scheduleNotification(title: Localized.s("Trove 백엔드 재시작"),
                                  body: "백엔드가 예기치 않게 종료되어 자동으로 다시 시작합니다.")
             start()
         } else {
             state = .error
             lastError = "백엔드가 반복적으로 비정상 종료됩니다(코드 \(exitStatus)). 로그를 확인하세요."
             statusMessage = lastError ?? "백엔드 반복 비정상 종료"
-            scheduleNotification(title: "Trove 백엔드 오류",
+            scheduleNotification(title: Localized.s("Trove 백엔드 오류"),
                                  body: "자동 재시작에 실패했습니다. 메뉴에서 ‘로그 보기’로 원인을 확인하세요.")
         }
         updateDockBadge()
@@ -788,8 +791,8 @@ final class BackendSupervisor: ObservableObject {
 
     func choosePhotoFolder() {
         let panel = NSOpenPanel()
-        panel.title = "Trove 사진 폴더 선택"
-        panel.message = "읽기 전용으로 스캔할 사진 폴더를 선택하세요."
+        panel.title = Localized.s("Trove 사진 폴더 선택")
+        panel.message = Localized.s("읽기 전용으로 스캔할 사진 폴더를 선택하세요.")
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         // 단일 폴더 개념 — 폴더를 바꾸면 기존 사진은 archived로 보존되고
@@ -1479,6 +1482,8 @@ final class BackendSupervisor: ObservableObject {
         env.merge(decoded) { _, new in new }
         env["PYTHONPATH"] = repoRoot.path
         env["TROVE_REPO_ROOT"] = repoRoot.path
+        // 첫 실행 때 고른 언어를 웹 UI 기본 로케일로도 넘긴다(쿠키 없을 때의 기본값).
+        env["TROVE_LOCALE"] = Localized.current
 
         if let sourceRoots = UserDefaults.standard.stringArray(forKey: Self.sourceRootsDefaultsKey), !sourceRoots.isEmpty {
             env["TROVE_SOURCE_ROOTS"] = sourceRoots.joined(separator: ",")

@@ -64,7 +64,7 @@ def test_menu_bar_only_app_structure() -> None:
     assert "setActivationPolicy(.accessory)" in content
     assert "Window(" not in content
     # 사진첩 열기(기본 브라우저) + 폴더 선택을 한 단계 평면으로 (중첩 Menu 미사용)
-    assert 'Button("사진첩 열기")' in content
+    assert 'Button(Localized.s("사진첩 열기"))' in content
     assert "backend.openGallery()" in content
     assert 'Menu("고급")' not in content
     assert "backend.choosePhotoFolder()" in content
