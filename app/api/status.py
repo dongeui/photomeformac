@@ -2517,7 +2517,7 @@ async def dashboard(request: Request) -> HTMLResponse:
           <div class="person-preview-reassign">
             ${{faceCrop}}
             <select class="reassign-select" data-face-id="${{item.face_id}}" aria-label="${{DT.reassign_target_aria}}">${{reassignOptionsHtml()}}</select>
-            <button type="button" class="reassign-btn" data-face-id="${{item.face_id}}" disabled>개별 이동</button>
+            <button type="button" class="reassign-btn" data-face-id="${{item.face_id}}" disabled>${{DT.move_one}}</button>
           </div>` : "";
       return `
         <article class="person-preview-card"${{faceAttr}} data-file-id="${{escapeHtml(item.file_id)}}">
@@ -2933,8 +2933,8 @@ async def dashboard(request: Request) -> HTMLResponse:
           const aliasChipsContainer = form.querySelector(".alias-chips-container");
           if (aliasChipsContainer) {{
             aliasChipsContainer.innerHTML = savedAliases.length
-              ? savedAliases.map((alias) => `<span class="alias-chip">${{escapeHtml(alias)}}<button type="button" class="alias-remove" data-alias="${{escapeHtml(alias)}}" title="${{escapeHtml(alias)}} 제거">×</button></span>`).join("")
-              : '<span class="alias-chips-empty-hint">병합 시 여기에 표시</span>';
+              ? savedAliases.map((alias) => `<span class="alias-chip">${{escapeHtml(alias)}}<button type="button" class="alias-remove" data-alias="${{escapeHtml(alias)}}" title="${{DT.alias_remove_title.replace("{{alias}}", escapeHtml(alias))}}">×</button></span>`).join("")
+              : '<span class="alias-chips-empty-hint">' + DT.alias_empty + '</span>';
             aliasChipsContainer.classList.toggle("empty", savedAliases.length === 0);
           }}
           form.classList.toggle("has-aliases", savedAliases.length > 0);
@@ -2967,7 +2967,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         }}
         if (container && container.querySelectorAll(".alias-chip").length === 0) {{
           container.classList.add("empty");
-          container.innerHTML = '<span class="alias-chips-empty-hint">병합 시 여기에 표시</span>';
+          container.innerHTML = '<span class="alias-chips-empty-hint">' + DT.alias_empty + '</span>';
           if (aliasInput) aliasInput.value = "";
           form.classList.remove("has-aliases");
         }}
@@ -2981,7 +2981,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     function jobWorkLabel(kind) {{
       if (kind === "scan") return DT.job_scan;
       if (kind === "semantic_maintenance") return DT.job_refresh;
-      if (kind === "semantic_backfill") return "AI 분석";
+      if (kind === "semantic_backfill") return DT.job_ai;
       return DT.job_generic;
     }}
     function syncAutoLabel(sched) {{
@@ -3157,7 +3157,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       const body = document.getElementById("detail-body");
       const titleEl = document.getElementById("detail-title");
       titleEl.textContent = title;
-      body.innerHTML = '<div class="detail-loading">불러오는 중...</div>';
+      body.innerHTML = '<div class="detail-loading">' + DT.loading_dots + '</div>';
       overlay.classList.add("open");
       document.body.style.overflow = "hidden";
       try {{
@@ -3165,7 +3165,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         const data = await res.json();
         renderDetailItems(body, data);
       }} catch (e) {{
-        body.innerHTML = '<div class="detail-loading">불러오기 실패</div>';
+        body.innerHTML = '<div class="detail-loading">' + DT.load_failed + '</div>';
       }}
     }}
     function closeDetailPopup() {{
@@ -3178,7 +3178,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       const hasNotes = Array.isArray(data.notes) && data.notes.length > 0;
       const hasItems = Array.isArray(data.items) && data.items.length > 0;
       if (!hasSummary && !hasNotes && !hasItems) {{
-        container.innerHTML = '<div class="detail-loading">데이터 없음</div>';
+        container.innerHTML = '<div class="detail-loading">' + DT.no_data + '</div>';
         return;
       }}
       let html = "";
@@ -3237,41 +3237,41 @@ async def dashboard(request: Request) -> HTMLResponse:
         if (nasEl) {{
           const roots = Object.keys(nasStatus);
           if (roots.length === 0) {{
-            nasEl.textContent = "NAS 확인 중…";
+            nasEl.textContent = DT.nas_checking;
             nasEl.className = "nas-badge nas-unknown";
           }} else {{
             const allOk = roots.every(r => nasStatus[r]);
             const anyOk = roots.some(r => nasStatus[r]);
             if (allOk) {{
-              nasEl.textContent = "NAS 연결됨";
+              nasEl.textContent = DT.nas_connected;
               nasEl.className = "nas-badge nas-ok";
             }} else if (anyOk) {{
-              nasEl.textContent = "NAS 일부 연결";
+              nasEl.textContent = DT.nas_partial;
               nasEl.className = "nas-badge nas-warn";
             }} else {{
-              nasEl.textContent = "NAS 연결 끊김";
+              nasEl.textContent = DT.nas_disconnected;
               nasEl.className = "nas-badge nas-error";
             }}
           }}
         }}
 
-        if (phase1ScheduleButton) phase1ScheduleButton.innerHTML = `<strong>자동 동기화</strong> ${{syncAutoLabel(sched)}}`;
+        if (phase1ScheduleButton) phase1ScheduleButton.innerHTML = `<strong>${{DT.auto_sync}}</strong> ${{syncAutoLabel(sched)}}`;
 
         // Impact metrics
-        if (cat.breakdown?.total !== undefined) _setText("m-total", cat.breakdown.total + "개");
-        else if (cat.total !== undefined) _setText("m-total", cat.total + "개");
-        if (cat.kind_counts !== undefined) _setText("m-total-kinds", "사진 " + (cat.kind_counts.image || 0) + "개");
+        if (cat.breakdown?.total !== undefined) _setText("m-total", DT.count_unit.replace("{{n}}", cat.breakdown.total));
+        else if (cat.total !== undefined) _setText("m-total", DT.count_unit.replace("{{n}}", cat.total));
+        if (cat.kind_counts !== undefined) _setText("m-total-kinds", DT.photos_n.replace("{{n}}", cat.kind_counts.image || 0));
         if (cat.breakdown?.summary_text !== undefined) _setText("m-total-status", cat.breakdown.summary_text);
-        else if (cat.status_counts !== undefined) _setText("m-total-status", "완료 " + ((cat.status_counts.thumb_done || 0) + (cat.status_counts.analysis_done || 0)) + "개 · 예정 " + ((cat.status_counts.metadata_done || 0) + (cat.status_counts.active || 0)) + "개 · 오류 " + (cat.status_counts.error || 0) + "개");
+        else if (cat.status_counts !== undefined) _setText("m-total-status", DT.cat_done_n.replace("{{done}}", (cat.status_counts.thumb_done || 0) + (cat.status_counts.analysis_done || 0)).replace("{{sched}}", (cat.status_counts.metadata_done || 0) + (cat.status_counts.active || 0)).replace("{{err}}", cat.status_counts.error || 0));
         if (perf.generated_tags !== undefined) _setText("m-tags", perf.generated_tags);
-        if (perf.tagged_media !== undefined) _setText("m-tags-note", perf.tagged_media + "개 사진에 적용");
+        if (perf.tagged_media !== undefined) _setText("m-tags-note", DT.applied_n.replace("{{n}}", perf.tagged_media));
         if (perf.place_tagged_media !== undefined) _setText("m-places", perf.place_tagged_media);
         if (perf.person_count !== undefined) _setText("m-people", perf.person_count);
-        if (perf.people_media !== undefined) _setText("m-people-note", perf.people_media + "개 사진에서 얼굴 감지");
+        if (perf.people_media !== undefined) _setText("m-people-note", DT.faces_n.replace("{{n}}", perf.people_media));
         if (perf.clip_embeddings !== undefined) _setText("m-ai", perf.clip_embeddings + " / " + perf.eligible_media);
         if (perf.ai_summary?.summary_text !== undefined) _setText("m-ai-note", perf.ai_summary.summary_text);
         else if (perf.ai_summary?.note_text !== undefined) _setText("m-ai-note", perf.ai_summary.note_text);
-        else if (perf.clip_coverage_percent !== undefined) _setText("m-ai-note", perf.clip_coverage_percent + "% 완료 · " + perf.remaining_clip + "개 남음");
+        else if (perf.clip_coverage_percent !== undefined) _setText("m-ai-note", DT.pct_done_remain.replace("{{pct}}", perf.clip_coverage_percent).replace("{{n}}", perf.remaining_clip));
 
         // Phase 1 card rows
         if (sched.last_poll_at !== undefined) _setText("p1-last-poll", sched.last_poll_at ?? "—");
@@ -3303,7 +3303,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         if (!response.ok) throw new Error(payload.detail || `HTTP ${{response.status}}`);
         const scheduler = payload.scheduler || {{}};
         schedulerSnapshot = scheduler;
-        button.innerHTML = `<strong>자동 동기화</strong> ${{syncAutoLabel(scheduler)}}`;
+        button.innerHTML = `<strong>${{DT.auto_sync}}</strong> ${{syncAutoLabel(scheduler)}}`;
         await refreshDashboardStatus();
       }} catch (error) {{
         scanResult.classList.add("visible");
@@ -3331,10 +3331,10 @@ async def dashboard(request: Request) -> HTMLResponse:
         ?? ((cov.remaining_for_clip ?? 0) + (cov.remaining_for_search ?? 0));
       const pct = eligible > 0 ? Math.round((analyzed / eligible) * 100) : 100;
       const lines = [
-        "── 전체 현황 ──",
-        `사진 ${{fmt(eligible)}}개 중 분석 완료 ${{fmt(analyzed)}}개 (${{pct}}%)`,
+        DT.overall_status,
+        DT.ov_progress.replace("{{eligible}}", fmt(eligible)).replace("{{analyzed}}", fmt(analyzed)).replace("{{pct}}", pct),
       ];
-      lines.push(remain > 0 ? `아직 처리할 항목 ${{fmt(remain)}}개` : "모든 사진이 최신 상태입니다 ✓");
+      lines.push(remain > 0 ? DT.remaining_n.replace("{{n}}", fmt(remain)) : DT.all_latest);
       return lines;
     }}
     function renderScanJob(job) {{
@@ -3342,24 +3342,24 @@ async def dashboard(request: Request) -> HTMLResponse:
       const summary = job?.result?.summary || {{}};
       const processed = job?.result?.processed || {{}};
       const progress = job?.result?.progress || {{}};
-      const lines = [`상태: ${{phaseStateLabel((job?.status || "").toUpperCase()) || job?.status || "확인 중"}}`];
+      const lines = [`${{DT.l_status}}: ${{phaseStateLabel((job?.status || "").toUpperCase()) || job?.status || DT.checking}}`];
       if (retryOnly) lines.push(DT.retry_running);
       if (job?.status === "queued" || job?.status === "running") {{
         if (progress.message) lines.push(progress.message);
-        if (progress.stage) lines.push(`단계: ${{progress.stage}}`);
-        if (progress.files_found !== undefined) lines.push(`찾은 파일: ${{progress.files_found}}개`);
-        if (progress.current_path) lines.push(`현재 파일: ${{progress.current_path}}`);
+        if (progress.stage) lines.push(`${{DT.l_stage}}: ${{progress.stage}}`);
+        if (progress.files_found !== undefined) lines.push(`${{DT.l_found_files}}: ${{progress.files_found}}${{DT.u_count}}`);
+        if (progress.current_path) lines.push(`${{DT.l_current_file}}: ${{progress.current_path}}`);
         if (progress.scan?.total !== undefined) {{
-          lines.push(`스캔: ${{progress.scan.current ?? 0}} / ${{progress.scan.total}}`);
-          lines.push(`스캔 실패: ${{progress.scan.failed ?? 0}}`);
+          lines.push(`${{DT.l_scan}}: ${{progress.scan.current ?? 0}} / ${{progress.scan.total}}`);
+          lines.push(`${{DT.l_scan_failed}}: ${{progress.scan.failed ?? 0}}`);
         }}
-        if (!retryOnly && progress.summary?.scanned !== undefined) lines.push(`발견: ${{progress.summary.scanned}}`);
+        if (!retryOnly && progress.summary?.scanned !== undefined) lines.push(`${{DT.l_found}}: ${{progress.summary.scanned}}`);
         if (progress.processed?.total !== undefined) {{
-          lines.push(`처리: ${{progress.processed.current ?? 0}} / ${{progress.processed.total}}`);
-          lines.push(`완료: ${{progress.processed.succeeded ?? 0}}, 실패: ${{progress.processed.failed ?? 0}}`);
+          lines.push(`${{DT.l_processing}}: ${{progress.processed.current ?? 0}} / ${{progress.processed.total}}`);
+          lines.push(`${{DT.l_done}}: ${{progress.processed.succeeded ?? 0}}, ${{DT.l_failed}}: ${{progress.processed.failed ?? 0}}`);
         }}
         const elapsed = formatElapsed(job?.started_at, job?.finished_at);
-        if (elapsed) lines.push(`소요 시간: ${{elapsed}}`);
+        if (elapsed) lines.push(`${{DT.l_elapsed}}: ${{elapsed}}`);
         return lines.join("\\n");
       }}
       const semantic = job?.result?.semantic || {{}};
@@ -3368,34 +3368,34 @@ async def dashboard(request: Request) -> HTMLResponse:
       const semWork = (semantic.search_documents_updated || 0) + (semantic.embeddings_created || 0)
         + (semantic.auto_tag_values || 0) + (semantic.faces_reanalyzed || 0);
       let scanHeadline;
-      if (job?.status === "failed") scanHeadline = "✗ 동기화에 실패했습니다";
-      else if (job?.status === "canceled" || job?.status === "cancelled") scanHeadline = "■ 동기화를 취소했습니다";
+      if (job?.status === "failed") scanHeadline = DT.sc_failed;
+      else if (job?.status === "canceled" || job?.status === "cancelled") scanHeadline = DT.sc_canceled;
       else if (retryOnly) scanHeadline = (processed.succeeded ?? 0) > 0
-        ? `✓ 오류 항목 재처리 완료 — ${{processed.succeeded}}개 복구`
-        : "✓ 재처리할 오류 항목이 없었어요 (0건)";
+        ? DT.sc_retry_done.replace("{{n}}", processed.succeeded)
+        : DT.sc_retry_none;
       else if (scanCreated === 0 && scanUpdated === 0 && semWork === 0)
-        scanHeadline = "✓ 이미 최신 상태 — 새로 추가·변경된 사진이 없었어요 (0건)";
-      else scanHeadline = `✓ 동기화 완료 — 새 사진 ${{scanCreated}}개, 변경 ${{scanUpdated}}개`;
+        scanHeadline = DT.sc_uptodate;
+      else scanHeadline = DT.sc_done.replace("{{created}}", scanCreated).replace("{{updated}}", scanUpdated);
       lines.unshift(scanHeadline);
       if (progress.message) lines.push(progress.message);
       if (!retryOnly) {{
         lines.push(
-          `발견: ${{summary.scanned ?? 0}}`,
-          `새로 추가: ${{scanCreated}}`,
-          `업데이트: ${{scanUpdated}}`,
-          `이동 감지: ${{summary.moved ?? 0}}`,
-          `누락: ${{summary.missing ?? 0}}`,
-          `실패: ${{summary.failed ?? 0}}`,
+          `${{DT.l_found}}: ${{summary.scanned ?? 0}}`,
+          `${{DT.l_new_added}}: ${{scanCreated}}`,
+          `${{DT.l_updated}}: ${{scanUpdated}}`,
+          `${{DT.l_moved}}: ${{summary.moved ?? 0}}`,
+          `${{DT.l_missing}}: ${{summary.missing ?? 0}}`,
+          `${{DT.l_failed}}: ${{summary.failed ?? 0}}`,
         );
       }}
-      lines.push(`처리 완료: ${{processed.succeeded ?? 0}}, 실패: ${{processed.failed ?? 0}}`);
-      if (semantic.search_documents_updated !== undefined) lines.push(`검색 색인: +${{semantic.search_documents_updated}}`);
-      if (semantic.auto_tag_files !== undefined) lines.push(`자동 태그: ${{semantic.auto_tag_files}} 항목, +${{semantic.auto_tag_values ?? 0}}개`);
-      if (semantic.faces_reanalyzed) lines.push(`얼굴 재분석: +${{semantic.faces_reanalyzed}}`);
-      if (semantic.embeddings_created) lines.push(`AI 임베딩: +${{semantic.embeddings_created}}`);
+      lines.push(`${{DT.l_processed_done}}: ${{processed.succeeded ?? 0}}, ${{DT.l_failed}}: ${{processed.failed ?? 0}}`);
+      if (semantic.search_documents_updated !== undefined) lines.push(`${{DT.l_search_index}}: +${{semantic.search_documents_updated}}`);
+      if (semantic.auto_tag_files !== undefined) lines.push(DT.t_auto_tag.replace("{{files}}", semantic.auto_tag_files).replace("{{values}}", semantic.auto_tag_values ?? 0));
+      if (semantic.faces_reanalyzed) lines.push(`${{DT.l_face_reanalyze}}: +${{semantic.faces_reanalyzed}}`);
+      if (semantic.embeddings_created) lines.push(`${{DT.l_ai_embed}}: +${{semantic.embeddings_created}}`);
       const elapsed = formatElapsed(job?.started_at, job?.finished_at);
-      if (elapsed) lines.push(`소요 시간: ${{elapsed}}`);
-      if (job?.error_message) lines.push(`오류: ${{job.error_message}}`);
+      if (elapsed) lines.push(`${{DT.l_elapsed}}: ${{elapsed}}`);
+      if (job?.error_message) lines.push(`${{DT.l_error}}: ${{job.error_message}}`);
       lines.push(...coverageSummaryLines());
       return lines.join("\\n");
     }}
@@ -3453,7 +3453,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (!sourcePicker || !sourcePickerList) return;
       const params = new URLSearchParams();
       if (path) params.set("path", path);
-      sourcePickerList.innerHTML = `<div class="source-picker-item"><strong>불러오는 중...</strong><small></small><span></span></div>`;
+      sourcePickerList.innerHTML = `<div class="source-picker-item"><strong>${{DT.loading_dots}}</strong><small></small><span></span></div>`;
       try {{
         const response = await fetch(`/source-roots/browse?${{params.toString()}}`, {{ cache: "no-store" }});
         const payload = await response.json();
@@ -3467,7 +3467,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         const entries = payload.entries || [];
         sourcePickerList.innerHTML = "";
         if (!entries.length) {{
-          sourcePickerList.innerHTML = `<div class="source-picker-item"><strong>여기에서 보이는 폴더가 없습니다.</strong><small></small><span></span></div>`;
+          sourcePickerList.innerHTML = `<div class="source-picker-item"><strong>${{DT.sp_empty}}</strong><small></small><span></span></div>`;
           return;
         }}
         entries.forEach((entry) => {{
@@ -3496,7 +3496,7 @@ async def dashboard(request: Request) -> HTMLResponse:
           sourcePickerList.append(row);
         }});
       }} catch (error) {{
-        sourcePickerList.innerHTML = `<div class="source-picker-item"><strong>오류: ${{escapeHtml(error.message)}}</strong><small></small><span></span></div>`;
+        sourcePickerList.innerHTML = `<div class="source-picker-item"><strong>${{DT.error}}: ${{escapeHtml(error.message)}}</strong><small></small><span></span></div>`;
       }}
     }}
     async function resumeJob(key, card, button, result, render) {{
@@ -3513,7 +3513,7 @@ async def dashboard(request: Request) -> HTMLResponse:
           forgetJob(key);
         }}
       }} catch (error) {{
-        result.textContent = `오류: ${{error.message}}`;
+        result.textContent = DT.error + ": " + error.message;
         forgetJob(key);
       }} finally {{
         card.classList.remove("is-running");
@@ -3523,67 +3523,67 @@ async def dashboard(request: Request) -> HTMLResponse:
     function renderSemanticJob(job) {{
       const result = job?.result || {{}};
       const progress = result.progress || {{}};
-      const lines = [`상태: ${{phaseStateLabel((job?.status || "").toUpperCase()) || job?.status || "확인 중"}}`];
+      const lines = [`${{DT.l_status}}: ${{phaseStateLabel((job?.status || "").toUpperCase()) || job?.status || DT.checking}}`];
       if (job?.status === "queued" || job?.status === "running") {{
         if (progress.message) lines.push(progress.message);
-        if (progress.mode) lines.push(`방식: ${{progress.mode}}`);
-        if (progress.full_run) lines.push(`범위: 전체 사진첩`);
-        if (progress.chunk !== undefined) lines.push(`묶음: ${{progress.chunk}}`);
-        if (progress.pending !== undefined) lines.push(`대상: ${{progress.pending}}`);
-        if (progress.current !== undefined) lines.push(`처리: ${{progress.current}} / ${{progress.pending ?? progress.current}}`);
+        if (progress.mode) lines.push(`${{DT.l_mode}}: ${{progress.mode}}`);
+        if (progress.full_run) lines.push(`${{DT.l_scope}}: ${{DT.scope_all}}`);
+        if (progress.chunk !== undefined) lines.push(`${{DT.l_chunk}}: ${{progress.chunk}}`);
+        if (progress.pending !== undefined) lines.push(`${{DT.l_target}}: ${{progress.pending}}`);
+        if (progress.current !== undefined) lines.push(`${{DT.l_processing}}: ${{progress.current}} / ${{progress.pending ?? progress.current}}`);
         if (progress.succeeded !== undefined || progress.failed !== undefined) {{
-          lines.push(`완료: ${{progress.succeeded ?? 0}}, 실패: ${{progress.failed ?? 0}}`);
+          lines.push(`${{DT.l_done}}: ${{progress.succeeded ?? 0}}, ${{DT.l_failed}}: ${{progress.failed ?? 0}}`);
         }}
         if (progress.total_succeeded !== undefined || progress.total_failed !== undefined) {{
-          lines.push(`전체 완료: ${{progress.total_succeeded ?? 0}}, 실패: ${{progress.total_failed ?? 0}}`);
+          lines.push(`${{DT.l_total_done}}: ${{progress.total_succeeded ?? 0}}, ${{DT.l_failed}}: ${{progress.total_failed ?? 0}}`);
         }}
-        if (progress.embeddings_created !== undefined) lines.push(`이미지 AI: +${{progress.embeddings_created}}`);
+        if (progress.embeddings_created !== undefined) lines.push(`${{DT.l_image_ai}}: +${{progress.embeddings_created}}`);
         if (progress.auto_tag_files !== undefined || progress.auto_tag_values !== undefined) {{
-          lines.push(`자동 태그: ${{progress.auto_tag_files ?? 0}}개 사진, +${{progress.auto_tag_values ?? 0}}개`);
+          lines.push(DT.t_auto_tag_photos.replace("{{files}}", progress.auto_tag_files ?? 0).replace("{{values}}", progress.auto_tag_values ?? 0));
         }}
-        if (progress.search_documents_updated !== undefined) lines.push(`검색 색인: +${{progress.search_documents_updated}}`);
-        if (progress.faces_reanalyzed !== undefined) lines.push(`얼굴 분석: +${{progress.faces_reanalyzed}}`);
-        if (progress.face_analysis_available === false) lines.push(`얼굴 분석 모델이 준비되지 않았습니다`);
-        if (progress.clip_enabled === false) lines.push(`이미지 AI가 꺼져 있습니다`);
-        if (progress.total_embeddings_created !== undefined) lines.push(`전체 이미지 AI: +${{progress.total_embeddings_created}}`);
+        if (progress.search_documents_updated !== undefined) lines.push(`${{DT.l_search_index}}: +${{progress.search_documents_updated}}`);
+        if (progress.faces_reanalyzed !== undefined) lines.push(`${{DT.l_face_analyze}}: +${{progress.faces_reanalyzed}}`);
+        if (progress.face_analysis_available === false) lines.push(DT.face_model_not_ready);
+        if (progress.clip_enabled === false) lines.push(DT.image_ai_off);
+        if (progress.total_embeddings_created !== undefined) lines.push(`${{DT.l_total_image_ai}}: +${{progress.total_embeddings_created}}`);
         if (progress.total_auto_tag_files !== undefined || progress.total_auto_tag_values !== undefined) {{
-          lines.push(`전체 자동 태그: ${{progress.total_auto_tag_files ?? 0}}개 사진, +${{progress.total_auto_tag_values ?? 0}}개`);
+          lines.push(DT.t_total_auto_tag.replace("{{files}}", progress.total_auto_tag_files ?? 0).replace("{{values}}", progress.total_auto_tag_values ?? 0));
         }}
-        if (progress.total_search_documents_updated !== undefined) lines.push(`전체 검색 색인: +${{progress.total_search_documents_updated}}`);
-        if (progress.total_faces_reanalyzed !== undefined) lines.push(`전체 얼굴 분석: +${{progress.total_faces_reanalyzed}}`);
+        if (progress.total_search_documents_updated !== undefined) lines.push(`${{DT.l_total_search_index}}: +${{progress.total_search_documents_updated}}`);
+        if (progress.total_faces_reanalyzed !== undefined) lines.push(`${{DT.l_total_face_analyze}}: +${{progress.total_faces_reanalyzed}}`);
         const elapsed = formatElapsed(job?.started_at, job?.finished_at);
-        if (elapsed) lines.push(`소요 시간: ${{elapsed}}`);
+        if (elapsed) lines.push(`${{DT.l_elapsed}}: ${{elapsed}}`);
         return lines.join("\\n");
       }}
       const semDidWork = (result.embeddings_created || 0) + (result.auto_tag_values || 0)
         + (result.search_documents_updated || 0) + (result.faces_reanalyzed || 0);
       let semHeadline;
-      if (job?.status === "failed") semHeadline = "✗ 이미지 AI 분석에 실패했습니다";
-      else if (job?.status === "canceled" || job?.status === "cancelled") semHeadline = "■ 이미지 AI 분석을 취소했습니다";
+      if (job?.status === "failed") semHeadline = DT.sem_failed;
+      else if (job?.status === "canceled" || job?.status === "cancelled") semHeadline = DT.sem_canceled;
       else if ((result.pending ?? 0) === 0 || semDidWork === 0)
-        semHeadline = "✓ 이미 최신 상태 — 이번에 새로 처리할 항목이 없었어요 (0건)";
-      else semHeadline = `✓ 이미지 AI 분석 완료 — 이번에 ${{result.succeeded ?? 0}}개 처리`;
+        semHeadline = DT.sem_uptodate;
+      else semHeadline = DT.sem_done.replace("{{n}}", result.succeeded ?? 0);
       lines.unshift(semHeadline);
       if (progress.message) lines.push(progress.message);
       lines.push(
-        `대상: ${{result.pending ?? 0}}`,
-        `완료: ${{result.succeeded ?? 0}}`,
-        `실패: ${{result.failed ?? 0}}`,
+        `${{DT.l_target}}: ${{result.pending ?? 0}}`,
+        `${{DT.l_done}}: ${{result.succeeded ?? 0}}`,
+        `${{DT.l_failed}}: ${{result.failed ?? 0}}`,
       );
-      if (result.full_run) lines.push(`범위: 전체 사진첩`);
-      if (result.chunks !== undefined) lines.push(`묶음: ${{result.chunks}}`);
-      if (result.embeddings_created !== undefined) lines.push(`이미지 AI: +${{result.embeddings_created}}`);
+      if (result.full_run) lines.push(`${{DT.l_scope}}: ${{DT.scope_all}}`);
+      if (result.chunks !== undefined) lines.push(`${{DT.l_chunk}}: ${{result.chunks}}`);
+      if (result.embeddings_created !== undefined) lines.push(`${{DT.l_image_ai}}: +${{result.embeddings_created}}`);
       if (result.auto_tag_files !== undefined || result.auto_tag_values !== undefined) {{
-        lines.push(`자동 태그: ${{result.auto_tag_files ?? 0}}개 사진, +${{result.auto_tag_values ?? 0}}개`);
+        lines.push(DT.t_auto_tag_photos.replace("{{files}}", result.auto_tag_files ?? 0).replace("{{values}}", result.auto_tag_values ?? 0));
       }}
-      if (result.search_documents_updated !== undefined) lines.push(`검색 색인: +${{result.search_documents_updated}}`);
-      if (result.faces_reanalyzed !== undefined) lines.push(`얼굴 분석: +${{result.faces_reanalyzed}}`);
+      if (result.search_documents_updated !== undefined) lines.push(`${{DT.l_search_index}}: +${{result.search_documents_updated}}`);
+      if (result.faces_reanalyzed !== undefined) lines.push(`${{DT.l_face_analyze}}: +${{result.faces_reanalyzed}}`);
       const elapsed = formatElapsed(job?.started_at, job?.finished_at);
-      if (elapsed) lines.push(`소요 시간: ${{elapsed}}`);
+      if (elapsed) lines.push(`${{DT.l_elapsed}}: ${{elapsed}}`);
       const faceAvail = result.face_analysis_available;
-      if (faceAvail === false) lines.push(`얼굴 분석 모델이 준비되지 않았습니다`);
-      if (result.clip_enabled === false) lines.push(`이미지 AI가 꺼져 있습니다`);
-      if (job?.error_message) lines.push(`오류: ${{job.error_message}}`);
+      if (faceAvail === false) lines.push(DT.face_model_not_ready);
+      if (result.clip_enabled === false) lines.push(DT.image_ai_off);
+      if (job?.error_message) lines.push(`${{DT.l_error}}: ${{job.error_message}}`);
       lines.push(...coverageSummaryLines());
       return lines.join("\\n");
     }}
@@ -3646,18 +3646,18 @@ async def dashboard(request: Request) -> HTMLResponse:
       const label = _INTENT_LABELS[reason] || reason;
       const modeLabel = {{ "hybrid": DT.mode_auto, "ocr": DT.mode_text, "semantic": DT.mode_image }}[meta.effective_mode] || meta.effective_mode;
       const lines = [
-        `검색 방식: ${{modeLabel}} (${{label}})`,
+        `${{DT.l_search_mode}}: ${{modeLabel}} (${{label}})`,
       ];
-      if ((plan.person_terms || []).length) lines.push(`인물: ${{plan.person_terms.join(", ")}}`);
-      if ((plan.place_terms || []).length) lines.push(`장소: ${{plan.place_terms.join(", ")}}`);
-      if (plan.date_from) lines.push(`날짜: ${{plan.date_from}}${{plan.date_to ? " ~ " + plan.date_to : ""}}`);
-      if (meta.fallback) lines.push(`재검색: ${{_INTENT_LABELS[meta.fallback] || meta.fallback}}`);
-      if (meta.fuzzy_corrected_query) lines.push(`보정된 검색어: "${{meta.fuzzy_corrected_query}}"`);
+      if ((plan.person_terms || []).length) lines.push(`${{DT.l_person_terms}}: ${{plan.person_terms.join(", ")}}`);
+      if ((plan.place_terms || []).length) lines.push(`${{DT.l_place_terms}}: ${{plan.place_terms.join(", ")}}`);
+      if (plan.date_from) lines.push(`${{DT.l_date}}: ${{plan.date_from}}${{plan.date_to ? " ~ " + plan.date_to : ""}}`);
+      if (meta.fallback) lines.push(`${{DT.l_refallback}}: ${{_INTENT_LABELS[meta.fallback] || meta.fallback}}`);
+      if (meta.fuzzy_corrected_query) lines.push(`${{DT.l_corrected}}: "${{meta.fuzzy_corrected_query}}"`);
       if (Object.keys(meta.weight_overrides || {{}}).length) {{
         const w = meta.weight_overrides;
-        lines.push(`가중치 오버라이드: OCR=${{w.ocr ?? "—"}}  AI=${{w.clip ?? "—"}}  키워드=${{w.shadow ?? "—"}}`);
+        lines.push(`${{DT.l_weights}}: OCR=${{w.ocr ?? "—"}}  AI=${{w.clip ?? "—"}}  ${{DT.mode_text}}=${{w.shadow ?? "—"}}`);
       }}
-      lines.push("", "── 원시 데이터 ──");
+      lines.push("", DT.raw_data);
       lines.push(JSON.stringify(meta, null, 2));
       return lines.join("\\n");
     }}
@@ -3713,7 +3713,7 @@ async def dashboard(request: Request) -> HTMLResponse:
           ? `, failed checks ${{JSON.stringify(payload.summary.failed_checks)}}`
           : "";
         const passIcon = payload.failed === 0 ? "✓" : "✗";
-        benchmarkSummary.textContent = `${{passIcon}} ${{payload.passed}} / ${{payload.total}} 통과, ${{payload.failed}} 실패${{overrideText}}${{failedChecks}}`;
+        benchmarkSummary.textContent = DT.bench_summary.replace("{{icon}}", passIcon).replace("{{passed}}", payload.passed).replace("{{total}}", payload.total).replace("{{failed}}", payload.failed) + overrideText + failedChecks;
         benchmarkResult.textContent = JSON.stringify({{
           summary: payload.summary,
           cases: payload.cases,
@@ -3778,7 +3778,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         body2.innerHTML = body2.innerHTML.replace(/<button[^>]*>.*?<\\/button>/s, "");
         if (!body2.querySelector(".ai-spinner")) {{
           const lbl = document.getElementById("ai-dl-label");
-          if (!lbl) body2.insertAdjacentHTML("beforeend", '<span><span class="ai-spinner"></span> 준비 중...</span>');
+          if (!lbl) body2.insertAdjacentHTML("beforeend", '<span><span class="ai-spinner"></span> ' + DT.ai_preparing + '</span>');
         }}
       }} else if (stage === "ready") {{
         step2.className = "ai-step ai-step-done";
@@ -3805,8 +3805,8 @@ async def dashboard(request: Request) -> HTMLResponse:
         const offline = {str(settings.offline_mode).lower()};
         const retry = offline ? '<button class="btn-sm" id="ai-download-btn" onclick="aiPackPrepare(true)">로컬 캐시 확인</button>' : '<button class="btn-sm" onclick="aiPackPrepare()">다시 시도</button>';
         if (offline) {{
-          body2.innerHTML = `<strong>로컬 모델 캐시 사용</strong>
-            <span class="status-warn">마지막 시도: ${{errMsg}}</span>
+          body2.innerHTML = `<strong>${{DT.ai_use_cache}}</strong>
+            <span class="status-warn">${{DT.ai_last_try}}: ${{errMsg}}</span>
             ${{retry}}
             <p class="ai-step-desc">이 버튼은 새 모델을 받지 않습니다. 현재 캐시 폴더에 이미 있는 모델을 불러오기만 시도합니다.</p>
             <p class="ai-step-desc">캐시가 비어 있으면 한 번만 온라인 준비 모드로 재시작해서 모델을 받은 뒤, 다시 오프라인 모드로 돌아와야 합니다.</p>
