@@ -66,6 +66,24 @@ def t(key: str, locale: str = DEFAULT_LOCALE, /, **fmt: object) -> str:
         return template
 
 
+def subset(locale: str, prefix: str) -> dict[str, str]:
+    """주어진 접두사로 시작하는 키들을 {접두사 제거한 키: 번역값}으로 반환.
+
+    JS에 번역 묶음을 한 번에 주입할 때 쓴다(예: prefix='djs.' → const DT).
+    locale에 없는 키는 ko로 폴백. 반환 키는 JS 식별자로 쓰도록 '.' 없는
+    이름을 권장(djs.tag_object → DT.tag_object).
+    """
+    resolved = normalize_locale(locale)
+    base = _catalog(DEFAULT_LOCALE)
+    loc = _catalog(resolved)
+    out: dict[str, str] = {}
+    for key in base:
+        if key.startswith(prefix):
+            short = key[len(prefix):]
+            out[short] = loc.get(key, base[key])
+    return out
+
+
 def translator(locale: str):
     """요청 단위로 locale을 고정한 t의 부분적용 버전."""
     resolved = normalize_locale(locale)

@@ -23,6 +23,7 @@ from starlette.concurrency import run_in_threadpool
 from app.api.ai_pack import get_ai_pack_state
 from app.api.deps import require_state
 from app.api.i18n_web import render_lang_switcher, request_translator
+from app.core.i18n import subset as i18n_subset
 from app.api.performance_settings import resource_settings_snapshot
 from app.api.serializers import serialize_scheduler_snapshot
 from app.core.settings import AppSettings
@@ -670,6 +671,18 @@ async def dashboard(request: Request) -> HTMLResponse:
     locale, _ = request_translator(request)
     def _json_t(key: str, **fmt: object) -> str:
         return json.dumps(_(key, **fmt), ensure_ascii=False)
+    dashboard_js_strings = json.dumps(i18n_subset(locale, "djs."), ensure_ascii=False)
+    tag_type_i18n = json.dumps(i18n_subset(locale, "tt."), ensure_ascii=False)
+    intent_i18n = json.dumps(
+        {key: _(f"intent.{key}") for key in (
+            "fallback", "date_relaxed", "fuzzy_corrected", "auto-face", "auto-travel",
+            "auto-celebration", "auto-mixed", "auto-text-hint", "auto-screen-text",
+            "auto-code", "auto-word-match", "auto-phrase-code", "planner-ocr",
+            "planner-visual", "manual", "condition_visual_only", "condition_place_only",
+            "condition_person_only", "empty", "degenerate",
+        )},
+        ensure_ascii=False,
+    )
     scheduler = payload["scheduler"]
     semantic = payload["semantic"]
     performance = payload["performance"]
@@ -2294,6 +2307,8 @@ async def dashboard(request: Request) -> HTMLResponse:
     </section>
   </div>
   <script>
+    // 서버에서 현재 로케일로 미리 번역한 JS용 문자열 묶음(djs.* 카탈로그 전체).
+    const DT = {dashboard_js_strings};
     const scanForm = document.getElementById("phase1-scan-form");
     const scanResult = document.getElementById("phase1-scan-result");
     const scanCard = document.getElementById("phase1-card");
@@ -2362,17 +2377,17 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (resourceTorchThreadsValue) resourceTorchThreadsValue.textContent = String(torchThreads);
       if (resourceCpuProfile) {{
         const ratio = workers / Math.max(1, workerCap);
-        resourceCpuProfile.textContent = ratio >= 0.85 ? "최대" : ratio >= 0.6 ? "고성능" : ratio >= 0.35 ? "균형" : "절약";
+        resourceCpuProfile.textContent = ratio >= 0.85 ? DT.cpu_peak : ratio >= 0.6 ? DT.cpu_high : ratio >= 0.35 ? DT.cpu_balanced : DT.cpu_saver;
       }}
       if (resourceMemoryProfile) {{
         const score = Math.max(maintenanceBatch, manualBatch);
-        resourceMemoryProfile.textContent = score >= 1500 ? "높음" : score >= 700 ? "보통" : "낮음";
+        resourceMemoryProfile.textContent = score >= 1500 ? DT.mem_high : score >= 700 ? DT.mem_normal : DT.mem_low;
       }}
     }}
     async function saveResourceSettings() {{
       if (!resourceSaveButton) return;
       resourceSaveButton.disabled = true;
-      if (resourceResult) resourceResult.textContent = "저장 중...";
+      if (resourceResult) resourceResult.textContent = DT.saving;
       try {{
         const response = await fetch("/settings/performance", {{
           method: "POST",
@@ -2384,8 +2399,8 @@ async def dashboard(request: Request) -> HTMLResponse:
             semantic_manual_batch_size: Number(resourceManualBatch?.value || 1000),
           }}),
         }});
-        const data = await response.json().catch(() => ({{message: "설정 저장에 실패했습니다."}}));
-        if (!response.ok) throw new Error(data?.detail || data?.message || "설정 저장 실패");
+        const data = await response.json().catch(() => ({{message: DT.save_fail_msg}}));
+        if (!response.ok) throw new Error(data?.detail || data?.message || DT.save_fail);
         if (data?.settings) {{
           if (resourceWorkers && data.settings.asset_processing_workers) resourceWorkers.value = String(data.settings.asset_processing_workers);
           if (resourceTorchThreads && data.settings.torch_threads) resourceTorchThreads.value = String(data.settings.torch_threads);
@@ -2394,9 +2409,9 @@ async def dashboard(request: Request) -> HTMLResponse:
           performanceSnapshot.resource_settings = data.settings;
         }}
         updateResourceLabels();
-        if (resourceResult) resourceResult.textContent = data?.message || "저장 완료";
+        if (resourceResult) resourceResult.textContent = data?.message || DT.saved;
       }} catch (error) {{
-        if (resourceResult) resourceResult.textContent = error?.message || "설정 저장 실패";
+        if (resourceResult) resourceResult.textContent = error?.message || DT.save_fail;
       }} finally {{
         resourceSaveButton.disabled = false;
       }}
@@ -2501,12 +2516,12 @@ async def dashboard(request: Request) -> HTMLResponse:
       const reassignControls = item.face_id ? `
           <div class="person-preview-reassign">
             ${{faceCrop}}
-            <select class="reassign-select" data-face-id="${{item.face_id}}" aria-label="인물 이동 대상">${{reassignOptionsHtml()}}</select>
+            <select class="reassign-select" data-face-id="${{item.face_id}}" aria-label="${{DT.reassign_target_aria}}">${{reassignOptionsHtml()}}</select>
             <button type="button" class="reassign-btn" data-face-id="${{item.face_id}}" disabled>개별 이동</button>
           </div>` : "";
       return `
         <article class="person-preview-card"${{faceAttr}} data-file-id="${{escapeHtml(item.file_id)}}">
-          <input type="checkbox" class="preview-card-check" aria-label="선택">
+          <input type="checkbox" class="preview-card-check" aria-label="${{DT.select_aria}}">
           <div class="person-preview-thumb">${{thumb}}</div>
           ${{reassignControls}}
         </article>
@@ -2535,7 +2550,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         const select = personPreviewGrid.querySelector(`.reassign-select[data-face-id="${{faceId}}"]`);
         if (!faceId || !select?.value) return;
         reassignButton.disabled = true;
-        reassignButton.textContent = "처리 중";
+        reassignButton.textContent = DT.processing;
         const ok = await reassignFace(faceId, select.value);
         if (ok) {{
           const card = reassignButton.closest(".person-preview-card");
@@ -2544,8 +2559,8 @@ async def dashboard(request: Request) -> HTMLResponse:
           if (personPreviewSubtitle) personPreviewSubtitle.textContent = `${{remaining}}개 사진`;
           updateBulkBar();
         }} else {{
-          reassignButton.textContent = "실패";
-          window.setTimeout(() => {{ reassignButton.textContent = "개별 이동"; reassignButton.disabled = !select.value; }}, 900);
+          reassignButton.textContent = DT.failed;
+          window.setTimeout(() => {{ reassignButton.textContent = DT.move_one; reassignButton.disabled = !select.value; }}, 900);
         }}
         return;
       }}
@@ -2570,7 +2585,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       const faceIds = cards.map((c) => c.dataset.faceId).filter(Boolean);
       if (!faceIds.length) return;
       [previewBulkMove, previewBulkUnassign, previewBulkCancel].forEach((b) => {{ if (b) b.disabled = true; }});
-      if (previewBulkState) previewBulkState.textContent = "처리 중...";
+      if (previewBulkState) previewBulkState.textContent = DT.processing_dots;
       const ok = await bulkReassignFaces(faceIds.map(Number), personIdOrNull);
       if (previewBulkState) previewBulkState.textContent = `${{ok}}건 완료`;
       cards.forEach((card) => {{ card.style.opacity = "0.35"; card.style.pointerEvents = "none"; card.querySelector(".preview-card-check").checked = false; card.classList.remove("selected"); }});
@@ -2600,7 +2615,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       refreshReassignSelects();
       populateBulkTarget();
       if (personPreviewTitle) personPreviewTitle.textContent = label || `person-${{personId}}`;
-      if (personPreviewSubtitle) personPreviewSubtitle.textContent = "불러오는 중";
+      if (personPreviewSubtitle) personPreviewSubtitle.textContent = DT.loading;
       personPreviewGrid.innerHTML = '<div class="person-preview-empty">Loading</div>';
       const cached = personPreviewCache.get(String(personId));
       if (cached) {{
@@ -2614,7 +2629,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         personPreviewCache.set(String(personId), payload);
         renderPersonPreview(payload, label, personId);
       }} catch (error) {{
-        if (personPreviewSubtitle) personPreviewSubtitle.textContent = "오류";
+        if (personPreviewSubtitle) personPreviewSubtitle.textContent = DT.error;
         personPreviewGrid.innerHTML = '<div class="person-preview-empty">Failed to load preview.</div>';
       }}
     }}
@@ -2769,7 +2784,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (peopleMergeTarget) peopleMergeTarget.disabled = isBusy;
       if (peopleMergeButton) {{
         peopleMergeButton.disabled = isBusy;
-        peopleMergeButton.textContent = isBusy ? "병합 중" : "선택 병합";
+        peopleMergeButton.textContent = isBusy ? DT.merging : DT.merge_selected;
       }}
       document.querySelectorAll(".person-merge-checkbox, .person-row button, .person-row input").forEach((element) => {{
         element.disabled = isBusy;
@@ -2828,7 +2843,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (!window.confirm(`${{sourceIds.length}} person group(s) will be merged into ${{targetLabel}}. Continue?`)) return;
       localStorage.setItem(peopleManagerOpenStorageKey, "true");
       if (peopleManagerCard) peopleManagerCard.open = true;
-      if (peopleMergeState) peopleMergeState.textContent = "병합 중...";
+      if (peopleMergeState) peopleMergeState.textContent = DT.merging_dots;
       setPeopleMergeBusy(true);
       try {{
         const response = await fetch("/people/merge", {{
@@ -2837,10 +2852,10 @@ async def dashboard(request: Request) -> HTMLResponse:
           body: JSON.stringify({{target_person_id: targetId, source_person_ids: sourceIds}}),
         }});
         if (!response.ok) throw new Error(await response.text());
-        if (peopleMergeState) peopleMergeState.textContent = "병합 완료. 목록을 새로고침합니다...";
+        if (peopleMergeState) peopleMergeState.textContent = DT.merge_done;
         window.setTimeout(() => window.location.reload(), 350);
       }} catch (error) {{
-        if (peopleMergeState) peopleMergeState.textContent = "병합 실패";
+        if (peopleMergeState) peopleMergeState.textContent = DT.merge_failed;
         setPeopleMergeBusy(false);
       }}
     }});
@@ -2851,7 +2866,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     }}
     document.querySelectorAll(".person-row").forEach((form) => {{
       function extractErrorMessage(raw) {{
-        if (!raw) return "오류";
+        if (!raw) return DT.error;
         try {{
           const payload = JSON.parse(raw);
           if (typeof payload?.detail === "string" && payload.detail.trim()) return payload.detail.trim();
@@ -2861,7 +2876,7 @@ async def dashboard(request: Request) -> HTMLResponse:
           }}
         }} catch (_error) {{}}
         const text = String(raw).trim();
-        return text || "오류";
+        return text || DT.error;
       }}
       form.addEventListener("submit", async (event) => {{
         event.preventDefault();
@@ -2871,10 +2886,10 @@ async def dashboard(request: Request) -> HTMLResponse:
         const displayName = form.querySelector("input[name='display_name']").value.trim();
         const aliases = getAliasesFromForm(form);
         if (!displayName && aliases.length === 0) {{
-          if (state) state.textContent = "이름 필요";
+          if (state) state.textContent = DT.needs_name;
           return;
         }}
-        if (state) state.textContent = "저장 중";
+        if (state) state.textContent = DT.saving2;
         if (button) button.disabled = true;
         isPeopleSaveInProgress = true;
         pauseFaceSampleLoading();
@@ -2885,7 +2900,7 @@ async def dashboard(request: Request) -> HTMLResponse:
             body: JSON.stringify({{display_name: displayName, aliases}}),
           }});
           if (!response.ok) throw new Error(extractErrorMessage(await response.text()));
-          if (state) state.textContent = "저장됨";
+          if (state) state.textContent = DT.saved2;
           const payload = await response.json();
           const savedName = String(payload?.display_name || displayName).trim();
           const savedAliases = Array.isArray(payload?.aliases) ? payload.aliases.map((value) => String(value).trim()).filter(Boolean) : [];
@@ -2899,22 +2914,22 @@ async def dashboard(request: Request) -> HTMLResponse:
           const displayNameInput = form.querySelector("input[name='display_name']");
           if (displayNameInput) {{
             displayNameInput.value = isNamed ? savedName : "";
-            displayNameInput.placeholder = isNamed ? "이름 입력" : "대표 이름 입력";
+            displayNameInput.placeholder = isNamed ? DT.name_ph : DT.name_ph_unnamed;
           }}
           const aliasInput = form.querySelector("input[name='aliases']");
           if (aliasInput) {{
             aliasInput.value = savedAliases.join(", ");
           }}
           const title = form.querySelector(".person-title");
-          if (title) title.textContent = isNamed ? savedName : "이름 없음";
+          if (title) title.textContent = isNamed ? savedName : DT.unnamed;
           const titleBadge = form.querySelector(".person-status-badge");
           if (titleBadge) {{
-            titleBadge.textContent = isNamed ? "이름 있음" : "이름 필요";
+            titleBadge.textContent = isNamed ? DT.named : DT.needs_name;
             titleBadge.classList.toggle("named", isNamed);
             titleBadge.classList.toggle("unnamed", !isNamed);
           }}
           const helper = form.querySelector(".person-row-hint");
-          if (helper) helper.textContent = isNamed ? "검색에 쓸 이름과 애칭을 함께 관리합니다." : "대표 이름을 비워 두고 애칭만 적으면 첫 애칭이 대표 이름으로 저장됩니다.";
+          if (helper) helper.textContent = isNamed ? DT.hint_named : DT.hint_unnamed;
           const aliasChipsContainer = form.querySelector(".alias-chips-container");
           if (aliasChipsContainer) {{
             aliasChipsContainer.innerHTML = savedAliases.length
@@ -2924,12 +2939,12 @@ async def dashboard(request: Request) -> HTMLResponse:
           }}
           form.classList.toggle("has-aliases", savedAliases.length > 0);
           form.classList.toggle("unnamed", !isNamed);
-          if (button) button.textContent = isNamed ? "저장" : "이름 저장";
+          if (button) button.textContent = isNamed ? DT.save : DT.save_name;
           refreshPeopleCounts();
           peopleVisibleLimit = Math.max(peopleVisibleLimit, 24);
           applyPeopleFilterAndSort();
         }} catch (error) {{
-          if (state) state.textContent = error instanceof Error ? error.message : "오류";
+          if (state) state.textContent = error instanceof Error ? error.message : DT.error;
         }} finally {{
           isPeopleSaveInProgress = false;
           queueFaceSampleLoading();
@@ -2959,18 +2974,18 @@ async def dashboard(request: Request) -> HTMLResponse:
       }});
     }});
     function jobKindLabel(kind) {{
-      if (kind === "scan") return "사진 가져오기";
-      if (kind === "semantic_backfill" || kind === "semantic_maintenance") return "검색 개선";
-      return "사진첩 작업";
+      if (kind === "scan") return DT.job_scan;
+      if (kind === "semantic_backfill" || kind === "semantic_maintenance") return DT.job_improve;
+      return DT.job_generic;
     }}
     function jobWorkLabel(kind) {{
-      if (kind === "scan") return "사진 가져오기";
-      if (kind === "semantic_maintenance") return "검색 갱신";
+      if (kind === "scan") return DT.job_scan;
+      if (kind === "semantic_maintenance") return DT.job_refresh;
       if (kind === "semantic_backfill") return "AI 분석";
-      return "사진첩 작업";
+      return DT.job_generic;
     }}
     function syncAutoLabel(sched) {{
-      if (!sched?.sync_auto_enabled) return "꺼짐";
+      if (!sched?.sync_auto_enabled) return DT.off;
       const minutes = Math.max(1, Math.floor((sched.sync_interval_seconds || 0) / 60));
       return `켜짐 · ${{minutes}}분마다 확인`;
     }}
@@ -2997,7 +3012,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         if (progress.summary?.scanned !== undefined) {{
           return `발견 ${{progress.summary.scanned}}`;
         }}
-        return progress.stage || "작업 중";
+        return progress.stage || DT.working;
       }}
       const totalDone = progress.total_succeeded ?? progress.succeeded;
       const totalFailed = progress.total_failed ?? progress.failed;
@@ -3009,14 +3024,14 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (progress.current !== undefined) {{
         return `${{chunk}}${{progress.current}} / ${{progress.pending ?? progress.current}}`;
       }}
-      return progress.stage || progress.message || "작업 중";
+      return progress.stage || progress.message || DT.working;
     }}
     function detailedProgress(job) {{
       const progress = job?.result?.progress || {{}};
-      if (!job || !["queued", "running"].includes(job.status || "")) return "대기 중";
+      if (!job || !["queued", "running"].includes(job.status || "")) return DT.waiting;
       if (job.job_kind === "scan") {{
         if (progress.stage === "semantic_maintenance") {{
-          const parts = ["검색 분석 중"];
+          const parts = [DT.analyzing];
           if (progress.chunk !== undefined) parts.push(`묶음 ${{progress.chunk}}`);
           parts.push(`완료 ${{progress.total_succeeded ?? progress.succeeded ?? 0}}`);
           parts.push(`실패 ${{progress.total_failed ?? progress.failed ?? 0}}`);
@@ -3046,7 +3061,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         }}
         return `작업 중 · ${{progress.stage || progress.message || ""}}`;
       }}
-      const parts = ["검색 분석 중"];
+      const parts = [DT.analyzing];
       if (progress.chunk !== undefined) parts.push(`묶음 ${{progress.chunk}}`);
       if (progress.pending !== undefined || progress.current !== undefined) {{
         parts.push(`${{progress.current ?? 0}} / ${{progress.pending ?? progress.current ?? 0}}`);
@@ -3058,7 +3073,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       return parts.join(" · ");
     }}
     function phaseStateLabel(state) {{
-      return {{"RUNNING": "실행 중", "QUEUED": "대기열", "WAITING": "대기", "IDLE": "대기 중", "FAILED": "실패", "DONE": "완료", "COMPLETED": "완료", "SUCCEEDED": "완료", "CANCELED": "취소됨", "CANCELLED": "취소됨"}}[state] || state;
+      return {{"RUNNING": DT.st_running, "QUEUED": DT.st_queued, "WAITING": DT.st_waiting, "IDLE": DT.waiting, "FAILED": DT.st_failed, "DONE": DT.st_done, "COMPLETED": DT.st_done, "SUCCEEDED": DT.st_done, "CANCELED": DT.st_canceled, "CANCELLED": DT.st_canceled}}[state] || state;
     }}
     function setPhaseState(phase, state, running) {{
       const label = phaseStateLabel(state);
@@ -3136,11 +3151,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     }}
 
     // ── Detail popup ──────────────────────────────────────────────────────
-    const _TAG_TYPE_KO = {{
-      auto_object:"사물", auto_scene:"장면", auto_person:"인물", auto_screen:"화면",
-      place:"지역", place_detail:"세부 지역", location:"위치", geo:"좌표", geo_detail:"좌표 상세",
-      person:"사람",
-    }};
+    const _TAG_TYPE_KO = {tag_type_i18n};
     async function openDetailPopup(category, title) {{
       const overlay = document.getElementById("detail-overlay");
       const body = document.getElementById("detail-body");
@@ -3332,7 +3343,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       const processed = job?.result?.processed || {{}};
       const progress = job?.result?.progress || {{}};
       const lines = [`상태: ${{phaseStateLabel((job?.status || "").toUpperCase()) || job?.status || "확인 중"}}`];
-      if (retryOnly) lines.push("기존 오류 항목을 다시 처리하는 중입니다.");
+      if (retryOnly) lines.push(DT.retry_running);
       if (job?.status === "queued" || job?.status === "running") {{
         if (progress.message) lines.push(progress.message);
         if (progress.stage) lines.push(`단계: ${{progress.stage}}`);
@@ -3447,7 +3458,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         const response = await fetch(`/source-roots/browse?${{params.toString()}}`, {{ cache: "no-store" }});
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || `HTTP ${{response.status}}`);
-        if (sourcePickerPath) sourcePickerPath.textContent = payload.path || "바로가기";
+        if (sourcePickerPath) sourcePickerPath.textContent = payload.path || DT.shortcut;
         if (sourcePickerNote) sourcePickerNote.textContent = payload.note || "";
         if (sourcePickerUp) {{
           sourcePickerUp.disabled = !payload.parent;
@@ -3472,13 +3483,13 @@ async def dashboard(request: Request) -> HTMLResponse:
 
           const openButton = document.createElement("button");
           openButton.type = "button";
-          openButton.textContent = "열기";
+          openButton.textContent = DT.open;
           openButton.addEventListener("click", () => loadSourcePicker(entry.path));
 
           const selectButton = document.createElement("button");
           selectButton.type = "button";
           selectButton.className = "primary";
-          selectButton.textContent = "선택";
+          selectButton.textContent = DT.select_btn;
           selectButton.addEventListener("click", () => appendSourceRoot(entry.path));
 
           row.append(label, openButton, selectButton);
@@ -3494,7 +3505,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       result.classList.add("visible");
       card.classList.add("is-running");
       if (button) button.disabled = true;
-      result.textContent = "실행 중인 작업을 다시 연결합니다...";
+      result.textContent = DT.reconnecting;
       try {{
         const job = await pollJob(jobId, result, render);
         result.textContent = render(job);
@@ -3597,13 +3608,13 @@ async def dashboard(request: Request) -> HTMLResponse:
     phase1RetryButton?.addEventListener("click", async () => {{
       if (activeLibraryJob && ["queued", "running"].includes(activeLibraryJob.status || "")) {{
         scanResult.classList.add("visible");
-        scanResult.textContent = "다른 작업이 실행 중입니다. 끝난 뒤 다시 시도하세요.";
+        scanResult.textContent = DT.busy;
         return;
       }}
       scanResult.classList.add("visible");
       scanCard.classList.add("is-running");
       phase1RetryButton.disabled = true;
-      scanResult.textContent = "기존 오류 항목을 다시 처리합니다...";
+      scanResult.textContent = DT.retry_starting;
       activeLibraryJob = {{ job_kind: "scan", status: "queued", payload: {{ retry_errors_only: true }} }};
       updateLibraryJobGuards();
       try {{
@@ -3627,24 +3638,13 @@ async def dashboard(request: Request) -> HTMLResponse:
     }});
     resumeJob(phase1StorageKey, scanCard, phase1RetryButton, scanResult, renderScanJob);
 
-    const _INTENT_LABELS = {{
-      "fallback": "스마트 검색", "date_relaxed": "날짜 범위 확대",
-      "fuzzy_corrected": "유사어 보정", "auto-face": "얼굴·인물 검색",
-      "auto-travel": "여행 사진 검색", "auto-celebration": "행사 사진 검색",
-      "auto-mixed": "복합 검색", "auto-text-hint": "텍스트 검색",
-      "auto-screen-text": "화면·캡처 검색", "auto-code": "문서·코드 검색",
-      "auto-word-match": "단어 일치", "auto-phrase-code": "구문 일치",
-      "planner-ocr": "텍스트 추출", "planner-visual": "이미지 검색",
-      "manual": "직접 지정", "condition_visual_only": "키워드 검색",
-      "condition_place_only": "장소 검색", "condition_person_only": "인물 검색",
-      "empty": "검색어 없음", "degenerate": "검색 불가",
-    }};
+    const _INTENT_LABELS = {intent_i18n};
     function renderSearchMeta(meta) {{
       if (!meta) return "(no result)";
       const plan = meta.query_plan || {{}};
       const reason = meta.intent_reason || "";
       const label = _INTENT_LABELS[reason] || reason;
-      const modeLabel = {{ "hybrid": "자동", "ocr": "텍스트", "semantic": "이미지 AI" }}[meta.effective_mode] || meta.effective_mode;
+      const modeLabel = {{ "hybrid": DT.mode_auto, "ocr": DT.mode_text, "semantic": DT.mode_image }}[meta.effective_mode] || meta.effective_mode;
       const lines = [
         `검색 방식: ${{modeLabel}} (${{label}})`,
       ];
@@ -3728,7 +3728,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       const text = document.getElementById(id)?.textContent || "";
       navigator.clipboard.writeText(text).then(() => {{
         btn.textContent = "Copied!";
-        setTimeout(() => btn.textContent = "복사", 1500);
+        setTimeout(() => btn.textContent = DT.copy, 1500);
       }});
     }}
 
@@ -3736,14 +3736,14 @@ async def dashboard(request: Request) -> HTMLResponse:
 
     function aiPackPrepare(loadCached = false) {{
       const btn = document.getElementById("ai-download-btn");
-      if (btn) {{ btn.disabled = true; btn.textContent = "시작 중..."; }}
+      if (btn) {{ btn.disabled = true; btn.textContent = DT.starting_dots; }}
       const url = loadCached ? "/ai-pack/prepare?load_cached=true" : "/ai-pack/prepare";
       fetch(url, {{ method: "POST" }})
         .then(r => r.json())
         .then(d => {{
           if (d.ok) {{ startAiPoll(); }} else {{ alert(d.message); if (btn) btn.disabled = false; }}
         }})
-        .catch(e => {{ alert("오류: " + e.message); if (btn) btn.disabled = false; }});
+        .catch(e => {{ alert(DT.error + ": " + e.message); if (btn) btn.disabled = false; }});
     }}
 
     function startAiPoll() {{
@@ -3801,7 +3801,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         }}
       }} else if (stage === "error") {{
         step2.className = "ai-step ai-step-active";
-        const errMsg = data.model_error || "알 수 없는 오류";
+        const errMsg = data.model_error || DT.unknown_error;
         const offline = {str(settings.offline_mode).lower()};
         const retry = offline ? '<button class="btn-sm" id="ai-download-btn" onclick="aiPackPrepare(true)">로컬 캐시 확인</button>' : '<button class="btn-sm" onclick="aiPackPrepare()">다시 시도</button>';
         if (offline) {{
