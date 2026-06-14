@@ -2444,11 +2444,11 @@ async def dashboard(request: Request) -> HTMLResponse:
       const options = reassignTargets()
         .map((person) => `<option value="${{person.id}}" ${{String(person.id) === String(selectedValue) ? "selected" : ""}}>${{escapeHtml(personOptionLabel(person))}}</option>`)
         .join("");
-      return `<option value="">— 이동 —</option>${{options}}<option value="unassign" ${{selectedValue === "unassign" ? "selected" : ""}}>배정 해제</option>`;
+      return `<option value="">— ${{DT.move_dash}} —</option>${{options}}<option value="unassign" ${{selectedValue === "unassign" ? "selected" : ""}}>${{DT.unassign_opt}}</option>`;
     }}
     function refreshReassignSelects() {{
       const targets = reassignTargets();
-      if (personReassignCount) personReassignCount.textContent = `${{targets.length}}명`;
+      if (personReassignCount) personReassignCount.textContent = `${{targets.length}}${{DT.u_people}}`;
       personPreviewGrid?.querySelectorAll(".reassign-select").forEach((select) => {{
         const previous = select.value;
         select.innerHTML = reassignOptionsHtml(previous);
@@ -2468,7 +2468,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     function renderPersonPreview(payload, fallbackLabel, fallbackId) {{
       const items = payload?.items || [];
       if (personPreviewTitle) personPreviewTitle.textContent = payload?.person?.display_name || fallbackLabel || `person-${{fallbackId}}`;
-      if (personPreviewSubtitle) personPreviewSubtitle.textContent = `${{items.length}}개 사진`;
+      if (personPreviewSubtitle) personPreviewSubtitle.textContent = `${{items.length}}${{DT.u_photos}}`;
       personPreviewGrid.innerHTML = items.length
         ? items.map(personPreviewCard).join("")
         : '<div class="person-preview-empty">No active photos for this person.</div>';
@@ -2482,7 +2482,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       const selected = selectedPreviewCards();
       if (!previewBulkBar) return;
       previewBulkBar.hidden = selected.length === 0;
-      if (previewBulkCount) previewBulkCount.textContent = `${{selected.length}}장 선택`;
+      if (previewBulkCount) previewBulkCount.textContent = `${{selected.length}}${{DT.u_selected}}`;
       if (previewBulkMove) previewBulkMove.disabled = !previewBulkTarget?.value;
       if (previewBulkState) previewBulkState.textContent = "";
     }}
@@ -2491,7 +2491,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       const options = reassignTargets()
         .map((p) => `<option value="${{p.id}}">${{escapeHtml(personOptionLabel(p))}}</option>`)
         .join("");
-      previewBulkTarget.innerHTML = `<option value="">— 인물 선택 —</option>${{options}}`;
+      previewBulkTarget.innerHTML = `<option value="">— ${{DT.pick_person}} —</option>${{options}}`;
     }}
     async function bulkReassignFaces(faceIds, personIdOrNull) {{
       const results = await Promise.allSettled(
@@ -2556,7 +2556,7 @@ async def dashboard(request: Request) -> HTMLResponse:
           const card = reassignButton.closest(".person-preview-card");
           card?.remove();
           const remaining = personPreviewGrid?.querySelectorAll(".person-preview-card").length || 0;
-          if (personPreviewSubtitle) personPreviewSubtitle.textContent = `${{remaining}}개 사진`;
+          if (personPreviewSubtitle) personPreviewSubtitle.textContent = `${{remaining}}${{DT.u_photos}}`;
           updateBulkBar();
         }} else {{
           reassignButton.textContent = DT.failed;
@@ -2587,11 +2587,11 @@ async def dashboard(request: Request) -> HTMLResponse:
       [previewBulkMove, previewBulkUnassign, previewBulkCancel].forEach((b) => {{ if (b) b.disabled = true; }});
       if (previewBulkState) previewBulkState.textContent = DT.processing_dots;
       const ok = await bulkReassignFaces(faceIds.map(Number), personIdOrNull);
-      if (previewBulkState) previewBulkState.textContent = `${{ok}}건 완료`;
+      if (previewBulkState) previewBulkState.textContent = `${{ok}}${{DT.u_done_count}}`;
       cards.forEach((card) => {{ card.style.opacity = "0.35"; card.style.pointerEvents = "none"; card.querySelector(".preview-card-check").checked = false; card.classList.remove("selected"); }});
       if (personPreviewSubtitle) {{
         const remaining = (personPreviewGrid?.querySelectorAll(".person-preview-card:not([style*='opacity'])").length || 0);
-        personPreviewSubtitle.textContent = `${{remaining}}개 사진`;
+        personPreviewSubtitle.textContent = `${{remaining}}${{DT.u_photos}}`;
       }}
       updateBulkBar();
       [previewBulkMove, previewBulkUnassign, previewBulkCancel].forEach((b) => {{ if (b) b.disabled = false; }});
@@ -2734,9 +2734,9 @@ async def dashboard(request: Request) -> HTMLResponse:
       peopleStats.total = total;
       peopleStats.named = named;
       peopleStats.unnamed = unnamed;
-      if (peopleTotalCount) peopleTotalCount.textContent = `${{total}}명`;
-      if (peopleNamedCount) peopleNamedCount.textContent = `${{named}}명`;
-      if (peopleUnnamedCount) peopleUnnamedCount.textContent = `${{unnamed}}명`;
+      if (peopleTotalCount) peopleTotalCount.textContent = `${{total}}${{DT.u_people}}`;
+      if (peopleNamedCount) peopleNamedCount.textContent = `${{named}}${{DT.u_people}}`;
+      if (peopleUnnamedCount) peopleUnnamedCount.textContent = `${{unnamed}}${{DT.u_people}}`;
     }}
     function applyPeopleFilterAndSort() {{
       const query = (peopleFilter?.value || "").trim().toLowerCase();
@@ -2765,11 +2765,11 @@ async def dashboard(request: Request) -> HTMLResponse:
       const visible = matched.slice(0, peopleVisibleLimit).length;
       if (peopleVisibleCount) {{
         const total = Number(peopleStats?.total || rows.length);
-        peopleVisibleCount.textContent = `${{visible}} / ${{matched.length}}명 표시 · 전체 ${{total}}명`;
+        peopleVisibleCount.textContent = DT.visible_count.replace("{{visible}}", visible).replace("{{matched}}", matched.length).replace("{{total}}", total);
       }}
       if (peopleLoadMore) {{
         peopleLoadMore.hidden = matched.length <= peopleVisibleLimit;
-        peopleLoadMore.textContent = `더 보기 (${{Math.max(0, matched.length - peopleVisibleLimit)}}명 남음)`;
+        peopleLoadMore.textContent = DT.load_more_n.replace("{{n}}", Math.max(0, matched.length - peopleVisibleLimit));
       }}
       updatePeopleModeButtons();
       updatePeopleMergeBar();
@@ -2804,7 +2804,7 @@ async def dashboard(request: Request) -> HTMLResponse:
       const rows = selectedPersonRows();
       if (!peopleMergeBar || !peopleMergeTarget) return;
       peopleMergeBar.hidden = rows.length < 2;
-      if (peopleMergeCount) peopleMergeCount.textContent = `${{rows.length}}개 선택`;
+      if (peopleMergeCount) peopleMergeCount.textContent = `${{rows.length}}${{DT.u_pick_selected}}`;
       const previous = peopleMergeTarget.value;
       peopleMergeTarget.replaceChildren(...rows.map((row) => {{
         const personId = row.dataset.personId || "";
@@ -2987,7 +2987,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     function syncAutoLabel(sched) {{
       if (!sched?.sync_auto_enabled) return DT.off;
       const minutes = Math.max(1, Math.floor((sched.sync_interval_seconds || 0) / 60));
-      return `켜짐 · ${{minutes}}분마다 확인`;
+      return DT.sync_on.replace("{{min}}", minutes);
     }}
     function activeJobId(job) {{
       return job?.job_id || job?.id || "";
@@ -2997,29 +2997,29 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (!job || !["queued", "running"].includes(job.status || "")) return "—";
       if (job?.job_kind === "scan") {{
         if (progress.stage === "semantic_maintenance") {{
-          return `분석 완료 ${{progress.total_succeeded ?? progress.succeeded ?? 0}} · 검색 ${{progress.total_search_documents_updated ?? progress.search_documents_updated ?? 0}}`;
+          return DT.dp_done_search.replace("{{done}}", progress.total_succeeded ?? progress.succeeded ?? 0).replace("{{search}}", progress.total_search_documents_updated ?? progress.search_documents_updated ?? 0);
         }}
         if (progress.stage === "discovering_files") {{
-          return `파일 탐색 중 · ${{progress.files_found ?? 0}}개 발견`;
+          return DT.dp_scanning_found.replace("{{found}}", progress.files_found ?? 0);
         }}
         if (progress.scan?.total !== undefined) {{
           const pct = progress.scan.total > 0 ? Math.round((progress.scan.current ?? 0) / progress.scan.total * 100) : 0;
-          return `${{progress.scan.current ?? 0}} / ${{progress.scan.total}} (${{pct}}%) · 발견 ${{progress.files_found ?? progress.scan.total}}`;
+          return DT.dp_scan_progress.replace("{{cur}}", progress.scan.current ?? 0).replace("{{total}}", progress.scan.total).replace("{{pct}}", pct).replace("{{found}}", progress.files_found ?? progress.scan.total);
         }}
         if (progress.processed?.total !== undefined) {{
           return `${{progress.processed.current ?? 0}} / ${{progress.processed.total}}`;
         }}
         if (progress.summary?.scanned !== undefined) {{
-          return `발견 ${{progress.summary.scanned}}`;
+          return DT.dp_found.replace("{{n}}", progress.summary.scanned);
         }}
         return progress.stage || DT.working;
       }}
       const totalDone = progress.total_succeeded ?? progress.succeeded;
       const totalFailed = progress.total_failed ?? progress.failed;
       const indexed = progress.total_search_documents_updated ?? progress.search_documents_updated;
-      const chunk = progress.chunk !== undefined ? `묶음 ${{progress.chunk}} · ` : "";
+      const chunk = progress.chunk !== undefined ? DT.dp_chunk_prefix.replace("{{chunk}}", progress.chunk) : "";
       if (totalDone !== undefined || indexed !== undefined) {{
-        return `${{chunk}}완료 ${{totalDone ?? 0}} · 실패 ${{totalFailed ?? 0}} · 검색 ${{indexed ?? 0}}`;
+        return DT.dp_done_fail_search.replace("{{chunk}}", chunk).replace("{{done}}", totalDone ?? 0).replace("{{fail}}", totalFailed ?? 0).replace("{{idx}}", indexed ?? 0);
       }}
       if (progress.current !== undefined) {{
         return `${{chunk}}${{progress.current}} / ${{progress.pending ?? progress.current}}`;
@@ -3032,11 +3032,11 @@ async def dashboard(request: Request) -> HTMLResponse:
       if (job.job_kind === "scan") {{
         if (progress.stage === "semantic_maintenance") {{
           const parts = [DT.analyzing];
-          if (progress.chunk !== undefined) parts.push(`묶음 ${{progress.chunk}}`);
-          parts.push(`완료 ${{progress.total_succeeded ?? progress.succeeded ?? 0}}`);
-          parts.push(`실패 ${{progress.total_failed ?? progress.failed ?? 0}}`);
-          parts.push(`검색 +${{progress.total_search_documents_updated ?? progress.search_documents_updated ?? 0}}`);
-          parts.push(`태그 +${{progress.total_auto_tag_values ?? progress.auto_tag_values ?? 0}}`);
+          if (progress.chunk !== undefined) parts.push(DT.dp_chunk.replace("{{n}}", progress.chunk));
+          parts.push(DT.dp_done.replace("{{n}}", progress.total_succeeded ?? progress.succeeded ?? 0));
+          parts.push(DT.dp_fail.replace("{{n}}", progress.total_failed ?? progress.failed ?? 0));
+          parts.push(DT.dp_search.replace("{{n}}", progress.total_search_documents_updated ?? progress.search_documents_updated ?? 0));
+          parts.push(DT.dp_tag.replace("{{n}}", progress.total_auto_tag_values ?? progress.auto_tag_values ?? 0));
           return parts.join(" · ");
         }}
         if (progress.stage === "discovering_files") {{
@@ -3044,32 +3044,32 @@ async def dashboard(request: Request) -> HTMLResponse:
           const rootTotal = progress.source_root_total ?? "?";
           const found = progress.files_found ?? 0;
           const msg = progress.message || "";
-          return `파일 탐색 중 (${{rootIdx}}/${{rootTotal}} 경로) · ${{found}}개 발견 · ${{msg}}`;
+          return DT.dp_scanning_roots.replace("{{idx}}", rootIdx).replace("{{total}}", rootTotal).replace("{{found}}", found).replace("{{msg}}", msg);
         }}
         const scan = progress.scan || {{}};
         if (scan.total !== undefined) {{
           const pct = scan.total > 0 ? Math.round((scan.current ?? 0) / scan.total * 100) : 0;
-          return `동기화 중 · ${{scan.current ?? 0}} / ${{scan.total}} (${{pct}}%) · 발견 ${{progress.files_found ?? scan.total}} · 실패 ${{scan.failed ?? 0}}`;
+          return DT.dp_syncing.replace("{{cur}}", scan.current ?? 0).replace("{{total}}", scan.total).replace("{{pct}}", pct).replace("{{found}}", progress.files_found ?? scan.total).replace("{{fail}}", scan.failed ?? 0);
         }}
         const processed = progress.processed || {{}};
         if (processed.total !== undefined) {{
-          return `처리 중 · ${{processed.current ?? 0}} / ${{processed.total}} · 완료 ${{processed.succeeded ?? 0}} · 실패 ${{processed.failed ?? 0}}`;
+          return DT.dp_processing.replace("{{cur}}", processed.current ?? 0).replace("{{total}}", processed.total).replace("{{done}}", processed.succeeded ?? 0).replace("{{fail}}", processed.failed ?? 0);
         }}
         const summary = progress.summary || {{}};
         if (summary.scanned !== undefined) {{
-          return `스캔 중 · 발견 ${{summary.scanned}} · 실패 ${{summary.failed ?? 0}}`;
+          return DT.dp_scanning_summary.replace("{{scanned}}", summary.scanned).replace("{{fail}}", summary.failed ?? 0);
         }}
-        return `작업 중 · ${{progress.stage || progress.message || ""}}`;
+        return DT.dp_working_stage.replace("{{stage}}", progress.stage || progress.message || "");
       }}
       const parts = [DT.analyzing];
-      if (progress.chunk !== undefined) parts.push(`묶음 ${{progress.chunk}}`);
+      if (progress.chunk !== undefined) parts.push(DT.dp_chunk.replace("{{n}}", progress.chunk));
       if (progress.pending !== undefined || progress.current !== undefined) {{
         parts.push(`${{progress.current ?? 0}} / ${{progress.pending ?? progress.current ?? 0}}`);
       }}
-      parts.push(`완료 ${{progress.total_succeeded ?? progress.succeeded ?? 0}}`);
-      parts.push(`실패 ${{progress.total_failed ?? progress.failed ?? 0}}`);
+      parts.push(DT.dp_done.replace("{{n}}", progress.total_succeeded ?? progress.succeeded ?? 0));
+      parts.push(DT.dp_fail.replace("{{n}}", progress.total_failed ?? progress.failed ?? 0));
       parts.push(`AI +${{progress.total_embeddings_created ?? progress.embeddings_created ?? 0}}`);
-      parts.push(`태그 +${{progress.total_auto_tag_values ?? progress.auto_tag_values ?? 0}}`);
+      parts.push(DT.dp_tag.replace("{{n}}", progress.total_auto_tag_values ?? progress.auto_tag_values ?? 0));
       return parts.join(" · ");
     }}
     function phaseStateLabel(state) {{
@@ -3097,21 +3097,21 @@ async def dashboard(request: Request) -> HTMLResponse:
       const perf = payload?.performance || {{}};
       const cov = payload?.semantic?.coverage || {{}};
       const pending = Number(cov.remaining_for_clip ?? perf?.ai_summary?.remaining_clip ?? 0);
-      let label = "완료";
+      let label = DT.complete;
       let className = "metric-state-badge is-idle";
-      let note = "현재 이미지 AI 대상 사진은 모두 완료됐습니다.";
+      let note = DT.ai_all_done;
       if (phase2OwnsActive) {{
-        label = "진행 중";
+        label = DT.in_progress;
         className = "metric-state-badge is-running";
-        note = detailedProgress(activeLibraryJob) || "이미지 AI 분석 중";
+        note = detailedProgress(activeLibraryJob) || DT.ai_analyzing;
       }} else if (phase1OwnsActive) {{
-        label = "대기";
+        label = DT.st_waiting;
         className = "metric-state-badge is-waiting";
-        note = "동기화가 끝나면 이미지 AI가 이어서 처리됩니다.";
+        note = DT.ai_after_sync;
       }} else if (pending > 0) {{
-        label = "진행 중";
+        label = DT.in_progress;
         className = "metric-state-badge is-running";
-        note = `남은 ${{pending}}개는 다음 동기화에서 이어서 처리됩니다. 다음 확인: ${{sched.next_sync_run_at || "자동 주기"}}`;
+        note = DT.ai_remaining.replace("{{pending}}", pending).replace("{{next}}", sched.next_sync_run_at || DT.auto_cycle);
       }}
       const badge = document.getElementById("m-ai-state");
       if (badge) {{
