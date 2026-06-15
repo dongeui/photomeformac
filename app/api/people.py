@@ -329,8 +329,12 @@ def _render_people_manage_html(people: list[dict], request: Request) -> str:
 def people_manage_page(request: Request) -> HTMLResponse:
     database = require_state(request, "database")
     active = MediaFile.status.not_in(("missing", "replaced", "excluded"))
+    # 경량 임베딩의 과분할로 생기는 노이즈 클러스터를 거른다: 사진 10장 이하
+    # '그리고' 얼굴 10회 이하인 무명 그룹은 숨긴다(둘 중 하나라도 넘으면 표시).
+    # 사용자가 이름 붙인 인물은 적게 나와도 항상 표시한다.
     candidate = or_(
-        func.count(Face.id).filter(active) >= 5,
+        func.count(func.distinct(Face.file_id)).filter(active) > 10,
+        func.count(Face.id).filter(active) > 10,
         Person.display_name.not_like("person-%"),
     )
     people: list[dict] = []
