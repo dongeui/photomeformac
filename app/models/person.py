@@ -23,3 +23,26 @@ class Person(Base):
     )
 
     faces: Mapped[list["Face"]] = relationship(back_populates="person", foreign_keys="Face.person_id")
+
+    def search_labels(self) -> list[str]:
+        """All searchable labels for this person: display name + every alias.
+
+        Single source of truth so freshly-ingested photos (tagged by the
+        pipeline) carry the exact same person tags that the bulk label sync
+        (`_sync_person_search_labels`) writes. Whitespace-normalised and
+        deduped case-insensitively, display name first, internal person-XXXX
+        aliases included (search uses them for lookup).
+        """
+        labels: list[str] = []
+        seen: set[str] = set()
+        raw = self.aliases_json if isinstance(self.aliases_json, list) else []
+        for value in (self.display_name, *raw):
+            label = " ".join(str(value or "").strip().split())
+            if not label:
+                continue
+            folded = label.casefold()
+            if folded in seen:
+                continue
+            seen.add(folded)
+            labels.append(label)
+        return labels

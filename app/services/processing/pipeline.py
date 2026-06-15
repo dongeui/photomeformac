@@ -43,6 +43,11 @@ from app.services.fingerprint.service import FingerprintService
 from app.services.metadata.service import MetadataService
 from app.services.ocr import OCRResult, extract as extract_ocr
 from app.services.processing.incremental import IncrementalScanService, IncrementalScanSummary
+from app.services.processing.person_labels import (
+    find_files_needing_person_label_sync,
+    person_label_values,
+    reconcile_file_person_tags,
+)
 from app.services.processing.registry import MediaCatalog, build_derived_asset_location
 from app.services.scanner.service import DirMtimeCache, ScannerService
 from app.services.semantic import SemanticCatalog
@@ -1046,7 +1051,57 @@ class ProcessingPipeline:
                 aggregate["stopped_reason"] = "cancelled"
                 break
 
+        aggregate["person_labels"] = self._reconcile_person_label_tags(job)
         return aggregate
+
+    def _reconcile_person_label_tags(
+        self,
+        job: ProcessingJob | None = None,
+        *,
+        max_files: int = 5000,
+        chunk_size: int = 200,
+    ) -> dict[str, Any]:
+        """Back-fill person tags so already-indexed files carry the full label
+        set (display name + aliases) of the people they contain.
+
+        New files are tagged correctly on ingest by ``_person_tags_for_faces``;
+        this heals files indexed before alias-tagging existed (and any later
+        drift after a rename/merge). Bounded per sync via ``max_files`` so a
+        large first run can span a few syncs — it is idempotent and finds
+        nothing once drained.
+        """
+        scanned = synced = 0
+        try:
+            with self._session_factory() as session:
+                candidates = find_files_needing_person_label_sync(session, limit=max_files)
+            scanned = len(candidates)
+            for start in range(0, len(candidates), chunk_size):
+                chunk = candidates[start : start + chunk_size]
+                with self._session_factory() as session:
+                    semantic_catalog = SemanticCatalog(session)
+                    for file_id in chunk:
+                        try:
+                            if reconcile_file_person_tags(
+                                session,
+                                file_id=file_id,
+                                search_version=self._semantic_search_version,
+                                semantic_catalog=semantic_catalog,
+                            ):
+                                synced += 1
+                        except Exception as exc:  # noqa: BLE001 - keep draining the batch
+                            logger.warning(
+                                "person label reconcile failed",
+                                extra={"file_id": file_id, "error": str(exc)},
+                            )
+                    session.commit()
+        except Exception:
+            logger.exception("person label reconciliation pass failed")
+        if synced > 0:
+            clear_query_cache()
+            from app.services.search.vocab import TagVocabularyCache
+
+            TagVocabularyCache.invalidate()
+        return {"scanned": scanned, "synced": synced, "has_more": scanned >= max_files}
 
     def _process_pending_media(
         self,
@@ -2035,10 +2090,13 @@ class ProcessingPipeline:
         if not person_ids:
             return []
         people = session.scalars(select(Person).where(Person.id.in_(person_ids))).all()
+        # display_name뿐 아니라 별칭까지 모두 태깅한다. 이래야 새로 들어온
+        # 사진의 person 태그가 일괄 라벨 동기화(_sync_person_search_labels)와
+        # 동일해져, "정이한"+별칭("이한") 같은 require_all_persons 검색에서도
+        # 최신 사진이 누락되지 않는다. 라벨 산출은 person_labels와 공유한다.
         return [
-            MediaTagInput(tag_type="person", tag_value=person.display_name)
-            for person in people
-            if person.display_name
+            MediaTagInput(tag_type="person", tag_value=label)
+            for label in person_label_values(people)
         ]
 
     def _materialize_faces(self, session: Session, media_file: MediaFile) -> FaceMaterializationResult | None:
