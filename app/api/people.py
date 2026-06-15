@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
-from sqlalchemy import bindparam, delete, func, or_, select, text, update
+from sqlalchemy import and_, bindparam, delete, func, not_, or_, select, text, update
 
 from app.api.deps import require_state
 from app.api.i18n_web import render_lang_switcher, request_translator
@@ -126,6 +126,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvet
 .search{margin-left:auto;width:240px;max-width:45%;padding:7px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:.85rem;}
 .list{max-width:900px;margin:0 auto;padding:14px 16px 30px;}
 .hint{font-size:.84rem;color:var(--muted);padding:6px 4px 14px;}
+.minor-row{text-align:center;padding:18px 4px 4px;}
+.minor-toggle{display:inline-block;font-size:.86rem;color:var(--muted);text-decoration:none;padding:8px 16px;border:1px solid var(--line);border-radius:999px;background:var(--panel);}
+.minor-toggle:hover{color:var(--text);border-color:var(--muted);}
 .row{display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:10px;transition:background .12s,border-color .12s,box-shadow .12s;}
 .row.unnamed{opacity:.85;}
 .row.merge-on{border-color:var(--accent);background:var(--accent-soft);}
@@ -217,7 +220,13 @@ async function unmergePerson(targetId,sourceId){
 """
 
 
-def _render_people_manage_html(people: list[dict], request: Request) -> str:
+def _render_people_manage_html(
+    people: list[dict],
+    request: Request,
+    *,
+    minor_count: int = 0,
+    include_minor: bool = False,
+) -> str:
     locale, _ = request_translator(request)
     if not people:
         rows_html = f'<div class="empty">{_("people.empty")}</div>'
@@ -273,6 +282,17 @@ def _render_people_manage_html(people: list[dict], request: Request) -> str:
         rows_html = "".join(parts)
 
     total = len(people)
+    if include_minor:
+        minor_toggle_html = (
+            f'<a class="minor-toggle" href="/people/manage">{_("people.show_major")}</a>'
+        )
+    elif minor_count > 0:
+        minor_toggle_html = (
+            f'<a class="minor-toggle" href="/people/manage?include_minor=1">'
+            f'{_("people.show_minor", n=minor_count)}</a>'
+        )
+    else:
+        minor_toggle_html = ""
     people_t = {
         "mergeCountZero": _("people.merge_count_zero"),
         "mergeCountN": _("people.merge_count_n"),
@@ -311,6 +331,7 @@ def _render_people_manage_html(people: list[dict], request: Request) -> str:
       <div class="list">
         <div class="hint">{_("people.hint")}</div>
         {rows_html}
+        <div class="minor-row">{minor_toggle_html}</div>
       </div>
       <div class="footer">
         <span id="merge-count">{_("people.merge_count_zero")}</span>
@@ -326,17 +347,22 @@ def _render_people_manage_html(people: list[dict], request: Request) -> str:
 
 
 @router.get("/manage", response_class=HTMLResponse)
-def people_manage_page(request: Request) -> HTMLResponse:
+def people_manage_page(
+    request: Request,
+    include_minor: bool = Query(False),
+) -> HTMLResponse:
     database = require_state(request, "database")
     active = MediaFile.status.not_in(("missing", "replaced", "excluded"))
     # 경량 임베딩의 과분할로 생기는 노이즈 클러스터를 거른다: 사진 10장 이하
     # '그리고' 얼굴 10회 이하인 무명 그룹은 숨긴다(둘 중 하나라도 넘으면 표시).
-    # 사용자가 이름 붙인 인물은 적게 나와도 항상 표시한다.
+    # 사용자가 이름 붙인 인물은 적게 나와도 항상 표시한다. include_minor면 게이트를
+    # 풀어 숨겨둔 '기타 얼굴'까지 보여준다(숫자 옵션 대신 '더 보기' 토글로 노출).
     candidate = or_(
         func.count(func.distinct(Face.file_id)).filter(active) > 10,
         func.count(Face.id).filter(active) > 10,
         Person.display_name.not_like("person-%"),
     )
+    has_faces = func.count(Face.id).filter(active) > 0
     people: list[dict] = []
     with database.session_factory() as session:
         rows = session.execute(
@@ -349,10 +375,25 @@ def people_manage_page(request: Request) -> HTMLResponse:
             .outerjoin(MediaFile, MediaFile.file_id == Face.file_id)
             .where(Person.merged_into_id.is_(None))
             .group_by(Person.id)
-            .having(candidate)
+            .having(has_faces if include_minor else candidate)
             .order_by(func.count(Face.id).filter(active).desc(), Person.id.asc())
             .limit(1000)
         ).all()
+        # 게이트에 걸려 숨겨진 '기타 얼굴' 인물 수(얼굴은 있으나 노이즈 기준).
+        minor_count = int(
+            session.scalar(
+                select(func.count()).select_from(
+                    select(Person.id)
+                    .outerjoin(Face, Face.person_id == Person.id)
+                    .outerjoin(MediaFile, MediaFile.file_id == Face.file_id)
+                    .where(Person.merged_into_id.is_(None))
+                    .group_by(Person.id)
+                    .having(and_(has_faces, not_(candidate)))
+                    .subquery()
+                )
+            )
+            or 0
+        )
         # 각 target에 병합돼 숨겨진 source 목록 (배치 조회로 N+1 회피)
         merged_rows = session.scalars(
             select(Person).where(Person.merged_into_id.isnot(None))
@@ -392,7 +433,11 @@ def people_manage_page(request: Request) -> HTMLResponse:
                     "merged_sources": merged_by_target.get(int(person.id), []),
                 }
             )
-    return HTMLResponse(_render_people_manage_html(people, request))
+    return HTMLResponse(
+        _render_people_manage_html(
+            people, request, minor_count=minor_count, include_minor=include_minor
+        )
+    )
 
 
 @router.get("/{person_id}", response_model=PersonResponse)

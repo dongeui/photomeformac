@@ -64,6 +64,8 @@
   "people.header_sub": "Name recurring faces and add nicknames · {total} people",
   "people.search_placeholder": "Search names & nicknames",
   "people.hint": "Tap a face or count to see that person's photos. Select similar groups to merge them.",
+  "people.show_minor": "Show {n} more minor faces",
+  "people.show_major": "Show main people only",
   "people.empty": "No face groups to show yet.<br>You can name them here once image AI analysis finishes.",
   "people.badge_named": "Named",
   "people.badge_unnamed": "Needs name",
