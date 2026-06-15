@@ -25,6 +25,7 @@ from app.models.tag import Tag
 from app.services.search import HybridSearchService
 from app.services.search.backend import SqlAlchemyHybridSearchBackend
 from app.services.search.hybrid import FeedbackReranker
+from app.services.scanner.service import _path_exists
 
 
 router = APIRouter(tags=["gallery"])
@@ -206,6 +207,18 @@ def gallery_page(
     current_url = request.url.path
     if request.url.query:
         current_url += f"?{request.url.query}"
+    # 원본 저장소(외장하드·NAS)가 지금 연결돼 있는지 루트 단위로 1회만 확인한다.
+    # 분리돼 있으면 썸네일은 그대로 보이되 다운로드만 비활성화한다(스캐너와 동일
+    # 기준 _path_exists). 같은 루트는 캐시해 페이지당 stat 몇 번으로 끝낸다.
+    _root_online: dict[str, bool] = {}
+
+    def _original_offline(root: str | None) -> bool:
+        if not root:
+            return False
+        if root not in _root_online:
+            _root_online[root] = _path_exists(Path(root))
+        return not _root_online[root]
+
     cards = [
         _render_card(
             media_file=item,
@@ -214,6 +227,7 @@ def gallery_page(
             annotation=annotation_map.get(item.file_id),
             index=index,
             next_url=f"{current_url}#card-{item.file_id}",
+            original_offline=_original_offline(item.source_root),
         )
         for index, item in enumerate(items)
     ]
@@ -894,6 +908,10 @@ def gallery_page(
     .lightbox-download:hover, .lightbox-close:hover {{
       background: rgba(255, 255, 255, 0.26);
     }}
+    .lightbox-download.disabled {{
+      opacity: 0.4;
+      cursor: not-allowed;
+    }}
     .lightbox-meta {{
       width: min(900px, 92vw);
       margin-top: 10px;
@@ -1526,6 +1544,7 @@ def _render_card(
     annotation: MediaAnnotation | None,
     index: int,
     next_url: str,
+    original_offline: bool = False,
 ) -> str:
     eager = index < 6
     loading_attr = "eager" if eager else "lazy"
@@ -1541,6 +1560,15 @@ def _render_card(
     title = _display_title(media_file, annotation)
     preview_id = f"preview-{asset.id}" if asset is not None else ""
     thumb_href = f"#{preview_id}" if asset is not None else "#gallery"
+    # 원본 저장소가 분리돼 있으면 다운로드 버튼을 비활성화한다(뱃지 없이 disabled
+    # 상태로만 표시). 연결돼 있으면 정상 링크 — 클릭 시 원본이 그새 빠졌으면
+    # 다운로드 엔드포인트가 "원본 다운로드 불가" 안내를 띄운다.
+    download_html = (
+        '<span class="lightbox-download disabled" aria-disabled="true" '
+        'title="원본 미연결 — 저장소를 연결하세요">↓ 원본</span>'
+        if original_offline
+        else f'<a class="lightbox-download" href="/media/{escape(media_file.file_id)}/download" download="{escape(media_file.filename)}" title="원본 다운로드">↓ 원본</a>'
+    )
     lightbox_html = (
         f"""
       <div id="{preview_id}" class="lightbox" aria-label="{escape(title)} 미리보기">
@@ -1551,7 +1579,7 @@ def _render_card(
             <div class="lightbox-row">
               <span class="lightbox-title">{escape(title)}</span>
               <div class="lightbox-actions">
-                <a class="lightbox-download" href="/media/{escape(media_file.file_id)}/download" download="{escape(media_file.filename)}" title="원본 다운로드">↓ 원본</a>
+                {download_html}
                 <a class="lightbox-close" href="#gallery">닫기</a>
               </div>
             </div>
