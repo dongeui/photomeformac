@@ -44,7 +44,6 @@ enum Localized {
             "사진첩 열기": "Open Photos",
             "사진 폴더 선택": "Choose photo folder",
             "설정 열기": "Open settings",
-            "Trove 다시 시작": "Restart Trove",
             "로그인 시 자동 시작": "Launch at login",
             "종료": "Quit",
             "취소": "Cancel",

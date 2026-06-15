@@ -114,15 +114,15 @@ struct MenuBarContent: View {
 
         Divider()
 
-        // 동기화는 자동으로 돈다(시작 직후 + 주기 + 폴더 변경/재시작). 수동 '지금
-        // 동기화' 버튼은 없앴다 — 시작 직후 '실행 중'과 자동 동기화 시작 사이에
-        // 잠깐 활성화됐다 비활성화되는 혼선의 주범이었고, 자동 경로와 중복이다.
+        // 동기화는 자동으로 돈다(시작 직후 + 주기 + 폴더 변경/NAS 재연결). 수동 '지금
+        // 동기화'·'다시 시작' 버튼은 없앴다 — 자동 경로와 중복이고, 시작 직후 '실행 중'과
+        // 자동 동기화 시작 사이에 잠깐 활성↔비활성으로 깜빡이는 혼선의 주범이었다.
+        // 재시작이 필요하면 '종료' 후 다시 켜면 된다(켜질 때 백엔드가 자동 기동).
         //
-        // 폴더 변경·재시작은 백엔드를 내려 진행 중 동기화를 끊으므로, 전환 중
-        // (isBusy=시작/중지)이나 동기화 중에는 같은 기준으로 잠근다. 단 첫 실행
-        // (state=.stopped, 폴더 없음)에선 폴더 선택이 열려 있어야 하므로 isRunning을
-        // 요구하지 않는다. 백엔드가 먹통이면 healthLoop이 state=.error + 잡 nil로
-        // 만들어 둘 다 다시 활성화된다 — 복구 탈출구 유지.
+        // 폴더 변경은 백엔드를 내려 진행 중 동기화를 끊으므로, 전환 중(isBusy=시작/중지)
+        // 이나 동기화 중에는 잠근다. 단 첫 실행(state=.stopped, 폴더 없음)에선 폴더 선택이
+        // 열려 있어야 하므로 isRunning을 요구하지 않는다 — 오류 상태에서도 폴더 재선택이
+        // 곧 백엔드 재기동으로 이어져 복구 탈출구가 된다.
         Button(Localized.s("사진 폴더 선택")) {
             backend.choosePhotoFolder()
         }
@@ -131,10 +131,6 @@ struct MenuBarContent: View {
             backend.openDashboard()
         }
         .disabled(!backend.isRunning)
-        Button(Localized.s("Trove 다시 시작")) {
-            backend.restart()
-        }
-        .disabled(backend.isBusy || backend.hasActiveLibraryJob)
 
         Divider()
 
