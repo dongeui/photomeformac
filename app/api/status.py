@@ -22,7 +22,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.ai_pack import get_ai_pack_state
 from app.api.deps import require_state
-from app.api.i18n_web import render_lang_switcher, request_translator
+from app.api.i18n_web import render_lang_switcher, request_locale, request_translator
 from app.core.i18n import subset as i18n_subset
 from app.api.performance_settings import resource_settings_snapshot
 from app.api.serializers import serialize_scheduler_snapshot
@@ -55,13 +55,14 @@ async def browse_source_roots(request: Request, path: Optional[str] = None) -> d
     """
     settings: AppSettings = require_state(request, "settings")
     database = require_state(request, "database")
+    _locale, _ = request_translator(request)
     if path:
         target = Path(path).expanduser()
     else:
         return {
             "path": None,
             "parent": None,
-            "entries": _source_root_shortcuts(settings, database),
+            "entries": _source_root_shortcuts(settings, database, _),
             "note": _source_browser_note(),
         }
 
@@ -158,7 +159,7 @@ def _preferred_input_source_roots(
     return display_configured
 
 
-def _source_root_shortcuts(settings: AppSettings, database: Any) -> list[dict[str, Any]]:
+def _source_root_shortcuts(settings: AppSettings, database: Any, _) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     seen: set[str] = set()
     for candidate in _source_browser_roots(settings, database):
@@ -172,7 +173,7 @@ def _source_root_shortcuts(settings: AppSettings, database: Any) -> list[dict[st
         seen.add(key)
         entries.append(
             {
-                "name": _source_shortcut_name(resolved),
+                "name": _source_shortcut_name(resolved, _),
                 "path": key,
                 "kind": "shortcut",
                 "selectable": True,
@@ -211,13 +212,13 @@ def _is_allowed_source_browser_path(settings: AppSettings, database: Any, path: 
     return False
 
 
-def _source_shortcut_name(path: Path) -> str:
+def _source_shortcut_name(path: Path, _) -> str:
     if str(path) == "/Volumes":
-        return "Finder 저장장치 · NAS/외장하드/USB"
+        return _("det.sc_volumes")
     if str(path) == "/Users":
-        return "Mac 사용자 폴더 · Desktop/Pictures/Photos"
+        return _("det.sc_users")
     if str(path) == "/photos":
-        return "Docker 내부 사진 폴더 · /photos"
+        return _("det.sc_photos")
     return path.name or str(path)
 
 
@@ -229,63 +230,52 @@ def _deployment_label() -> str:
     return "Docker container" if _is_docker_runtime() else "Native local process"
 
 
-def _source_root_guidance(settings: AppSettings) -> str:
+def _source_root_guidance(settings: AppSettings, _) -> str:
     if _is_docker_runtime():
         if settings.source_root_host is not None and settings.source_root_mount is not None:
-            return (
-                "도커 실행이어도 파인더 경로를 그대로 입력하면 됩니다. NAS, 외장하드, USB, 로컬 폴더를 모두 받을 수 있고, "
-                "Trove가 필요하면 해당 경로를 컨테이너 마운트 경로로 자동 변환합니다."
-            )
-        return (
-            "도커 실행이어도 파인더 경로를 그대로 입력하면 됩니다. NAS, 외장하드, USB, 로컬 폴더는 /Volumes 와 /Users 마운트로 바로 읽고, "
-            "별도 source mount는 host 원본 경로와 컨테이너 마운트 경로 설정으로 자동 변환할 수 있습니다."
-        )
-    return (
-        "맥 로컬 실행에서는 파인더에서 보이는 일반 경로를 사용할 수 있습니다. NAS 공유는 보통 /Volumes 아래에 표시됩니다."
-    )
+            return _("dash.guide_docker_mount")
+        return _("dash.guide_docker")
+    return _("dash.guide_local")
 
 
-def _sync_auto_label(scheduler: dict[str, Any]) -> str:
+def _sync_auto_label(scheduler: dict[str, Any], _) -> str:
     if not scheduler.get("sync_auto_enabled"):
-        return "꺼짐"
+        return _("djs.off")
     interval_seconds = int(scheduler.get("sync_interval_seconds") or 0)
     minutes = max(1, interval_seconds // 60)
-    return f"켜짐 · {minutes}분마다 확인"
+    return _("djs.sync_on", min=minutes)
 
 
-def _phase_state_label(value: str) -> str:
+def _phase_state_label(value: str, _) -> str:
     return {
-        "RUNNING": "실행 중",
-        "WAITING": "대기",
-        "IDLE": "대기 중",
+        "RUNNING": _("djs.st_running"),
+        "WAITING": _("djs.st_waiting"),
+        "IDLE": _("djs.waiting"),
     }.get(value, value)
 
 
-def _dashboard_job_progress(job: dict[str, Any] | None) -> str:
+def _dashboard_job_progress(job: dict[str, Any] | None, _) -> str:
     if not job:
-        return "대기 중"
+        return _("djs.waiting")
     result = job.get("result") or {}
     progress = result.get("progress") or {}
     kind = str(job.get("job_kind") or "")
-    status_name = str(job.get("status") or "unknown")
 
     if kind == "scan":
         scan = progress.get("scan") or {}
         if scan.get("total") is not None:
-            return (
-                f"스캔 중 · {scan.get('current', 0)} / {scan.get('total')} · "
-                f"발견 {progress.get('files_found', scan.get('total'))} · 실패 {scan.get('failed', 0)}"
-            )
+            _total = scan.get("total") or 0
+            _pct = round((scan.get("current", 0) / _total) * 100) if _total else 0
+            return _("djs.dp_syncing", cur=scan.get("current", 0), total=scan.get("total"),
+                     pct=_pct, found=progress.get("files_found", scan.get("total")), fail=scan.get("failed", 0))
         processed = progress.get("processed") or {}
         if processed.get("total") is not None:
-            return (
-                f"처리 중 · {processed.get('current', 0)} / {processed.get('total')} · "
-                f"완료 {processed.get('succeeded', 0)} · 실패 {processed.get('failed', 0)}"
-            )
+            return _("djs.dp_processing", cur=processed.get("current", 0), total=processed.get("total"),
+                     done=processed.get("succeeded", 0), fail=processed.get("failed", 0))
         summary = progress.get("summary") or {}
         if summary.get("scanned") is not None:
-            return f"스캔 중 · 발견 {summary.get('scanned')} · 실패 {summary.get('failed', 0)}"
-        return f"처리 중 · {progress.get('stage') or progress.get('message') or '작업 중'}"
+            return _("djs.dp_scanning_summary", scanned=summary.get("scanned"), fail=summary.get("failed", 0))
+        return _("djs.dp_working_stage", stage=progress.get("stage") or progress.get("message") or "")
 
     chunk = progress.get("chunk")
     pending = progress.get("pending")
@@ -294,15 +284,15 @@ def _dashboard_job_progress(job: dict[str, Any] | None) -> str:
     total_failed = progress.get("total_failed", progress.get("failed", 0))
     total_embeddings = progress.get("total_embeddings_created", progress.get("embeddings_created", 0))
     total_tags = progress.get("total_auto_tag_values", progress.get("auto_tag_values", 0))
-    parts = ["검색 분석 중"]
+    parts = [_("djs.analyzing")]
     if chunk is not None:
-        parts.append(f"묶음 {chunk}")
+        parts.append(_("djs.dp_chunk", n=chunk))
     if pending is not None or current is not None:
         parts.append(f"{current or 0} / {pending or current or 0}")
-    parts.append(f"완료 {total_done}")
-    parts.append(f"실패 {total_failed}")
+    parts.append(_("djs.dp_done", n=total_done))
+    parts.append(_("djs.dp_fail", n=total_failed))
     parts.append(f"AI +{total_embeddings}")
-    parts.append(f"태그 +{total_tags}")
+    parts.append(_("djs.dp_tag", n=total_tags))
     return " · ".join(parts)
 
 
@@ -586,7 +576,7 @@ def _people_manager_summary(total_count: int, named_count: int, _) -> str:
     return _("pplm.summary", count=count, named=named)
 
 
-def _catalog_breakdown(status_counts: dict[str, int]) -> dict[str, Any]:
+def _catalog_breakdown(status_counts: dict[str, int], _) -> dict[str, Any]:
     counts = {str(status): int(count or 0) for status, count in (status_counts or {}).items()}
     hidden_statuses = {"excluded", "missing", "replaced"}
     not_applicable = sum(counts.get(status, 0) for status in hidden_statuses)
@@ -604,15 +594,13 @@ def _catalog_breakdown(status_counts: dict[str, int]) -> dict[str, Any]:
         "scheduled": scheduled,
         "not_applicable": not_applicable,
         "error": error,
-        "summary_text": (
-            f"1. 토탈 {total}개 · 2. 완료 {completed}개 · 3. 예정 {scheduled}개 · 4. 미해당 {not_applicable}개 · 5. 오류 {error}개"
-        ),
+        "summary_text": _("dsum.cat_summary", total=total, completed=completed, scheduled=scheduled, na=not_applicable, err=error),
         "notes": [
-            "토탈: 현재 처리 대상 사진만 집계합니다. 미해당(missing/replaced/excluded)은 별도로 분리합니다.",
-            "완료: 썸네일 또는 분석까지 끝나서 사진첩에서 바로 쓸 수 있는 파일입니다.",
-            "예정: 스캔/메타데이터까지만 끝나서 다음 처리(썸네일·기본 분석)가 남아 있는 파일입니다.",
-            "미해당: 원본이 현재 없거나(missing), 다른 파일로 대체됐거나(replaced), 현재 제품 범위에서 제외된 파일(excluded)입니다.",
-            "오류: 지난 파일 처리에서 실패해서 '오류 항목만 재처리' 대상이 된 파일입니다.",
+            _("dsum.cat_note1"),
+            _("dsum.cat_note2"),
+            _("dsum.cat_note3"),
+            _("dsum.cat_note4"),
+            _("dsum.cat_note5"),
         ],
     }
 
@@ -625,28 +613,23 @@ def _ai_summary(
     completed_videos: int,
     total_images: int,
     semantic_job_errors: int,
+    _,
 ) -> dict[str, Any]:
     remaining_clip = max(0, eligible_media - clip_embeddings)
     not_applicable = max(0, total_images - eligible_media)
     completed_without_ai = max(0, completed_images - clip_embeddings)
     error = max(0, semantic_job_errors)
-    notes = [
-        "이미지 AI는 사진 검색·자동분류에 쓰는 CLIP 임베딩 상태를 뜻합니다.",
-        "이미지 AI 완료 수는 현재 CLIP 임베딩 버전까지 생성된 사진만 셉니다.",
-        "파일 완료는 사진첩에서 볼 수 있는 상태이고, 이미지 AI 완료는 CLIP 임베딩까지 준비된 상태라 두 숫자는 다를 수 있습니다.",
-    ]
+    notes = [_("dsum.ai_note1"), _("dsum.ai_note2"), _("dsum.ai_note3")]
     if completed_without_ai:
-        notes.append(
-            f"완료 사진 중 {completed_without_ai}개는 썸네일/기본 처리는 끝났지만 이미지 AI 임베딩은 아직 남아 있습니다."
-        )
+        notes.append(_("dsum.ai_note_without_ai", n=completed_without_ai))
     if not_applicable:
-        notes.append(f"{not_applicable}개는 아직 파일 처리가 끝나지 않았거나 원본 없음/제외 상태라 이미지 AI 대상에서 빠져 있습니다.")
+        notes.append(_("dsum.ai_note_na", n=not_applicable))
     if error:
-        notes.append(f"이미지 AI 작업 오류 기록이 {error}개 있습니다. 파일 오류와 별도로 semantic maintenance 작업 실패를 뜻합니다.")
+        notes.append(_("dsum.ai_note_err", n=error))
     if remaining_clip:
-        notes.append(f"현재 이미지 AI 대상 {eligible_media}개 중 {clip_embeddings}개만 완료됐고, {remaining_clip}개가 남아 있습니다.")
+        notes.append(_("dsum.ai_note_remaining", eligible=eligible_media, clip=clip_embeddings, remaining=remaining_clip))
     else:
-        notes.append("현재 이미지 AI 대상 사진은 모두 임베딩까지 완료된 상태입니다.")
+        notes.append(_("dsum.ai_note_done"))
     return {
         "eligible_media": eligible_media,
         "clip_embeddings": clip_embeddings,
@@ -655,11 +638,8 @@ def _ai_summary(
         "remaining_clip": remaining_clip,
         "not_applicable": not_applicable,
         "error": error,
-        "summary_text": (
-            f"1. 대상 {eligible_media}개 · 2. 완료 {clip_embeddings}개 · 3. 예정 {remaining_clip}개 · "
-            f"4. 미해당 {not_applicable}개 · 5. 오류 {error}개"
-        ),
-        "note_text": f"대상 {eligible_media}개 · 완료 {clip_embeddings}개 · 예정 {remaining_clip}개",
+        "summary_text": _("dsum.ai_summary", eligible=eligible_media, clip=clip_embeddings, remaining=remaining_clip, na=not_applicable, err=error),
+        "note_text": _("dsum.ai_note_text", eligible=eligible_media, clip=clip_embeddings, remaining=remaining_clip),
         "notes": notes,
     }
 
@@ -701,7 +681,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         if display_known_source_roots
         else '<span class="muted">No cataloged source roots yet</span>'
     )
-    source_root_guidance = _source_root_guidance(settings)
+    source_root_guidance = _source_root_guidance(settings, _)
     active_library_job_json = json.dumps(jobs.get("active_library_job"), default=str)
     active_job = jobs.get("active_library_job")
     active_kind = str((active_job or {}).get("job_kind") or "")
@@ -720,38 +700,36 @@ async def dashboard(request: Request) -> HTMLResponse:
     phase2_cancel_display = "" if phase2_active else "display:none"
     phase1_live_class = "live-panel is-running" if phase1_active else "live-panel"
     phase2_live_class = "live-panel is-running" if phase2_active else ("live-panel is-waiting" if phase1_active else "live-panel")
-    phase1_state_label = _phase_state_label(phase1_state_text)
-    phase2_state_label = _phase_state_label(phase2_state_text)
-    phase1_live_text = _dashboard_job_progress(active_job) if phase1_active else "대기 중"
+    phase1_state_label = _phase_state_label(phase1_state_text, _)
+    phase2_state_label = _phase_state_label(phase2_state_text, _)
+    phase1_live_text = _dashboard_job_progress(active_job, _) if phase1_active else _("djs.waiting")
     phase2_live_text = (
-        _dashboard_job_progress(active_job)
+        _dashboard_job_progress(active_job, _)
         if phase2_active
-        else ("사진 가져오기가 끝날 때까지 대기 중" if phase1_active else "대기 중")
+        else (_("dash.waiting_for_scan") if phase1_active else _("djs.waiting"))
     )
-    sync_auto_label = _sync_auto_label(payload["scheduler"])
+    sync_auto_label = _sync_auto_label(payload["scheduler"], _)
     semantic_coverage = semantic["coverage"]
     # 단일 소스: coverage가 캐노니컬이다. ai_summary.remaining_clip은 같은
     # 카운트에서 파생된 표시용 사본이라 폴백으로 섞어 읽지 않는다.
     ai_pending_count = int(semantic_coverage.get("remaining_for_clip") or 0)
     if phase2_active:
-        ai_metric_state_label = "진행 중"
+        ai_metric_state_label = _("djs.in_progress")
         ai_metric_state_class = "metric-state-badge is-running"
-        ai_metric_state_detail = str(phase2_live_text or "이미지 AI 분석 중")
+        ai_metric_state_detail = str(phase2_live_text or _("djs.ai_analyzing"))
     elif phase1_active:
-        ai_metric_state_label = "대기"
+        ai_metric_state_label = _("djs.st_waiting")
         ai_metric_state_class = "metric-state-badge is-waiting"
-        ai_metric_state_detail = "동기화가 끝나면 이미지 AI가 이어서 처리됩니다."
+        ai_metric_state_detail = _("djs.ai_after_sync")
     elif ai_pending_count:
-        ai_metric_state_label = "진행 중"
+        ai_metric_state_label = _("djs.in_progress")
         ai_metric_state_class = "metric-state-badge is-running"
-        next_ai_run = scheduler.get("next_sync_run_at") or "자동 주기"
-        ai_metric_state_detail = (
-            f"남은 {ai_pending_count}개는 다음 동기화에서 이어서 처리됩니다. 다음 확인: {next_ai_run}"
-        )
+        next_ai_run = scheduler.get("next_sync_run_at") or _("djs.auto_cycle")
+        ai_metric_state_detail = _("djs.ai_remaining", pending=ai_pending_count, next=next_ai_run)
     else:
-        ai_metric_state_label = "완료"
+        ai_metric_state_label = _("djs.complete")
         ai_metric_state_class = "metric-state-badge is-idle"
-        ai_metric_state_detail = "현재 이미지 AI 대상 사진은 모두 완료됐습니다."
+        ai_metric_state_detail = _("djs.ai_all_done")
     clip_dependency = next(
         (item for item in security["local_dependencies"] if item["name"] == "CLIP semantic embedding"),
         {"state": "unknown", "detail": "", "dependencies": {}, "cache": {}},
@@ -3845,11 +3823,17 @@ async def status(request: Request) -> dict[str, Any]:
     이벤트 루프가 막히고 GIL 경쟁으로 백그라운드 분석 작업까지 기어간다.
     """
     state = request.app.state
-    cached = getattr(state, "status_payload_cache", None)
+    # payload에 요청 로케일로 번역된 요약 문자열이 들어가므로 로케일별로 캐시한다.
+    locale = request_locale(request)
+    cache = getattr(state, "status_payload_cache", None)
+    if not isinstance(cache, dict):
+        cache = {}
+        state.status_payload_cache = cache
+    cached = cache.get(locale)
     if cached is not None and time.monotonic() < cached[1]:
         return cached[0]
     payload = await run_in_threadpool(_compute_status_payload, request)
-    state.status_payload_cache = (payload, time.monotonic() + _STATUS_CACHE_TTL_SECONDS)
+    cache[locale] = (payload, time.monotonic() + _STATUS_CACHE_TTL_SECONDS)
     return payload
 
 
@@ -3858,6 +3842,7 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
     database = require_state(request, "database")
     pipeline = require_state(request, "pipeline")
     scheduler = require_state(request, "scheduler")
+    _locale, _ = request_translator(request)  # payload 내 한국어 요약을 요청 로케일로
 
     with database.session_factory() as session:
         catalog = MediaCatalog(session)
@@ -4153,7 +4138,7 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
             )
         search_ready_percent = round((search_documents_current / eligible_media_count) * 100, 1) if eligible_media_count else 0
         clip_coverage_percent = round((clip_embeddings_current / eligible_media_count) * 100, 1) if eligible_media_count else 0
-        catalog_breakdown = _catalog_breakdown(pipeline_snapshot["media"].get("status_counts") or {})
+        catalog_breakdown = _catalog_breakdown(pipeline_snapshot["media"].get("status_counts") or {}, _)
         resource_settings = resource_settings_snapshot(settings, pipeline)
         ai_summary = _ai_summary(
             eligible_media=eligible_media_count,
@@ -4162,6 +4147,7 @@ def _compute_status_payload(request: Request) -> dict[str, Any]:
             completed_videos=completed_videos,
             total_images=total_images,
             semantic_job_errors=semantic_job_errors,
+            _=_,
         )
         known_source_roots = [
             str(row[0])
@@ -4292,6 +4278,7 @@ async def status_detail(category: str, request: Request) -> dict[str, Any]:
     if category not in {"files", "tags", "places", "people", "ai"}:
         raise HTTPException(status_code=404, detail="unknown category")
     payload = await status(request)
+    _locale, _ = request_translator(request)
     catalog = payload.get("catalog") or {}
     performance = payload.get("performance") or {}
     database = require_state(request, "database")
@@ -4303,11 +4290,11 @@ async def status_detail(category: str, request: Request) -> dict[str, Any]:
     if category == "files":
         breakdown = catalog.get("breakdown") or {}
         summary = [
-            {"label": "1. 토탈", "count": breakdown.get("total", 0), "sublabel": "현재 처리 대상 사진만 집계"},
-            {"label": "2. 완료", "count": breakdown.get("completed", 0), "sublabel": "thumb_done + analysis_done"},
-            {"label": "3. 예정", "count": breakdown.get("scheduled", 0), "sublabel": "metadata_done 등 다음 처리 대기"},
-            {"label": "4. 미해당", "count": breakdown.get("not_applicable", 0), "sublabel": "missing + replaced + excluded"},
-            {"label": "5. 오류", "count": breakdown.get("error", 0), "sublabel": "error 상태"},
+            {"label": _("det.f1"), "count": breakdown.get("total", 0), "sublabel": _("det.f1s")},
+            {"label": _("det.n2"), "count": breakdown.get("completed", 0), "sublabel": "thumb_done + analysis_done"},
+            {"label": _("det.n3"), "count": breakdown.get("scheduled", 0), "sublabel": _("det.f3s")},
+            {"label": _("det.n4"), "count": breakdown.get("not_applicable", 0), "sublabel": "missing + replaced + excluded"},
+            {"label": _("det.n5"), "count": breakdown.get("error", 0), "sublabel": _("det.f5s")},
         ]
         notes = [str(note) for note in breakdown.get("notes") or []]
         return {"category": category, "summary": summary, "notes": notes, "items": []}
@@ -4317,8 +4304,8 @@ async def status_detail(category: str, request: Request) -> dict[str, Any]:
 
         if category == "tags":
             _AUTO_SECTION = {
-                "auto_object": "사물", "auto_scene": "장면",
-                "auto_person": "인물 유형", "auto_screen": "화면",
+                "auto_object": _("det.sec_object"), "auto_scene": _("det.sec_scene"),
+                "auto_person": _("det.sec_person_type"), "auto_screen": _("det.sec_screen"),
             }
             rows = session.execute(
                 select(Tag.tag_type, Tag.tag_value, func.count().label("cnt"))
@@ -4366,21 +4353,21 @@ async def status_detail(category: str, request: Request) -> dict[str, Any]:
                 .limit(400)
             ).all()
             for display_name, face_cnt, media_cnt in rows:
-                items.append({"label": display_name, "sublabel": f"{media_cnt}개 사진", "count": face_cnt})
+                items.append({"label": display_name, "sublabel": _("det.photos_n", n=media_cnt), "count": face_cnt})
 
         elif category == "ai":
             ai_summary = performance.get("ai_summary") or {}
             summary = [
-                {"label": "1. 대상", "count": ai_summary.get("eligible_media", 0), "sublabel": "CLIP 검색/자동분류 대상 사진"},
-                {"label": "2. 완료", "count": ai_summary.get("clip_embeddings", 0), "sublabel": "CLIP 임베딩 생성 완료"},
-                {"label": "3. 예정", "count": ai_summary.get("remaining_clip", 0), "sublabel": "아직 임베딩이 없는 대상 사진"},
-                {"label": "4. 미해당", "count": ai_summary.get("not_applicable", 0), "sublabel": "파일 미완료/원본 없음/제외"},
-                {"label": "5. 오류", "count": ai_summary.get("error", 0), "sublabel": "이미지 AI 작업 실패 기록"},
+                {"label": _("det.a1"), "count": ai_summary.get("eligible_media", 0), "sublabel": _("det.a1s")},
+                {"label": _("det.n2"), "count": ai_summary.get("clip_embeddings", 0), "sublabel": _("det.a2s")},
+                {"label": _("det.n3"), "count": ai_summary.get("remaining_clip", 0), "sublabel": _("det.a3s")},
+                {"label": _("det.n4"), "count": ai_summary.get("not_applicable", 0), "sublabel": _("det.a4s")},
+                {"label": _("det.n5"), "count": ai_summary.get("error", 0), "sublabel": _("det.a5s")},
             ]
             notes = [str(note) for note in ai_summary.get("notes") or []]
             _AI_SECTION = {
-                "auto_object": "사물", "auto_scene": "장면",
-                "auto_person": "인물 유형", "auto_screen": "화면",
+                "auto_object": _("det.sec_object"), "auto_scene": _("det.sec_scene"),
+                "auto_person": _("det.sec_person_type"), "auto_screen": _("det.sec_screen"),
             }
             rows = session.execute(
                 select(Tag.tag_type, Tag.tag_value, func.count().label("cnt"))
