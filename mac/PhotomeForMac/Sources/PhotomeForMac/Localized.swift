@@ -42,7 +42,6 @@ enum Localized {
         "en": [
             // 메뉴
             "사진첩 열기": "Open Photos",
-            "지금 동기화": "Sync now",
             "사진 폴더 선택": "Choose photo folder",
             "설정 열기": "Open settings",
             "Trove 다시 시작": "Restart Trove",

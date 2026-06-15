@@ -239,6 +239,9 @@ final class BackendSupervisor: ObservableObject {
     private var logHandle: FileHandle?
     private var crashRestartAttempts: Int = 0
     private var lastNotifiedJobID: String?
+    // 동기화가 자동으로 도는 첫 순간에 알림 권한을 1회 요청한다. 수동 '지금 동기화'를
+    // 없앤 뒤로는 이게 유일한 요청 지점 — 작업 완료 알림이 동작하려면 필요하다.
+    private var notificationAuthRequested = false
     /// Path → security-scoped bookmark data. Persisted so the user does not have
     /// to re-pick the same folders after each app restart (NSOpenPanel hands out
     /// transient permission; bookmarks make it durable across launches).
@@ -891,27 +894,6 @@ final class BackendSupervisor: ObservableObject {
         }
     }
 
-    func triggerLibraryScan() {
-        guard isRunning else {
-            statusMessage = "먼저 백엔드를 실행하세요."
-            return
-        }
-        // 작업 완료 알림을 보낼 수 있게, 사용자가 긴 작업을 처음 시작하는 이 시점에서
-        // (첫 실행 직후가 아니라) 알림 권한을 요청한다. macOS는 한 번만 팝업한다.
-        requestNotificationAuthorization()
-        actionTask?.cancel()
-        actionTask = Task { [weak self] in
-            guard let self else { return }
-            let result = await self.postJSON(endpoint: "scan/async")
-            await MainActor.run {
-                self.statusMessage = result.ok ? "전체 동기화를 시작했습니다." : result.message
-                if !result.ok {
-                    self.lastError = result.message
-                }
-            }
-            await self.refreshLibraryJobStatus()
-        }
-    }
 
 
     private func startHealthLoop() {
@@ -992,6 +974,10 @@ final class BackendSupervisor: ObservableObject {
                 self.coverage = coverage
                 if let job, job.isRunning {
                     self.statusMessage = job.summary
+                    if !self.notificationAuthRequested {
+                        self.notificationAuthRequested = true
+                        self.requestNotificationAuthorization()
+                    }
                 }
                 self.handleJobTransition(previous: previous, current: job)
                 self.updateDockBadge()
