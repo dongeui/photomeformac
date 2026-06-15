@@ -1175,6 +1175,36 @@ def gallery_page(
       }});
     }})();
 
+    // 라이트박스 스크롤 유지: 썸네일을 #preview-X 앵커로 열면 히스토리 항목이
+    // 쌓인다. 닫기 버튼/배경은 원래 #gallery로 점프해 페이지가 최상단으로 튀었다.
+    // 대신 history.back()으로 돌아가면 브라우저가 직전 스크롤 위치를 그대로
+    // 복원해줘 보던 자리를 유지한다(깜빡임 없음). :target CSS는 그대로 둔다.
+    (function setupLightboxScroll() {{
+      let pushedByThumb = false;
+      document.querySelectorAll(".thumb").forEach((link) => {{
+        link.addEventListener("click", () => {{ pushedByThumb = true; }});
+      }});
+      window.addEventListener("hashchange", () => {{
+        if (!location.hash.startsWith("#preview-")) pushedByThumb = false;
+      }});
+      function closeLightbox(e) {{
+        // 직접 URL로 진입한 경우 등 우리가 연 게 아니면 기본 동작(#gallery)에 맡긴다.
+        if (!pushedByThumb) return;
+        e.preventDefault();
+        pushedByThumb = false;
+        history.back();
+      }}
+      document.querySelectorAll(".lightbox-close, .lightbox-backdrop").forEach((link) => {{
+        link.addEventListener("click", closeLightbox);
+      }});
+      document.addEventListener("keydown", (e) => {{
+        if (e.key === "Escape" && location.hash.startsWith("#preview-") && pushedByThumb) {{
+          pushedByThumb = false;
+          history.back();
+        }}
+      }});
+    }})();
+
     if (searchForm) {{
       searchForm.addEventListener("submit", () => showSearchProgress(T.searching));
     }}
