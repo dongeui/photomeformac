@@ -31,29 +31,26 @@
 **목표:** 기본 화면엔 의미 있는 인물만. 노이즈 싱글톤 600개는 접어둔다. 클러스터링
 손 안 대고 "너무 많다" 체감 제거.
 
-### 1.1 목록 API에 유의미성 게이트 — `status: TODO`
+### 1.1 목록 API에 유의미성 게이트 — `status: N/A`
 
-- `GET /people`에 파라미터 추가: `min_media`(기본 예: 2 또는 3), `include_minor=false`,
-  선택적으로 `limit/offset`(페이지네이션).
-- 응답을 두 묶음으로: **주요 인물**(media_count ≥ min_media) + **기타 카운트**
-  (그 미만 인물 수). 정렬은 기존 face_count desc 유지.
-- `having` 절에 media_count 조건만 추가하면 됨(이미 face_count로 그룹·정렬 중).
-- **수용 기준:** 기본 호출이 주요 인물만 반환 + `minor_count` 제공. `include_minor=true`
-  면 전원 반환(현행 호환).
+조사 결과 `GET /people`(JSON)은 **테스트만** 소비하고 웹 UI는 안 쓴다(갤러리는
+`_list_named_person_display_names`로 명명된 인물만, 관리 페이지는 자체 서버렌더
+쿼리). 따라서 게이트를 둘 가치가 관리 페이지에 있어 1.2로 통합. GET /people는
+현행(전원 반환) 유지.
 
-### 1.2 관리 페이지 접힘 UI — `status: TODO`
+### 1.2 관리 페이지 접힘 UI — `status: DONE`
 
-- `/people/manage`에서 주요 인물 그리드 + 하단 **"기타 얼굴 N명 더 보기"** 토글
-  (펼치면 1.1의 include_minor 호출).
-- 이름 붙은/병합된 인물은 항상 주요 묶음으로(아래 Item-1 보너스).
-- **수용 기준:** 첫 화면에 수백 개 싱글톤이 안 보이고, 한 번 펼쳐야 나온다.
+- `/people/manage`는 이미 게이트가 있었음(`얼굴 5회 이상 OR 명명됨`, limit 1000).
+  여기에 **숨겨진 '기타 얼굴' 수 산출 + "기타 얼굴 N명 더 보기" 토글** 추가.
+- `include_minor=1` 쿼리면 게이트 해제하고 전원 표시(서버 재렌더), 그 화면엔
+  "주요 인물만 보기" 토글. i18n 키 `people.show_minor/show_major` 추가.
+- **수용 기준 충족:** 기본 화면에 싱글톤 숨김 + 한 번 펼쳐야 나옴. 기존
+  `/people/manage` 렌더 테스트 통과.
 
-### 1.3 (보너스) '확인됨' vs '추정' 구분 — `status: TODO`
+### 1.3 '확인됨' vs '추정' 구분 — `status: DONE (기존)`
 
-- 사용자가 이름 붙였거나 병합한 인물 = "확인됨" 섹션 상단, 자동 무명 클러스터 =
-  "추정/제안". 자동 결과를 *정답*이 아니라 *제안*으로 프레이밍.
-- **수용 기준:** display_name이 `person-XXXXXX` 패턴이 아닌(=사용자 명명) 인물과
-  그 외를 시각적으로 분리.
+관리 페이지에 이미 `이름 있음(named)` / `이름 필요(unnamed)` 뱃지로 구분돼 있음
+(`people.badge_named/badge_unnamed`). 추가 작업 불필요.
 
 ---
 

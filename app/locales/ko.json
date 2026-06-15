@@ -64,6 +64,8 @@
   "people.header_sub": "반복해서 나온 얼굴에 이름·애칭을 붙이세요 · {total}명",
   "people.search_placeholder": "이름·애칭 검색",
   "people.hint": "대표 얼굴이나 장수를 누르면 그 사람의 사진을 모아 봅니다. 비슷한 그룹은 선택해 병합하세요.",
+  "people.show_minor": "기타 얼굴 {n}명 더 보기",
+  "people.show_major": "주요 인물만 보기",
   "people.empty": "5회 이상 감지된 얼굴 그룹이 아직 없습니다.<br>이미지 AI 분석이 끝나면 여기에서 이름을 붙일 수 있어요.",
   "people.badge_named": "이름 있음",
   "people.badge_unnamed": "이름 필요",
