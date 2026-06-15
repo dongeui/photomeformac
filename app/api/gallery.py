@@ -861,6 +861,23 @@ def gallery_page(
       color: white;
       font-size: 0.9rem;
     }}
+    .lightbox-titlebox {{
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }}
+    .lightbox-title {{
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    .lightbox-path {{
+      font-size: 0.74rem;
+      color: rgba(255, 255, 255, 0.6);
+      word-break: break-all;
+    }}
     .lightbox-actions {{
       display: flex;
       gap: 8px;
@@ -1531,7 +1548,10 @@ def _render_card(
         <div class="lightbox-panel">
           <img src="/gallery/assets/{asset.id}" alt="{escape(title)} 크게 보기">
           <div class="lightbox-caption">
-            <span>{escape(title)}</span>
+            <div class="lightbox-titlebox">
+              <span class="lightbox-title">{escape(title)}</span>
+              <span class="lightbox-path" title="{escape(media_file.current_path)}">{escape(media_file.current_path)}</span>
+            </div>
             <div class="lightbox-actions">
               <a class="lightbox-download" href="/media/{escape(media_file.file_id)}/download" download="{escape(media_file.filename)}" title="원본 다운로드">↓ 원본</a>
               <a class="lightbox-close" href="#gallery">닫기</a>
