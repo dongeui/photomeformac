@@ -212,12 +212,6 @@ final class BackendSupervisor: ObservableObject {
     @Published private(set) var libraryJobStatus: LibraryJobStatus?
     @Published private(set) var coverage: LibraryCoverage?
     @Published private(set) var resourceUsage: ResourceUsage?
-    @Published var lanEnabled: Bool {
-        didSet {
-            guard lanEnabled != oldValue else { return }
-            UserDefaults.standard.set(lanEnabled, forKey: Self.lanEnabledDefaultsKey)
-        }
-    }
     /// CLIP 이미지 AI는 정식 배포에서 항상 켜진 상태로 동작한다 (DMG에 PyTorch +
     /// weights 동봉). 사용자에게 토글을 노출하지 않는다.
     let clipEnabled: Bool = true
@@ -255,14 +249,12 @@ final class BackendSupervisor: ObservableObject {
 
     private static let sourceRootsDefaultsKey = "PhotomeSourceRoots"
     private static let sourceRootBookmarksKey = "PhotomeSourceRootBookmarks"
-    private static let lanEnabledDefaultsKey = "PhotomeLANEnabled"
     private static let maxCrashRestartAttempts: Int = 1
 
     init(port: Int = 8000) {
         self.basePort = port
         self.port = port
         self.sourceRoots = UserDefaults.standard.stringArray(forKey: Self.sourceRootsDefaultsKey) ?? []
-        self.lanEnabled = UserDefaults.standard.bool(forKey: Self.lanEnabledDefaultsKey)
         self.sourceRootBookmarks = Self.loadBookmarks()
         self.resolveAndAccessBookmarks()
         // 메뉴바 전용 앱이라 띄울 창이 없으므로, 선택해둔 폴더가 있으면 앱 시작과
@@ -495,7 +487,6 @@ final class BackendSupervisor: ObservableObject {
                 python: python,
                 appDataRoot: appDataRoot,
                 port: port,
-                lan: lanEnabled,
                 clipEnabled: clipEnabled,
                 offlineMode: offlineMode
             )
@@ -509,7 +500,7 @@ final class BackendSupervisor: ObservableObject {
             let pipe = Pipe()
             let logHandle = try FileHandle(forWritingTo: logFileURL)
             try logHandle.seekToEnd()
-            try Self.appendLogBanner(to: logHandle, port: port, lanEnabled: lanEnabled)
+            try Self.appendLogBanner(to: logHandle, port: port)
             proc.standardOutput = pipe
             proc.standardError = pipe
             Self.attachLogStreaming(pipe: pipe, logHandle: logHandle)
@@ -740,13 +731,6 @@ final class BackendSupervisor: ObservableObject {
         }
     }
 
-    func toggleLAN() {
-        lanEnabled.toggle()
-        if process != nil {
-            restart()
-        }
-    }
-
     /// Apple Photos 라이브러리 패키지의 `originals` 디렉토리. 시스템 사용자의
     /// 대다수가 여기에 사진을 저장하므로 자동 감지해서 onboarding에서 우선 추천한다.
     /// 패키지 자체는 read-only 권장이며, trove scanner는 일반 폴더와 동일하게 walk.
@@ -845,7 +829,6 @@ final class BackendSupervisor: ObservableObject {
             let exportURL = try Self.createDiagnosticsBundle(
                 logFileURL: logFileURL,
                 sourceRoots: sourceRoots,
-                lanEnabled: lanEnabled,
                 clipEnabled: clipEnabled,
                 offlineMode: offlineMode,
                 state: state,
@@ -908,9 +891,7 @@ final class BackendSupervisor: ObservableObject {
                     await MainActor.run {
                         self.state = .running
                         self.crashRestartAttempts = 0
-                        self.statusMessage = self.lanEnabled
-                            ? "실행 중 · LAN 공유 켜짐 · \(self.dashboardURL.absoluteString)"
-                            : "실행 중 · 로컬 전용 · \(self.dashboardURL.absoluteString)"
+                        self.statusMessage = "실행 중 · 로컬 전용 · \(self.dashboardURL.absoluteString)"
                         self.updateDockBadge()
                     }
                     await self.refreshAIPackStatus()
@@ -1277,7 +1258,6 @@ final class BackendSupervisor: ObservableObject {
     private static func createDiagnosticsBundle(
         logFileURL: URL?,
         sourceRoots: [String],
-        lanEnabled: Bool,
         clipEnabled: Bool,
         offlineMode: Bool,
         state: State,
@@ -1303,7 +1283,6 @@ final class BackendSupervisor: ObservableObject {
             "app_data_root": appDataRoot.path,
             "dashboard_url": dashboardURL.absoluteString,
             "state": state.rawValue,
-            "lan_enabled": lanEnabled,
             "clip_enabled": clipEnabled,
             "offline_mode": offlineMode,
             "source_roots": sourceRoots,
@@ -1353,9 +1332,9 @@ final class BackendSupervisor: ObservableObject {
         try? fm.moveItem(at: url, to: firstRotation)
     }
 
-    private static func appendLogBanner(to handle: FileHandle, port: Int, lanEnabled: Bool) throws {
+    private static func appendLogBanner(to handle: FileHandle, port: Int) throws {
         let formatter = ISO8601DateFormatter()
-        let banner = "\n[\(formatter.string(from: Date()))] Trove backend start · port=\(port) · lan=\(lanEnabled ? "on" : "off")\n"
+        let banner = "\n[\(formatter.string(from: Date()))] Trove backend start · port=\(port) · 로컬 전용\n"
         if let data = banner.data(using: .utf8) {
             try handle.write(contentsOf: data)
         }
@@ -1432,16 +1411,12 @@ final class BackendSupervisor: ObservableObject {
         python: URL,
         appDataRoot: URL,
         port: Int,
-        lan: Bool,
         clipEnabled: Bool,
         offlineMode: Bool
     ) throws -> [String: String] {
         let script = repoRoot.appendingPathComponent("scripts/mac_app_backend_env.py")
         let proc = Process()
         var arguments = [script.path, appDataRoot.path, "--port", String(port)]
-        if lan {
-            arguments.append("--lan")
-        }
         if !clipEnabled {
             arguments.append("--no-clip")
         }

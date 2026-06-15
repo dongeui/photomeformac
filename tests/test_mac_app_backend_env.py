@@ -34,15 +34,14 @@ def test_mac_app_env_does_not_rewrite_source_roots_to_docker_paths(tmp_path: Pat
     assert "TROVE_SOURCE_ROOT_HOST" not in env
 
 
-def test_mac_app_env_lan_mode_must_be_explicit(tmp_path: Path) -> None:
-    local_env = build_backend_env(tmp_path)
-    lan_env = build_backend_env(tmp_path, lan=True)
+def test_mac_app_env_is_always_local_only(tmp_path: Path) -> None:
+    # Mac 앱의 LAN 공유는 제거됐다 — 항상 local-only로 바인딩하고 LAN admin
+    # 토큰을 만들지 않는다. 네트워크 노출은 Docker/서버 배포가 담당한다.
+    env = build_backend_env(tmp_path)
 
-    assert local_env["TROVE_SERVER_HOST"] == "127.0.0.1"
-    assert "TROVE_LAN_ADMIN_TOKEN" not in local_env
-    assert lan_env["TROVE_SERVER_HOST"] == "0.0.0.0"
-    assert lan_env["TROVE_LAN_ADMIN_TOKEN"]
-    assert (tmp_path / "lan-admin-token").exists()
+    assert env["TROVE_SERVER_HOST"] == "127.0.0.1"
+    assert "TROVE_LAN_ADMIN_TOKEN" not in env
+    assert not (tmp_path / "lan-admin-token").exists()
 
 
 def test_mac_app_env_can_disable_clip_without_disabling_app(tmp_path: Path) -> None:

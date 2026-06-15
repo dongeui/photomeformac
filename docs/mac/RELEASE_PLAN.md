@@ -126,7 +126,7 @@ SwiftUI `onDrop(of: [.fileURL])` 사용.
 
 ### S3.2 LAN admin guard 크로스 디바이스 — `status: BLOCKED:user-required`
 
-> 현재 빌드는 LAN 공유 토글을 메뉴에 노출하지 않는다(코드는 `BackendSupervisor`에 잔존). LAN을 다시 노출할 때 아래를 확인한다.
+> Mac 앱은 LAN 공유를 제거(local-only 고정)했다. 이 QA는 Docker/서버 배포(`0.0.0.0` 바인딩)에서만 해당한다.
 
 다른 기기에서 LAN URL 접근 → 관리자 API 401 확인.
 

@@ -47,7 +47,8 @@
 - 설치 시 언어 선택(한/영) + 네이티브 UI i18n
 - CLIP / offline 토글 없음 — 정식 배포에서 항상 켜진 상태로 고정 (DMG에 weights 번들)
 - 업데이트 자동 확인 (GitHub Releases 폴링, 24h) — 수동 '업데이트 확인'·About 메뉴는 제거
-- LAN 공유·로그·진단·모델 캐시 열기는 `BackendSupervisor`에 구현돼 있으나 현재 메뉴 비노출
+- 로그·진단·모델 캐시 열기는 `BackendSupervisor`에 구현돼 있으나 현재 메뉴 비노출
+- LAN 공유는 코드까지 제거 — Mac 앱은 항상 local-only, 네트워크 노출은 Docker/서버 배포
 
 ### 배포 자동화
 - `TROVE_BUNDLE_PYTHON`/`TROVE_BUNDLE_WEIGHTS` 기본 1 — DMG에 venv + CLIP weights 동봉

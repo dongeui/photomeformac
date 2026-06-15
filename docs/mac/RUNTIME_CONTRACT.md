@@ -18,7 +18,7 @@ python3 -m app.main
 
 1. 기본값은 local-only다.
 2. `TROVE_SERVER_HOST=127.0.0.1`을 사용한다.
-3. LAN 공유는 사용자가 명시적으로 켠 경우에만 `TROVE_SERVER_HOST=0.0.0.0` 또는 선택 인터페이스로 바꾼다.
+3. Mac 앱은 LAN 공유를 제공하지 않는다 — 항상 local-only다. 네트워크 노출이 필요하면 Docker/서버 배포(`TROVE_SERVER_HOST=0.0.0.0` + admin token 가드)를 쓴다.
 4. Public internet 공개는 공식 지원 범위가 아니다.
 
 ## 필수 환경 변수

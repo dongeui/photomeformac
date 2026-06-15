@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import secrets
 from pathlib import Path
 from typing import Iterable
 
@@ -14,27 +13,10 @@ def _abs(path: Path | str) -> str:
     return str(Path(path).expanduser().resolve())
 
 
-def _lan_admin_token(root: Path) -> str:
-    token_file = root / "lan-admin-token"
-    if token_file.exists():
-        token = token_file.read_text(encoding="utf-8").strip()
-        if token:
-            return token
-    token = secrets.token_urlsafe(24)
-    token_file.parent.mkdir(parents=True, exist_ok=True)
-    token_file.write_text(token, encoding="utf-8")
-    try:
-        token_file.chmod(0o600)
-    except OSError:
-        pass
-    return token
-
-
 def build_backend_env(
     app_data_root: Path | str,
     *,
     source_roots: Iterable[Path | str] | None = None,
-    lan: bool = False,
     port: int = 8000,
     clip_enabled: bool = True,
     offline_mode: bool = True,
@@ -42,8 +24,8 @@ def build_backend_env(
     """Mac 앱에서 로컬 Trove 백엔드를 실행할 때 쓸 환경 변수를 만든다.
 
     Docker 경로(`/photos`)로 source root를 바꾸지 않고, 사용자가 고른 macOS
-    경로를 그대로 넘긴다. 앱 기본 모드는 local-only이고 LAN 공유는 명시적으로
-    `lan=True`를 넘긴 경우에만 켜진다.
+    경로를 그대로 넘긴다. Mac 앱은 항상 local-only(127.0.0.1)로 바인딩한다 —
+    LAN 공유는 제거됐다. 네트워크 노출이 필요하면 Docker/서버 배포를 쓴다.
     """
     root = Path(app_data_root).expanduser().resolve()
     data_root = root / "data"
@@ -51,7 +33,7 @@ def build_backend_env(
     model_root = root / "models"
 
     env = {
-        "TROVE_SERVER_HOST": "0.0.0.0" if lan else "127.0.0.1",
+        "TROVE_SERVER_HOST": "127.0.0.1",
         "TROVE_SERVER_PORT": str(port),
         "TROVE_DATA_ROOT": str(data_root),
         "TROVE_DERIVED_ROOT": str(derived_root),
@@ -73,8 +55,6 @@ def build_backend_env(
 
     if source_roots:
         env["TROVE_SOURCE_ROOTS"] = ",".join(_abs(path) for path in source_roots)
-    if lan:
-        env["TROVE_LAN_ADMIN_TOKEN"] = _lan_admin_token(root)
 
     return env
 
@@ -83,7 +63,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Trove Mac 앱 백엔드 env 생성")
     parser.add_argument("app_data_root", help="앱 데이터 루트")
     parser.add_argument("--source-root", action="append", default=[], help="원본 사진 폴더")
-    parser.add_argument("--lan", action="store_true", help="LAN 공유용 0.0.0.0 바인딩")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--no-clip", action="store_true", help="CLIP 비활성화")
     parser.add_argument("--online", action="store_true", help="오프라인 모드 해제")
@@ -92,7 +71,6 @@ def main() -> None:
     env = build_backend_env(
         args.app_data_root,
         source_roots=args.source_root,
-        lan=args.lan,
         port=args.port,
         clip_enabled=not args.no_clip,
         offline_mode=not args.online,
