@@ -140,9 +140,9 @@ GUI QA:
 
 1. Xcode에서 `mac/PhotomeForMac/Package.swift` 열기
 2. `PhotomeForMac` scheme 실행
-3. 앱 시작 후 WebView가 `/dashboard`로 전환되는지 확인
-4. 메뉴바에서 백엔드 시작/중지/재시작 확인
-5. 전체 동기화/이미지 AI 이어서 분석 버튼 disabled/enabled 상태 확인
+3. 메뉴바 아이콘이 뜨고, 사진 폴더 선택 후 상태가 `실행 중`으로 바뀌는지 확인
+4. "사진첩 열기"·"설정 열기"가 기본 브라우저에서 열리는지 확인 (창 없는 메뉴바 앱)
+5. 자동 동기화가 도는지(메뉴 '지금'·'사진 현황') + 동기화 중 "사진 폴더 선택"이 잠기는지 확인
 
 ## 7. 권한/사진 접근 UX
 
@@ -191,7 +191,7 @@ GitHub Actions `Mac Release` workflow가 tag(`mac-v*`) 또는 수동 dispatch에
 실제 배포 전 QA 순서:
 
 1. 로컬 소형 라이브러리로 앱 시작/스캔/검색 확인
-2. NAS source root 선택 후 전체 동기화
+2. NAS source root 선택 후 자동 동기화 진행 확인
 3. 앱 재시작 후 source root 유지 확인
 4. 일부 NAS 경로 오프라인 상태에서 dashboard/status가 죽지 않는지 확인
 5. 대용량 라이브러리에서 progress badge가 계속 갱신되는지 확인

@@ -105,10 +105,12 @@ git push origin mac-v0.1.0
 
 ### 4.1 Xcode GUI 실행 QA
 - `mac/PhotomeForMac/Package.swift`를 Xcode에서 열고 `⌘R`
-- 백엔드 자동 시작 → WebView 대시보드 로드 확인
-- 메뉴바 아이콘 상태 표시, 전체 동기화, 이미지 AI 이어서 분석 등 동작
+- 백엔드 자동 시작 → "사진첩 열기"·"설정 열기"가 기본 브라우저에서 열림 확인 (창 없는 메뉴바 앱)
+- 메뉴바 아이콘 상태/진행 표시, 자동 동기화 동작 확인
 
 ### 4.2 LAN admin guard 크로스 디바이스
+> 현재 빌드는 LAN 공유 토글을 메뉴에 노출하지 않는다(코드는 `BackendSupervisor`에 잔존). LAN을 다시 노출할 때 아래를 확인한다.
+
 - Mac 앱 메뉴바 [LAN 공유 켜기]
 - 다른 기기 (스마트폰 브라우저 등)에서 `http://<Mac IP>:8000/` 접근
 - 갤러리/대시보드는 표시되지만 `/scan`, `/people` 등 admin API는 401 (X-Trove-Admin-Token 없이) 확인

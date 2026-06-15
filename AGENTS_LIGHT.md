@@ -18,7 +18,7 @@
 ## 현재 읽을 문서
 
 - `AGENTS.md`
-- `.codex/context/ALL_TASKS.md`
+- `docs/README.md` (문서 인덱스)
 - `docs/engineering/ARCHITECTURE.md`
 - `docs/ops/DOCKER.md`
 - `docs/ops/RUNBOOK.md`

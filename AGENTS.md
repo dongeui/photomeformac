@@ -8,8 +8,7 @@
 
 1. `AGENTS.md`
 2. `AGENTS_LIGHT.md`
-3. `.codex/context/ALL_TASKS.md`
-4. user prompt
+3. user prompt
 
 기본 참조 원칙:
 
@@ -79,7 +78,6 @@
 - `AGENTS.md`: 전체 규칙의 canonical source
 - `AGENTS_LIGHT.md`: 세션 시작용 quick checklist
 - `CLAUDE.md`: Claude/Codex 공통 adapter
-- `.codex/agents/*.md`: 역할별 축약 규칙
 
 새 정책은 먼저 `AGENTS.md`에 반영하고, 다른 파일은 필요한 최소 요약만 유지한다.
 
@@ -96,9 +94,10 @@
 - `docs/ops/DOCKER.md`
 - `docs/ops/RUNBOOK.md`
 - `docs/ops/DEPLOYMENT_STRATEGY.md`
-- `.codex/context/ALL_TASKS.md`
+- `docs/engineering/PEOPLE_UX_PLAN.md`
+- `docs/mac/USER_TODO.md`
 
-삭제된 문서 경로를 다시 참조하지 않는다.
+문서 인덱스는 `docs/README.md`에 모은다. 삭제된 문서 경로를 다시 참조하지 않는다.
 
 ## 역할 경계
 
@@ -107,12 +106,8 @@
 - QA: validation/test
 - Planner: scope/acceptance/non-goal
 
-역할별 상세 제약은 `.codex/agents/*.md`에 둔다.
-
 ## 세션 시작
 
 1. `AGENTS.md`
 2. `AGENTS_LIGHT.md`
-3. 필요 시 역할별 `.codex/agents/*.md`
-4. 필요 시 `.codex/context/ALL_TASKS.md`
-5. 필요한 현재 문서만 추가로 읽는다.
+3. 필요한 현재 문서만 추가로 읽는다(`docs/README.md` 인덱스 참고).

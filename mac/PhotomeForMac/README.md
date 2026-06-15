@@ -1,21 +1,25 @@
 # PhotomeForMac Swift shell
 
-이 디렉토리는 Trove for Mac의 SwiftUI + WebView shell이다.
+이 디렉토리는 Trove for Mac의 SwiftUI 메뉴바 셸이다. 창 없는 메뉴바 전용 앱으로, 사진첩·설정 같은 웹 UI는 기본 브라우저로 연다(앱 내장 WebView 창 없음).
 
-기능:
+메뉴바 메뉴 (현재 노출):
 
-1. 앱 창 + WebView로 기존 Trove dashboard 표시
-2. Python 백엔드 supervisor 실행/중지/재시작 (Process.terminationHandler로 비정상 종료 1회 자동 복구)
-3. 메뉴바 아이콘 + 상태 표시, Dock badge
-4. 사진 폴더 선택 (NSOpenPanel + Finder Drag&Drop) — 첫 선택 시 백엔드 자동 시작
-5. LAN 공유 토글 (admin token 자동 발급)
-6. 모델 준비/재로드, 모델 캐시 폴더 열기
-7. 전체 동기화 / 이미지 AI 이어서 분석 빠른 실행
-8. UserNotifications (작업 완료, 새 버전, 백엔드 재시작 알림)
-9. Quit 확인 (스캔/AI 진행 중 종료 보호)
-10. 로그인 자동 시작, 로그 보기, 진단 내보내기
-11. 업데이트 확인 (GitHub Releases 폴링)
-12. 표준 macOS About panel
+1. 상태 / 지금(진행 중 작업) / 사진 현황 / 리소스 표시
+2. 사진첩 열기 (브라우저)
+3. 사진 폴더 선택 (NSOpenPanel + Finder Drag&Drop) — 첫 선택 시 백엔드 자동 시작
+4. 설정 열기 (브라우저 — 웹 '설정' 탭)
+5. 로그인 시 자동 시작 토글
+6. 종료
+
+백그라운드 동작:
+
+- Python 백엔드 supervisor 실행/중지 (비정상 종료 1회 자동 복구)
+- 자동 동기화(시작 직후 + 주기 + 폴더 변경/NAS 재연결) — 수동 '지금 동기화'·'다시 시작' 메뉴 없음
+- Dock badge (동기화/AI/오류), UserNotifications (작업 완료·새 버전·백엔드 자동 재시작)
+- Quit 확인 (동기화 진행 중 종료 보호)
+- 업데이트 자동 확인 (GitHub Releases 폴링, 24h)
+
+> LAN 공유·로그 보기·진단 내보내기·모델 캐시 열기 등은 `BackendSupervisor`에 구현돼 있으나 현재 메뉴에는 노출하지 않는다.
 
 빌드/테스트:
 

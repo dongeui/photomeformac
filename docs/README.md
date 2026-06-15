@@ -9,7 +9,7 @@
 ### Mac 앱
 - [mac/XCODE_RUN.md](mac/XCODE_RUN.md) — Xcode 개발 환경 + 실행
 - [mac/RUNTIME_CONTRACT.md](mac/RUNTIME_CONTRACT.md) — Mac shell ↔ 백엔드 계약
-- [mac/UI_SHELL_DECISION.md](mac/UI_SHELL_DECISION.md) — Swift/SwiftUI + WebView + 메뉴바 조합 결정
+- [mac/UI_SHELL_DECISION.md](mac/UI_SHELL_DECISION.md) — Swift/SwiftUI 메뉴바 셸 결정 (창 없는 메뉴바 전용 앱으로 수렴)
 - [mac/RELEASE_CHECKLIST.md](mac/RELEASE_CHECKLIST.md) — 서명·notarization·DMG 릴리스
 - [mac/RELEASE_PLAN.md](mac/RELEASE_PLAN.md) — 단위별 진행 트래커 (현재 코드 작업 전부 DONE)
 - [mac/USER_TODO.md](mac/USER_TODO.md) — 사용자가 직접 해야 할 일 (Apple Developer 가입, 실기기 QA)
@@ -22,11 +22,12 @@
 
 ### 엔지니어링
 - [engineering/ARCHITECTURE.md](engineering/ARCHITECTURE.md) — 구조·검색·처리 흐름
+- [engineering/PEOPLE_UX_PLAN.md](engineering/PEOPLE_UX_PLAN.md) — 사람(People) UX 개선 플랜
 
 ### 루트
 - [../README.md](../README.md) — 빠른 시작
 
-## 현재 상태 (2026-06-03)
+## 현재 상태 (2026-06-15)
 
 ### Core (web/backend)
 - 3채널 하이브리드 검색 (OCR/CLIP/Shadow) + RRF + NL 플래너
@@ -36,20 +37,17 @@
 - 대시보드 리소스 컨트롤 (워커/torch threads/batch sizes 런타임 조절)
 - `DirMtimeCache` 디스크 persist — 백엔드 재시작 후에도 변경 없는 폴더 walk skip
 
-### Mac shell
-- WebView 통합 + 메뉴바 아이콘
-- 백엔드 supervisor (자동 시작/중지/재시작 + 비정상 종료 자동 복구)
-- 소스 폴더 NSOpenPanel + Finder Drag&Drop + 자동 시작 트리거
-- UserNotifications (작업 완료, 새 버전, 백엔드 재시작)
-- Dock badge (스캔/AI/오류 표시)
-- Quit 확인 (작업 진행 중 보호)
-- LAN 공유 토글 + admin token 자동 발급
-- 모델 다운로드 progress (MB 표시) — 단, DMG에 weights 번들되므로 보통 즉시 ready
-- 로그인 자동 시작, 로그 보기, 진단 내보내기
-- 표준 macOS About panel (버전/빌드/GitHub 링크)
-- Landing에 첫 분석 시간 안내 카피
-- CLIP / offlineMode 토글은 제거 — 정식 배포에서 항상 켜진 상태로 고정
-- GitHub Releases 폴링 기반 업데이트 확인
+### Mac shell (창 없는 메뉴바 전용 앱)
+- 메뉴바 아이콘 + 상태/진행/사진 현황/리소스 표시, Dock badge
+- 메뉴: 사진첩 열기·사진 폴더 선택·설정 열기·로그인 자동 시작 토글·종료 (웹 UI는 기본 브라우저로 열림)
+- 자동 동기화(시작 직후 + 주기 + 폴더 변경/NAS 재연결) — 수동 '지금 동기화'·'다시 시작' 메뉴 없음, 설정은 웹 '설정' 탭으로 일원화
+- 백엔드 supervisor (자동 시작/중지 + 비정상 종료 1회 자동 복구)
+- 소스 폴더 NSOpenPanel + Finder Drag&Drop + 첫 선택 시 자동 시작
+- UserNotifications (작업 완료, 새 버전, 백엔드 자동 재시작), Quit 확인 (동기화 진행 중 보호)
+- 설치 시 언어 선택(한/영) + 네이티브 UI i18n
+- CLIP / offline 토글 없음 — 정식 배포에서 항상 켜진 상태로 고정 (DMG에 weights 번들)
+- 업데이트 자동 확인 (GitHub Releases 폴링, 24h) — 수동 '업데이트 확인'·About 메뉴는 제거
+- LAN 공유·로그·진단·모델 캐시 열기는 `BackendSupervisor`에 구현돼 있으나 현재 메뉴 비노출
 
 ### 배포 자동화
 - `TROVE_BUNDLE_PYTHON`/`TROVE_BUNDLE_WEIGHTS` 기본 1 — DMG에 venv + CLIP weights 동봉

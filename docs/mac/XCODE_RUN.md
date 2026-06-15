@@ -44,7 +44,7 @@ TROVE_PYTHON=/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python
 
 ## 4. Run
 
-Run 버튼을 누르면 앱이 뜨고, 앱이 내부에서 FastAPI 백엔드를 실행한 뒤 WebView로 대시보드를 연다.
+Run 버튼을 누르면 메뉴바에 Trove 아이콘이 뜨고, 앱이 내부에서 FastAPI 백엔드를 실행한다. 사진 폴더를 고르면 백엔드가 기동되고, 메뉴의 "사진첩 열기"·"설정 열기"로 기본 브라우저에서 UI를 연다(창 없는 메뉴바 전용 앱).
 
 CLI에서 Xcode 빌드 검증만 먼저 하고 싶으면 아래로 확인 가능하다.
 
@@ -73,9 +73,9 @@ scripts/build_mac_app_bundle.sh
 /Users/dongeui/Desktop/code/photomeformac/.venv/bin/python
 ```
 
-### 앱은 뜨는데 WebView가 비어 있음
+### 메뉴바 아이콘은 뜨는데 사진첩/설정이 안 열림
 
-백엔드 시작 중일 수 있다. 상단 상태가 `실행 중`으로 바뀌는지 보고, 안 바뀌면 메뉴바에서 `백엔드 재시작`을 누른다.
+앱은 창 없는 메뉴바 전용이다. "사진첩 열기"·"설정 열기"는 기본 브라우저로 열리며, 백엔드가 `실행 중`이 돼야 활성화된다. 한참 지나도 `실행 중`이 안 되면 메뉴바에서 `종료` 후 앱을 다시 켠다 — 별도 `재시작` 메뉴는 없고, 종료 후 재실행이 곧 백엔드 재기동이다.
 
 ### 포트 충돌
 

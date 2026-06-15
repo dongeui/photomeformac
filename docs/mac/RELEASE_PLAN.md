@@ -120,11 +120,13 @@ SwiftUI `onDrop(of: [.fileURL])` 사용.
 
 사용자가 Xcode에서 직접 실행하여 확인:
 1. 백엔드 자동 시작
-2. WebView 대시보드 로드
-3. 메뉴바 동작
-4. 전체 동기화/이미지 AI 버튼 enable/disable
+2. "사진첩 열기"·"설정 열기"가 기본 브라우저에서 열림 (창 없는 메뉴바 앱)
+3. 메뉴바 상태/진행 표시 동작
+4. 자동 동기화 진행 + 동기화 중 "사진 폴더 선택" 잠금 확인
 
 ### S3.2 LAN admin guard 크로스 디바이스 — `status: BLOCKED:user-required`
+
+> 현재 빌드는 LAN 공유 토글을 메뉴에 노출하지 않는다(코드는 `BackendSupervisor`에 잔존). LAN을 다시 노출할 때 아래를 확인한다.
 
 다른 기기에서 LAN URL 접근 → 관리자 API 401 확인.
 

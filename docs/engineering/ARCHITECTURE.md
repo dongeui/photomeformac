@@ -85,9 +85,11 @@ semantic maintenance 사이클마다 GPS 누락 이미지를 자동 재추출(`_
 
 ## 배포 타겟
 
-정식 배포 산출물은 `runtime-ai` 단일 빌드다. `runtime-base`는 배포하지 않으며, torch를 optional로 두는 **코드 레벨 import 계약**으로만 의미가 있다(startup 견고성 목적).
+정식 배포 산출물은 **ai-pack 단일 빌드**다 — Mac DMG는 항상 Python venv + CLIP weights를 번들하고(`TROVE_BUNDLE_*=1`), Docker는 `runtime-ai` 스테이지로 빌드한다. AI 미포함 빌드(`runtime-base`)는 배포하지 않으며, torch를 optional로 두는 **코드 레벨 import 계약**으로만 의미가 있다(startup 견고성 목적). 정책 상세는 `../../AGENTS.md`의 "배포 호환성" 참고.
 
-| 타겟 | 설명 | 배포 |
+`runtime-base`/`runtime-ai`는 `Dockerfile`의 빌드 스테이지명이다(`docker-compose.yml`의 `TROVE_DOCKER_TARGET` 기본값은 `runtime-ai`).
+
+| 타겟 (Docker 스테이지) | 설명 | 배포 |
 |------|------|------|
 | `runtime-base` | PyTorch 없음. 기본 스캔·갤러리·OCR 동작 | 코드 계약만 (미배포) |
-| `runtime-ai` | PyTorch + CLIP 포함. 의미 검색·자동 태그 동작 | **정식 배포 산출물** |
+| `runtime-ai` | PyTorch + CLIP 포함. 의미 검색·자동 태그 동작 | **정식 배포 산출물 (Mac DMG / Docker 기본)** |
