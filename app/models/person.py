@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import ForeignKey, JSON, String
+from sqlalchemy import DateTime, ForeignKey, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -46,3 +47,18 @@ class Person(Base):
             seen.add(folded)
             labels.append(label)
         return labels
+
+
+class PersonMergeDismissal(Base):
+    """사용자가 '다른 사람'이라고 거절한 병합 제안 쌍.
+
+    병합 제안 큐가 같은 쌍을 다시 띄우지 않게 기억한다. (low, high)로 정규화해
+    순서를 고정한다. 인물은 병합 시 삭제 대신 soft-hide되므로 id는 안정적이라
+    FK 없이 id만 저장한다.
+    """
+
+    __tablename__ = "person_merge_dismissals"
+
+    person_low_id: Mapped[int] = mapped_column(primary_key=True)
+    person_high_id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

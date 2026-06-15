@@ -19,11 +19,11 @@ from app.api.i18n_web import render_lang_switcher, request_translator
 from app.models.asset import DerivedAsset
 from app.models.face import Face
 from app.models.media import MediaFile
-from app.models.person import Person
+from app.models.person import Person, PersonMergeDismissal
 from app.models.semantic import SearchDocument
 from app.models.tag import Tag
 from app.services.image_decode import ensure_heif_support
-from app.services.processing.person_centroids import recompute_person_centroid
+from app.services.processing.person_centroids import person_centroid_path, recompute_person_centroid
 from app.services.semantic import SemanticCatalog
 from app.services.search.hybrid import clear_query_cache
 from app.services.search.vocab import TagVocabularyCache
@@ -69,6 +69,29 @@ class RenamePersonRequest(BaseModel):
 class MergePeopleRequest(BaseModel):
     target_person_id: int
     source_person_ids: list[int]
+
+
+class MergeSuggestionPerson(BaseModel):
+    id: int
+    label: str
+    face_count: int
+    media_count: int
+    face_id: Optional[int] = None
+
+
+class MergeSuggestion(BaseModel):
+    a: MergeSuggestionPerson
+    b: MergeSuggestionPerson
+    similarity: float
+
+
+class MergeSuggestionsResponse(BaseModel):
+    suggestions: list[MergeSuggestion]
+
+
+class DismissPairRequest(BaseModel):
+    person_id_a: int
+    person_id_b: int
 
 
 class AssignFaceRequest(BaseModel):
@@ -438,7 +461,9 @@ def people_manage_page(
     )
 
 
-@router.get("/{person_id}", response_model=PersonResponse)
+# int 컨버터로 좁힌다 — 안 그러면 GET /people/merge-suggestions 같은 정적 경로가
+# 이 파라미터 라우트에 먼저 잡혀(person_id="merge-suggestions") 422가 난다.
+@router.get("/{person_id:int}", response_model=PersonResponse)
 def get_person(person_id: int, request: Request) -> PersonResponse:
     database = require_state(request, "database")
     with database.session_factory() as session:
@@ -512,6 +537,172 @@ def merge_people(body: MergePeopleRequest, request: Request) -> PersonResponse:
             session, embeddings_root=request.app.state.settings.embeddings_root, person=target
         )
         return _person_response(session, target)
+
+
+def _person_manage_label(person: Person) -> str:
+    """사람에게 보여줄 라벨: 실제 이름 → 첫 표시 별칭 → '그룹 #id'."""
+    name = str(person.display_name or "").strip()
+    if name and not _INTERNAL_PERSON_ID_RE.match(name):
+        return name
+    aliases = _person_display_aliases(person)
+    if aliases:
+        return aliases[0]
+    return f"그룹 #{int(person.id)}"
+
+
+def _read_centroid_vector(embeddings_root: Path, person_id: int) -> list[float] | None:
+    path = person_centroid_path(embeddings_root, person_id)
+    try:
+        if not path.exists():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    raw = payload.get("embedding")
+    if not isinstance(raw, list) or not raw:
+        return None
+    try:
+        return [float(x) for x in raw]
+    except (TypeError, ValueError):
+        return None
+
+
+@router.get("/merge-suggestions", response_model=MergeSuggestionsResponse)
+def merge_suggestions(
+    request: Request,
+    limit: int = Query(30, ge=1, le=100),
+) -> MergeSuggestionsResponse:
+    """같은 사람일 가능성이 높은 클러스터 쌍을 제안한다.
+
+    경량 임베딩(SFace) + 그리디 온라인 클러스터링은 같은 사람을 여러 그룹으로
+    과분할한다. 매칭 임계값(face_match_threshold)을 **갓 못 넘은** 밴드
+    [threshold-0.06, threshold)에 드는 센트로이드 쌍이 곧 "갈라진 같은 사람"일
+    확률이 가장 높다. 이를 유사도 순으로 돌려주면 사용자가 원탭으로 병합한다.
+    거절(dismiss)한 쌍은 제외한다.
+    """
+    import numpy as np
+
+    settings = require_state(request, "settings")
+    database = require_state(request, "database")
+    threshold = float(settings.face_match_threshold)
+    band_low = max(0.0, threshold - 0.06)
+    embeddings_root = settings.embeddings_root
+    active = MediaFile.status.not_in(("missing", "replaced", "excluded"))
+
+    with database.session_factory() as session:
+        # 후보: 비병합 + 얼굴 2회 이상(싱글톤 노이즈 제외), 사진수 많은 순 상위 800
+        # (쌍별 비교는 O(n²)이라 상한을 둔다 — 과분할 중복은 대개 얼굴 수가 충분).
+        rows = session.execute(
+            select(
+                Person,
+                func.count(Face.id).filter(active).label("fc"),
+                func.count(func.distinct(Face.file_id)).filter(active).label("mc"),
+            )
+            .outerjoin(Face, Face.person_id == Person.id)
+            .outerjoin(MediaFile, MediaFile.file_id == Face.file_id)
+            .where(Person.merged_into_id.is_(None))
+            .group_by(Person.id)
+            .having(func.count(Face.id).filter(active) >= 2)
+            .order_by(func.count(Face.id).filter(active).desc(), Person.id.asc())
+            .limit(800)
+        ).all()
+
+        persons: list[dict] = []
+        vectors: list[list[float]] = []
+        dim: int | None = None
+        for person, fc, mc in rows:
+            vec = _read_centroid_vector(embeddings_root, int(person.id))
+            if vec is None:
+                continue
+            if dim is None:
+                dim = len(vec)
+            elif len(vec) != dim:
+                continue  # 차원 불일치 임베딩은 건너뛴다(행렬화 안전)
+            sample = session.execute(
+                select(Face.id)
+                .join(MediaFile, MediaFile.file_id == Face.file_id)
+                .where(Face.person_id == person.id, MediaFile.media_kind == "image", active)
+                .order_by(Face.id.asc())
+                .limit(1)
+            ).first()
+            persons.append(
+                {
+                    "person": person,
+                    "face_count": int(fc or 0),
+                    "media_count": int(mc or 0),
+                    "face_id": int(sample[0]) if sample else None,
+                }
+            )
+            vectors.append(vec)
+
+        if len(vectors) < 2:
+            return MergeSuggestionsResponse(suggestions=[])
+
+        matrix = np.asarray(vectors, dtype=np.float32)
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        matrix = matrix / norms
+        sims = matrix @ matrix.T
+
+        dismissed = {
+            (row.person_low_id, row.person_high_id)
+            for row in session.scalars(select(PersonMergeDismissal))
+        }
+
+        scored: list[tuple[float, int, int]] = []
+        count = len(persons)
+        for i in range(count):
+            for j in range(i + 1, count):
+                similarity = float(sims[i, j])
+                if not (band_low <= similarity < threshold):
+                    continue
+                a_id = int(persons[i]["person"].id)
+                b_id = int(persons[j]["person"].id)
+                if (min(a_id, b_id), max(a_id, b_id)) in dismissed:
+                    continue
+                scored.append((similarity, i, j))
+
+        scored.sort(key=lambda item: item[0], reverse=True)
+
+        def _person_payload(entry: dict) -> MergeSuggestionPerson:
+            return MergeSuggestionPerson(
+                id=int(entry["person"].id),
+                label=_person_manage_label(entry["person"]),
+                face_count=entry["face_count"],
+                media_count=entry["media_count"],
+                face_id=entry["face_id"],
+            )
+
+        suggestions: list[MergeSuggestion] = []
+        for similarity, i, j in scored[:limit]:
+            a, b = persons[i], persons[j]
+            # 사진 많은 쪽을 a(병합 시 남길 후보)로 — 합치기 기본값이 자연스럽게.
+            if b["face_count"] > a["face_count"]:
+                a, b = b, a
+            suggestions.append(
+                MergeSuggestion(
+                    a=_person_payload(a),
+                    b=_person_payload(b),
+                    similarity=round(similarity, 4),
+                )
+            )
+        return MergeSuggestionsResponse(suggestions=suggestions)
+
+
+@router.post("/merge-suggestions/dismiss", status_code=204)
+def dismiss_merge_suggestion(body: DismissPairRequest, request: Request) -> Response:
+    """'다른 사람' 거절 — 해당 쌍을 다시 제안하지 않게 저장한다."""
+    database = require_state(request, "database")
+    low, high = sorted((int(body.person_id_a), int(body.person_id_b)))
+    if low == high:
+        raise HTTPException(status_code=422, detail="two distinct persons required")
+    with database.session_factory() as session:
+        if session.get(PersonMergeDismissal, (low, high)) is None:
+            session.add(PersonMergeDismissal(person_low_id=low, person_high_id=high))
+            session.commit()
+    return Response(status_code=204)
 
 
 @router.post("/{target_id}/unmerge/{source_id}", response_model=PersonResponse)
