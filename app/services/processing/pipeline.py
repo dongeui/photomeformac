@@ -808,6 +808,16 @@ class ProcessingPipeline:
         """
         if self._scanner.has_changes():
             return True
+        # 스캔으로 발견됐지만 asset(썸네일/얼굴/검색) 미처리로 남은 metadata_done
+        # 백로그도 동기화 사유다. 이게 빠지면, 파일 변화가 없고 face-pending도
+        # (thumb_done 한정이라) 못 잡는 상태에서 백로그가 영영 안 돌게 된다.
+        with self._session_factory() as session:
+            if session.scalar(
+                select(MediaFile.file_id)
+                .where(MediaFile.status == "metadata_done")
+                .limit(1)
+            ) is not None:
+                return True
         return self.has_semantic_maintenance_work()
 
     def has_semantic_maintenance_work(self) -> bool:
@@ -877,7 +887,20 @@ class ProcessingPipeline:
         session.commit()
 
         semantic_summary: dict[str, Any] | None = None
+        predrained_summary: dict[str, Any] | None = None
         try:
+            # 느린 full walk(특히 NAS)가 끝나기 전에, 이전 동기화가 중단돼 남은
+            # metadata_done 백로그(썸네일/얼굴/검색 미처리)를 먼저 비운다. walk는
+            # 전체를 다 돈 뒤에야 asset 단계로 넘어가므로, 그 사이 프로세스가 죽으면
+            # 신규가 영영 색인되지 않는다. 선드레인으로 매 동기화가 백로그를 전진시킨다.
+            if not retry_errors_only:
+                predrained_summary = self._process_pending_media(
+                    session,
+                    trigger_job_id=job.id,
+                    parent_job=job,
+                    statuses=("metadata_done",),
+                )
+                session.commit()
             if retry_errors_only:
                 scan_summary = IncrementalScanSummary(scanned=0, created=0, updated=0, moved=0, missing=0, failed=0)
             else:
@@ -967,6 +990,7 @@ class ProcessingPipeline:
             "run_semantic_maintenance": run_semantic_maintenance,
             "source_roots": [str(path) for path in source_roots] if source_roots is not None else None,
             "summary": asdict(scan_summary),
+            "predrained": predrained_summary,
             "processed": processed_summary,
             "semantic": semantic_summary,
             "progress": {
