@@ -72,6 +72,7 @@
   "people.suggest_diff": "다른 사람",
   "people.suggest_similarity": "유사도 {pct}%",
   "people.suggest_confirm": "\"{a}\"와(과) \"{b}\"를 같은 사람으로 합칠까요?",
+  "people.suggest_view": "이 사람 얼굴 더 보기",
   "people.empty": "5회 이상 감지된 얼굴 그룹이 아직 없습니다.<br>이미지 AI 분석이 끝나면 여기에서 이름을 붙일 수 있어요.",
   "people.badge_named": "이름 있음",
   "people.badge_unnamed": "이름 필요",

@@ -72,6 +72,7 @@
   "people.suggest_diff": "Different",
   "people.suggest_similarity": "{pct}% similar",
   "people.suggest_confirm": "Merge \"{a}\" and \"{b}\" as the same person?",
+  "people.suggest_view": "See more of this person",
   "people.empty": "No face groups seen 5+ times yet.<br>You can name them here once image AI analysis finishes.",
   "people.badge_named": "Named",
   "people.badge_unnamed": "Needs name",

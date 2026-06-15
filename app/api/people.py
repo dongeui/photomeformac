@@ -154,16 +154,21 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvet
 .suggest-title{font-weight:600;}
 .suggest-hint{font-size:.82rem;color:var(--muted);}
 .suggest-cards{display:flex;flex-direction:column;gap:10px;}
-.sg-card{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--accent-soft);border-radius:12px;background:var(--panel);}
+.sg-card{display:flex;flex-direction:column;gap:10px;padding:10px 14px;border:1px solid var(--accent-soft);border-radius:12px;background:var(--panel);}
+.sg-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
 .sg-person{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 200px;}
-.sg-face{width:46px;height:46px;border-radius:50%;overflow:hidden;flex:0 0 auto;background:var(--accent-soft);}
-.sg-face img{width:100%;height:100%;object-fit:cover;}
+.sg-face{width:46px;height:46px;border-radius:50%;overflow:hidden;flex:0 0 auto;background:var(--accent-soft);border:0;padding:0;cursor:pointer;}
+.sg-face:hover{box-shadow:0 0 0 2px var(--accent);}
+.sg-face img{width:100%;height:100%;object-fit:cover;display:block;}
 .sg-meta{min-width:0;}
 .sg-name{font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sg-count{font-size:.76rem;color:var(--muted);}
 .sg-sim{font-size:.78rem;color:var(--muted);flex:0 0 auto;}
 .sg-actions{display:flex;gap:8px;flex:0 0 auto;margin-left:auto;}
 .sg-no{background:transparent;}
+.sg-prev{display:flex;flex-wrap:wrap;gap:6px;padding-top:10px;border-top:1px solid var(--line);}
+.sg-thumb{width:54px;height:54px;object-fit:cover;border-radius:8px;background:var(--accent-soft);}
+.sg-loading{color:var(--muted);font-size:.8rem;}
 .minor-row{text-align:center;padding:18px 4px 4px;}
 .minor-toggle{display:inline-block;font-size:.86rem;color:var(--muted);text-decoration:none;padding:8px 16px;border:1px solid var(--line);border-radius:999px;background:var(--panel);}
 .minor-toggle:hover{color:var(--text);border-color:var(--muted);}
@@ -261,9 +266,24 @@ function suggestFace(p){
 }
 function suggestCount(p){return PT.count.replace('{media}',p.media_count).replace('{face}',p.face_count);}
 function suggestPerson(p){
-  return '<div class="sg-person"><div class="sg-face">'+suggestFace(p)+'</div>'
+  return '<div class="sg-person"><button type="button" class="sg-face" data-pid="'+p.id+'" title="'+escapeHtml(PT.suggestView)+'">'+suggestFace(p)+'</button>'
     +'<div class="sg-meta"><div class="sg-name">'+escapeHtml(p.label)+'</div>'
     +'<div class="sg-count">'+escapeHtml(suggestCount(p))+'</div></div></div>';
+}
+async function togglePersonFaces(pid,card){
+  var prev=card.querySelector('.sg-prev');if(!prev){return;}
+  if(prev.dataset.pid===String(pid)&&!prev.hidden){prev.hidden=true;prev.dataset.pid='';return;}
+  prev.dataset.pid=String(pid);prev.hidden=false;prev.innerHTML='<span class="sg-loading">…</span>';
+  var items=[];
+  try{var r=await fetch('/people/'+pid+'/preview?limit=12');if(r.ok){items=((await r.json())||{}).items||[];}}catch(e){}
+  prev.innerHTML='';
+  items.forEach(function(it){
+    var src=it.face_id!=null?('/people/faces/'+it.face_id+'/crop'):(it.asset_id!=null?('/gallery/assets/'+it.asset_id):null);
+    if(!src){return;}
+    var im=document.createElement('img');im.className='sg-thumb';im.loading='lazy';im.decoding='async';im.src=src;im.alt='';
+    prev.appendChild(im);
+  });
+  if(!prev.children.length){prev.hidden=true;prev.dataset.pid='';}
 }
 async function loadSuggestions(){
   var wrap=document.getElementById('suggest');var box=document.getElementById('suggest-cards');
@@ -275,14 +295,18 @@ async function loadSuggestions(){
   list.forEach(function(s){
     var pct=Math.round((s.similarity||0)*100);
     var card=document.createElement('div');card.className='sg-card';
-    card.innerHTML=suggestPerson(s.a)
+    card.innerHTML='<div class="sg-top">'+suggestPerson(s.a)
       +'<span class="sg-sim">'+escapeHtml(PT.suggestSimilarity.replace('{pct}',pct))+'</span>'
       +suggestPerson(s.b)
       +'<div class="sg-actions">'
       +'<button class="btn sg-yes">'+escapeHtml(PT.suggestSame)+'</button>'
-      +'<button class="btn sg-no">'+escapeHtml(PT.suggestDiff)+'</button></div>';
+      +'<button class="btn sg-no">'+escapeHtml(PT.suggestDiff)+'</button></div></div>'
+      +'<div class="sg-prev" hidden></div>';
     card.querySelector('.sg-yes').onclick=function(){mergePair(s.a,s.b);};
     card.querySelector('.sg-no').onclick=function(){dismissPair(s.a.id,s.b.id,card,box,wrap);};
+    [].slice.call(card.querySelectorAll('.sg-face')).forEach(function(btn){
+      btn.onclick=function(){togglePersonFaces(parseInt(btn.dataset.pid),card);};
+    });
     box.appendChild(card);
   });
   wrap.hidden=false;
@@ -389,6 +413,7 @@ def _render_people_manage_html(
         "suggestDiff": _("people.suggest_diff"),
         "suggestSimilarity": _("people.suggest_similarity"),
         "suggestConfirm": _("people.suggest_confirm"),
+        "suggestView": _("people.suggest_view"),
         "count": _("people.count"),
     }
     t_json = json.dumps(people_t, ensure_ascii=False)
