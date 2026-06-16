@@ -15,6 +15,7 @@
   "gallery.start_date": "Start date",
   "gallery.end_date": "End date",
   "gallery.count_photos": "{count} photos",
+  "gallery.analyzing": "{count} analyzing · shown when ready",
   "gallery.page_of": "Page {page} of {total}",
   "gallery.range": "{start}–{end}",
   "gallery.empty": "Nothing to show",

@@ -13,11 +13,12 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api.gallery import _list_named_person_display_names
+from app.api.gallery import _build_gallery_ids_query, _list_named_person_display_names
 from app.models import annotation, asset, face, job, media, observation, person, runtime, semantic, tag  # noqa: F401
 from app.models.base import Base
 from app.models.media import MediaFile
 from app.models.person import Person
+from app.models.semantic import SearchDocument
 from app.models.tag import Tag
 
 
@@ -25,6 +26,58 @@ def _session_factory():
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine, expire_on_commit=False)
+
+
+def _add_image(session, file_id: str, *, with_search_doc: bool) -> None:
+    now = datetime.now(timezone.utc)
+    session.add(
+        MediaFile(
+            file_id=file_id, current_path=f"/p/{file_id}.jpg", filename=f"{file_id}.jpg",
+            source_root="/p", relative_path=f"{file_id}.jpg", media_kind="image",
+            status="thumb_done", size_bytes=1, mtime_ns=1, partial_hash="h",
+            first_seen_at=now, last_seen_at=now, updated_at=now, processed_at=now,
+        )
+    )
+    if with_search_doc:
+        session.add(SearchDocument(
+            file_id=file_id, version="search-v4", source_updated_at=now, search_text=file_id,
+        ))
+
+
+def test_gallery_gate_hides_unanalyzed_photos_when_required() -> None:
+    factory = _session_factory()
+    with factory() as session:
+        _add_image(session, "analyzed", with_search_doc=True)
+        _add_image(session, "pending", with_search_doc=False)
+        session.commit()
+
+        # 가시성 계약 ON: 분석 완료(search_document 있음)만 노출
+        gated = set(session.scalars(_build_gallery_ids_query(
+            media_type=None, date_from=None, date_to=None, person=None, place=None,
+            query=None, require_analysis_complete=True,
+        )))
+        assert gated == {"analyzed"}
+
+        # OFF(기존 동작): 둘 다 노출
+        ungated = set(session.scalars(_build_gallery_ids_query(
+            media_type=None, date_from=None, date_to=None, person=None, place=None,
+            query=None, require_analysis_complete=False,
+        )))
+        assert ungated == {"analyzed", "pending"}
+
+
+def test_gallery_gate_does_not_filter_explicit_search_result_ids() -> None:
+    factory = _session_factory()
+    with factory() as session:
+        _add_image(session, "pending", with_search_doc=False)
+        session.commit()
+        # 검색 결과(file_ids 지정)는 이미 search_document 출신이므로 게이트 미적용 —
+        # 명시된 id는 그대로 반환되어야 한다(이중 필터로 결과가 사라지면 안 됨).
+        result = set(session.scalars(_build_gallery_ids_query(
+            media_type=None, date_from=None, date_to=None, person=None, place=None,
+            query=None, file_ids=["pending"], require_analysis_complete=True,
+        )))
+        assert result == {"pending"}
 
 
 def _add_media(session) -> None:

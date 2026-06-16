@@ -15,6 +15,7 @@
   "gallery.start_date": "시작일",
   "gallery.end_date": "종료일",
   "gallery.count_photos": "{count}장",
+  "gallery.analyzing": "분석 중 {count}장 · 완료되면 표시",
   "gallery.page_of": "{page} / {total}페이지",
   "gallery.range": "{start}–{end}번째",
   "gallery.empty": "표시할 항목 없음",

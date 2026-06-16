@@ -125,6 +125,10 @@ class AppSettings:
     partial_hash_bytes: int
     thumbnail_size: int
     include_hidden_files: bool
+    # 사진첩 가시성 계약: 보이는 사진은 분석(검색 인덱싱)이 끝난 것만. 켜면 갤러리
+    # 브라우즈가 search_document 있는(=분석 완료) 사진만 노출한다. "보이는데 검색
+    # 안 됨"을 구조적으로 차단. docs/engineering/FINDABILITY_CONTRACT.md.
+    gallery_require_analysis_complete: bool
     stability_window_seconds: int
     sync_scheduler_enabled: bool
     sync_scheduler_interval_seconds: int
@@ -236,6 +240,7 @@ def load_settings() -> AppSettings:
         partial_hash_bytes=_env_int("TROVE_PARTIAL_HASH_BYTES", 1_048_576),
         thumbnail_size=_env_int("TROVE_THUMBNAIL_SIZE", 512),
         include_hidden_files=_env_bool("TROVE_INCLUDE_HIDDEN_FILES", False),
+        gallery_require_analysis_complete=_env_bool("TROVE_GALLERY_REQUIRE_ANALYSIS_COMPLETE", True),
         stability_window_seconds=_env_int("TROVE_STABILITY_WINDOW_SECONDS", 300),
         # 통합 동기화(스캔+이미지 AI) 스케줄러. 옛 SEMANTIC_SCHEDULER_* 이름은
         # 레거시 별칭으로만 읽는다.

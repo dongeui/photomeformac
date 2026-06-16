@@ -21,6 +21,7 @@ from app.models.annotation import MediaAnnotation
 from app.models.asset import DerivedAsset
 from app.models.media import MediaFile
 from app.models.person import Person
+from app.models.semantic import SearchDocument
 from app.models.tag import Tag
 from app.services.search import HybridSearchService
 from app.services.search.backend import SqlAlchemyHybridSearchBackend
@@ -165,7 +166,24 @@ def gallery_page(
             query=None if ranked_ids is not None else q,
             file_ids=ranked_ids,
             sort=sort_order,
+            require_analysis_complete=settings.gallery_require_analysis_complete,
         )
+        # 가시성 계약을 켜면 분석 미완 사진은 숨겨진다. 사라진 게 아니라 "분석 중"
+        # 임을 정직하게 알리려, 노출 후보지만 아직 search_document 없는 이미지 수를 센다.
+        analyzing_count = 0
+        if settings.gallery_require_analysis_complete:
+            analyzing_count = int(
+                session.scalar(
+                    select(func.count())
+                    .select_from(MediaFile)
+                    .where(
+                        MediaFile.status.not_in(("missing", "replaced", "excluded")),
+                        MediaFile.media_kind == "image",
+                        ~exists().where(SearchDocument.file_id == MediaFile.file_id),
+                    )
+                )
+                or 0
+            )
         # ids_query already filters to the relevant set (ranked_ids when q is set)
         # and applies ORDER BY captured_at per sort_order, so pagination is date-consistent.
         total = int(session.scalar(select(func.count()).select_from(ids_query.subquery())) or 0)
@@ -255,6 +273,13 @@ def gallery_page(
         person=person,
         place=place,
         sort=sort_order,
+    )
+    # 가시성 계약: 분석 미완 사진은 숨겨진다. "사라진 게 아니라 분석 중"임을 정직하게
+    # 알리는 안내 칩(분석 끝나면 자동으로 사진첩에 나타난다).
+    analyzing_notice = (
+        f'<span class="meta-pill analyzing">{_("gallery.analyzing", count=analyzing_count)}</span>'
+        if analyzing_count > 0
+        else ""
     )
 
     html = f"""<!doctype html>
@@ -655,6 +680,11 @@ def gallery_page(
       border-radius: 999px;
       background: var(--panel);
       border: 1px solid var(--line);
+    }}
+    .meta-pill.analyzing {{
+      color: var(--accent);
+      border-color: var(--accent);
+      font-weight: 500;
     }}
     .gallery {{
       display: grid;
@@ -1099,6 +1129,7 @@ def gallery_page(
           <span class="meta-pill">{_("gallery.count_photos", count=total)}{_render_filter_hint(person, place, _)}</span>
           {_render_search_mode_pill(search_meta, _)}
           <span class="meta-pill">{_("gallery.page_of", page=page, total=page_count)}</span>
+          {analyzing_notice}
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
           <select aria-label="{_('gallery.per_page_label')}" onchange="if(this.value)location.href=this.value;" style="font-size:0.85rem;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:4px 8px;cursor:pointer;">{per_page_options}</select>
@@ -1467,6 +1498,7 @@ def _build_gallery_ids_query(
     query: str | None,
     file_ids: list[str] | None = None,
     sort: str = SORT_NEWEST,
+    require_analysis_complete: bool = False,
 ) -> Select:
     statement = select(MediaFile.file_id).where(
         MediaFile.status.not_in(("missing", "replaced", "excluded"))
@@ -1475,6 +1507,14 @@ def _build_gallery_ids_query(
         if not file_ids:
             return statement.where(false())
         statement = statement.where(MediaFile.file_id.in_(file_ids))
+    elif require_analysis_complete:
+        # 가시성 계약: 브라우즈(검색 외)에서는 분석이 끝난 사진만 노출한다.
+        # search_document은 파일별 분석 패스의 마지막 단계에서 기록되므로, 그 존재가
+        # 곧 "분석 완료 + 검색가능"을 뜻한다 → "보이는데 검색 안 됨"을 차단.
+        # 검색 결과(file_ids 지정)는 이미 search_document에서 나오므로 게이트 불필요.
+        statement = statement.where(
+            exists().where(SearchDocument.file_id == MediaFile.file_id)
+        )
 
     if media_type:
         statement = statement.where(MediaFile.media_kind == media_type)
