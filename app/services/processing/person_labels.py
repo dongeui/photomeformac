@@ -88,6 +88,9 @@ def reconcile_file_person_tags(
             from app.services.semantic import SemanticCatalog
 
             semantic_catalog = SemanticCatalog(session)
+        # autoflush=False라 upsert가 select(Tag)로 사람을 읽기 전에 방금 쓴 태그를
+        # 먼저 확정해야 people_json이 비지 않는다.
+        session.flush()
         semantic_catalog.upsert_search_document(media_file, version=search_version)
     return True
 

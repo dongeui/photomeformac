@@ -138,6 +138,13 @@ def test_manual_photo_assign_tags_zero_face_photo_and_is_removable(
     assert ("person", "정이한") in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
     # 동기화에도 살아남도록 Face row로 모델링됨(박스리스 = 학습은 안 하지만 검색은 됨)
     assert any(f["person_id"] == person_id for f in detail["faces"])
+    # 검색문서까지 즉시 갱신돼야 이름으로 잡힌다(autoflush=False 회귀 가드)
+    from app.models.semantic import SearchDocument
+
+    with client.app.state.database.session_factory() as session:
+        doc = session.scalars(select(SearchDocument).where(SearchDocument.file_id == fid)).one()
+        assert "정이한" in (doc.search_text or "")
+        assert "정이한" in (doc.people_json or [])
 
     # 멱등: 같은 인물 재지정해도 중복 Face가 쌓이지 않는다
     client.post("/people/photo-assign", json={"file_id": fid, "person_id": person_id})

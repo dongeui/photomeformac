@@ -1098,6 +1098,10 @@ def _sync_single_file_person_labels(session, file_id: str, *, search_version: st
             session.add(Tag(file_id=file_id, tag_type="person", tag_value=label))
     media_file = session.get(MediaFile, file_id)
     if media_file:
+        # 세션은 autoflush=False라, upsert_search_document가 select(Tag)로 사람을
+        # 채우기 전에 방금 추가/삭제한 person 태그를 먼저 확정해야 한다(안 그러면
+        # people_json이 비어 검색문서에 인물이 안 들어간다).
+        session.flush()
         SemanticCatalog(session).upsert_search_document(media_file, version=search_version)
 
 
