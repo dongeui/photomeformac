@@ -28,6 +28,9 @@ BUNDLE_ID="${TROVE_MAC_BUNDLE_ID:-com.trove.mac}"
 # - SUPublicEDKey: Sparkle generate_keys로 만든 edDSA public key (base64).
 SPARKLE_FEED_URL="${TROVE_SPARKLE_FEED_URL:-}"
 SPARKLE_PUBLIC_ED_KEY="${TROVE_SPARKLE_PUBLIC_ED_KEY:-}"
+# opt-in 크래시 리포팅(Sentry) DSN. 설정되면 Info.plist의 TroveSentryDSN으로
+# 주입돼 앱에서 토글이 노출된다. 비어 있으면(개발 빌드) 기능 전체가 숨겨진다.
+SENTRY_DSN="${TROVE_SENTRY_DSN:-}"
 
 mkdir -p "$DIST_DIR"
 rm -rf "$APP_BUNDLE" "$DMG_PATH" "$DMG_STAGING"
@@ -41,15 +44,21 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BINARY_PATH" "$MACOS_DIR/$PRODUCT_NAME"
 chmod 755 "$MACOS_DIR/$PRODUCT_NAME"
 
-# SwiftPM은 Sparkle 같은 dynamic framework를 자동으로 .app/Contents/Frameworks/
-# 에 embed하지 않는다. 직접 복사하고 rpath를 @executable_path/../Frameworks로
-# 설정해야 사용자 Mac에서 dyld가 framework를 찾을 수 있다.
+# SwiftPM은 Sparkle/Sentry 같은 dynamic framework를 자동으로
+# .app/Contents/Frameworks/ 에 embed하지 않는다. 직접 복사하고 rpath를
+# @executable_path/../Frameworks로 설정해야 사용자 Mac에서 dyld가 framework를 찾는다.
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
-if [[ -d "$SPM_BIN_DIR/Sparkle.framework" ]]; then
-  mkdir -p "$FRAMEWORKS_DIR"
-  rsync -a "$SPM_BIN_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/"
-  # binary가 @rpath/Sparkle.framework/...로 link됐을 텐데, 그 rpath를
-  # @executable_path/../Frameworks 로 정해줘야 한다.
+EMBEDDED_FRAMEWORK=0
+for fw in Sparkle Sentry; do
+  if [[ -d "$SPM_BIN_DIR/$fw.framework" ]]; then
+    mkdir -p "$FRAMEWORKS_DIR"
+    rsync -a "$SPM_BIN_DIR/$fw.framework" "$FRAMEWORKS_DIR/"
+    EMBEDDED_FRAMEWORK=1
+  fi
+done
+if [[ "$EMBEDDED_FRAMEWORK" == "1" ]]; then
+  # binary가 @rpath/<Framework>.framework/...로 link됐을 텐데, 그 rpath를
+  # @executable_path/../Frameworks 로 정해줘야 한다(한 번만 추가).
   install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS_DIR/$PRODUCT_NAME" 2>/dev/null || true
 fi
 
@@ -111,8 +120,6 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <string>사용자가 선택한 사진 폴더를 읽기 전용으로 스캔하기 위해 접근합니다.</string>
     <key>NSDesktopFolderUsageDescription</key>
     <string>사용자가 선택한 사진 폴더를 읽기 전용으로 스캔하기 위해 접근합니다.</string>
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>LAN 공유를 켠 경우 같은 네트워크의 기기에서 Trove 대시보드에 접근할 수 있게 합니다.</string>
 PLIST
 if [[ -n "$SPARKLE_FEED_URL" ]]; then
   cat >> "$CONTENTS_DIR/Info.plist" <<PLIST
@@ -124,6 +131,12 @@ if [[ -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
   cat >> "$CONTENTS_DIR/Info.plist" <<PLIST
     <key>SUPublicEDKey</key>
     <string>$SPARKLE_PUBLIC_ED_KEY</string>
+PLIST
+fi
+if [[ -n "$SENTRY_DSN" ]]; then
+  cat >> "$CONTENTS_DIR/Info.plist" <<PLIST
+    <key>TroveSentryDSN</key>
+    <string>$SENTRY_DSN</string>
 PLIST
 fi
 cat >> "$CONTENTS_DIR/Info.plist" <<'PLIST'

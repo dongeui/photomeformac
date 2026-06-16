@@ -87,6 +87,15 @@ enum Localized {
             // 첫 실행 언어 선택
             "언어를 선택하세요": "Choose your language",
             "나중에 설정에서 바꿀 수 있습니다.": "You can change this later in settings.",
+            // 익명 오류 보고(opt-in 크래시 리포팅)
+            "익명 오류 보고": "Anonymous error reports",
+            "익명 오류 보고를 켰습니다.": "Turned on anonymous error reports.",
+            "익명 오류 보고를 껐습니다.": "Turned off anonymous error reports.",
+            "익명 오류 보고를 보낼까요?": "Send anonymous error reports?",
+            "크래시·오류 정보만 익명으로 전송해 안정성을 개선합니다. 사진·파일 경로·검색어는 절대 수집하지 않습니다. 나중에 메뉴에서 바꿀 수 있습니다.":
+                "Only crash and error details are sent anonymously to improve stability. Your photos, file paths, and search terms are never collected. You can change this later in the menu.",
+            "허용": "Allow",
+            "보내지 않음": "Don't send",
         ],
     ]
 }

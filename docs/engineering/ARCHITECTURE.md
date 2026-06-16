@@ -93,3 +93,7 @@ semantic maintenance 사이클마다 GPS 누락 이미지를 자동 재추출(`_
 |------|------|------|
 | `runtime-base` | PyTorch 없음. 기본 스캔·갤러리·OCR 동작 | 코드 계약만 (미배포) |
 | `runtime-ai` | PyTorch + CLIP 포함. 의미 검색·자동 태그 동작 | **정식 배포 산출물 (Mac DMG / Docker 기본)** |
+
+## 텔레메트리
+
+opt-in **크래시/예외 리포팅(Sentry)**만 있고 기본 OFF다. 동의는 Mac 셸(Swift `CrashReporting`, UserDefaults)이 소유하고 백엔드(`app/core/telemetry.py`)는 env 게이트(`TROVE_CRASH_REPORTING`+`TROVE_SENTRY_DSN`)로만 켜진다. DSN을 빌드에 주입하지 않으면 기능 전체가 비활성이다. 사진·파일 경로·검색어 등 사용자 콘텐츠는 전송하지 않는다(경로 마스킹·`send_default_pii=False`·breadcrumb 제거·트레이싱 0). 셋업은 `../mac/USER_TODO.md`.

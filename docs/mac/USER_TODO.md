@@ -177,6 +177,30 @@ generate_appcast /path/to/release_dmgs/   # 이 폴더의 모든 *.dmg를 스캔
 **6. (선택) GitHub Actions로 자동화:**
 새 tag push 시 `generate_appcast` 실행 + appcast.xml을 gh-pages branch에 커밋. workflow 추가는 향후 작업.
 
+### 익명 오류 보고(Sentry) 셋업 — 선택
+
+opt-in 크래시/예외 리포팅이다. **코드 측 통합은 끝났고**(Swift `CrashReporting.swift` + 백엔드 `app/core/telemetry.py`), 운영 측에서 Sentry 계정 + DSN 주입만 하면 된다. DSN을 빌드에 주입하지 않으면 기능 전체가 숨겨지므로(개발 빌드 = 토글 미노출, 전송 없음), 이 작업은 **완전 선택**이다.
+
+**설계 요약(프라이버시):**
+- **기본 OFF.** 첫 실행 시 동의를 한 번 묻고, 메뉴 토글 "익명 오류 보고"로 언제든 바꿀 수 있다(끄면 백엔드도 재시작해 즉시 반영).
+- **크래시·예외만.** 사용 이벤트·성능 트레이싱은 보내지 않는다(`tracesSampleRate=0`).
+- **사용자 콘텐츠 미수집.** 사진·파일 경로·검색어·호스트명을 전송하지 않는다. Swift `beforeSend`에서 `serverName`을 비우고, 백엔드 `_before_send`에서 `/Users`·`/Volumes` 등 경로를 마스킹하며 breadcrumb을 통째로 제거한다. `send_default_pii=False`.
+
+**1. Sentry 계정 + 프로젝트 생성:**
+- https://sentry.io 무료 티어로 가입. 한 org 안에 프로젝트 2개를 만든다 — **Apple (Cocoa)** 1개(Swift 셸 크래시), **Python** 1개(백엔드 예외). 각각 DSN이 발급된다.
+- 단순하게 시작하려면 우선 Cocoa 프로젝트 DSN 하나만 주입해도 된다(백엔드는 같은 DSN을 env로 받아 재사용 가능).
+
+**2. DSN 주입해서 빌드:**
+```bash
+export TROVE_SENTRY_DSN="https://<key>@o<org>.ingest.sentry.io/<project>"
+scripts/build_mac_app_bundle.sh
+# Info.plist에 TroveSentryDSN이 자동 부착되고, 동의 시 백엔드 env로도 전달된다.
+```
+
+**3. 검증:**
+- DSN 없이 빌드한 앱: 메뉴에 "익명 오류 보고" 토글이 없어야 하고, 첫 실행 동의 프롬프트도 뜨지 않는다.
+- DSN 주입 빌드: 첫 실행 시 동의 프롬프트 → "허용" 후 의도적 크래시를 내면 Sentry 대시보드에 이벤트가 뜬다(경로·콘텐츠가 마스킹돼 있는지 한 번 확인).
+
 ---
 
 ## 진행 트래커
@@ -195,3 +219,4 @@ generate_appcast /path/to/release_dmgs/   # 이 폴더의 모든 *.dmg를 스캔
 - [ ] 5. appcast.xml 호스팅 위치 결정 (GitHub Pages 추천)
 - [ ] 5. `TROVE_SPARKLE_FEED_URL` + `TROVE_SPARKLE_PUBLIC_ED_KEY` 환경변수로 첫 빌드
 - [ ] 5. 첫 릴리스 후 generate_appcast로 appcast.xml 호스팅 push
+- [ ] 6. (선택) Sentry 계정·프로젝트 생성 + `TROVE_SENTRY_DSN` 주입 빌드 (익명 오류 보고)

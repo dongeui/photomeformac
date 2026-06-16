@@ -18,7 +18,18 @@ def test_build_script_creates_signed_dmg_with_applications_symlink_and_backend_b
     assert "TROVE_BUNDLE_BACKEND" in text
     assert "trove-backend" in text
     assert "TROVE_BUNDLE_PYTHON" in text
-    assert "NSLocalNetworkUsageDescription" in text
+    # LAN 공유 제거 후 stale 권한 키는 더 이상 박지 않는다.
+    assert "NSLocalNetworkUsageDescription" not in text
+
+
+def test_build_script_injects_sentry_dsn_into_info_plist_when_provided():
+    text = BUILD_SCRIPT.read_text()
+    # opt-in 크래시 리포팅: TROVE_SENTRY_DSN env가 있으면 Info.plist의
+    # TroveSentryDSN 키로 주입돼 앱에서 토글이 노출된다(Sparkle SUFeedURL과 동일 패턴).
+    assert "TROVE_SENTRY_DSN" in text
+    assert "TroveSentryDSN" in text
+    # Sentry.framework도 Sparkle과 함께 .app/Contents/Frameworks/ 에 embed돼야 한다.
+    assert "for fw in Sparkle Sentry" in text
 
 
 def test_notarize_script_uses_keychain_profile_or_env_without_committed_secret():
@@ -59,7 +70,7 @@ def test_release_checklist_tracks_remaining_deployment_qa_items():
         "Python runtime",
         "Xcode 실행 QA",
         "권한/사진 접근 UX",
-        "LAN 공유 보호",
+        "LAN admin 가드",
         "launch-at-login",
         "자동 업데이트 전략",
         "NAS/대용량 라이브러리 QA",

@@ -488,7 +488,9 @@ final class BackendSupervisor: ObservableObject {
                 appDataRoot: appDataRoot,
                 port: port,
                 clipEnabled: clipEnabled,
-                offlineMode: offlineMode
+                offlineMode: offlineMode,
+                crashReporting: CrashReporting.isEnabled,
+                sentryDsn: CrashReporting.dsn
             )
 
             let proc = Process()
@@ -1412,7 +1414,9 @@ final class BackendSupervisor: ObservableObject {
         appDataRoot: URL,
         port: Int,
         clipEnabled: Bool,
-        offlineMode: Bool
+        offlineMode: Bool,
+        crashReporting: Bool,
+        sentryDsn: String
     ) throws -> [String: String] {
         let script = repoRoot.appendingPathComponent("scripts/mac_app_backend_env.py")
         let proc = Process()
@@ -1422,6 +1426,13 @@ final class BackendSupervisor: ObservableObject {
         }
         if !offlineMode {
             arguments.append("--online")
+        }
+        // opt-in 크래시 리포팅. 동의 + DSN이 모두 있을 때만 백엔드로 넘긴다
+        // (스크립트도 한 번 더 게이트하지만, 여기서도 인자 자체를 안 싣는다).
+        if crashReporting && !sentryDsn.isEmpty {
+            arguments.append("--crash-reporting")
+            arguments.append("--sentry-dsn")
+            arguments.append(sentryDsn)
         }
         proc.executableURL = python
         proc.arguments = arguments

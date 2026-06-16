@@ -32,9 +32,30 @@ struct PhotomeForMacApp: App {
                 // 메뉴가 다시 평가될 때마다 실제 상태를 읽는 클로저를 넘긴다.
                 isLaunchAtLoginEnabled: { Self.currentLaunchAtLoginEnabled() },
                 isLaunchAtLoginAvailable: Self.isLaunchAtLoginAvailable(),
-                onToggleLaunchAtLogin: { toggleLaunchAtLogin() }
+                onToggleLaunchAtLogin: { toggleLaunchAtLogin() },
+                isCrashReportingEnabled: { CrashReporting.isEnabled },
+                isCrashReportingAvailable: CrashReporting.isAvailable,
+                onToggleCrashReporting: { toggleCrashReporting() }
             )
             .onAppear { appDelegate.backend = backend }
+        }
+    }
+
+    /// 메뉴 토글: 동의 상태를 뒤집고, Swift 셸 측 Sentry를 즉시 start/stop한 뒤
+    /// 백엔드를 재시작해 env 게이트(`TROVE_CRASH_REPORTING`)까지 반영한다.
+    private func toggleCrashReporting() {
+        let next = !CrashReporting.isEnabled
+        CrashReporting.setEnabled(next)
+        if next {
+            CrashReporting.startIfConsented()
+            backend.updateStatusMessage(Localized.s("익명 오류 보고를 켰습니다."))
+        } else {
+            CrashReporting.stop()
+            backend.updateStatusMessage(Localized.s("익명 오류 보고를 껐습니다."))
+        }
+        // 백엔드(Python) 쪽 동의는 실행 시 주입한 env로만 결정되므로 재시작이 필요하다.
+        if backend.isRunning {
+            backend.restart()
         }
     }
 
@@ -83,6 +104,9 @@ struct MenuBarContent: View {
     let isLaunchAtLoginEnabled: () -> Bool
     let isLaunchAtLoginAvailable: Bool
     let onToggleLaunchAtLogin: () -> Void
+    let isCrashReportingEnabled: () -> Bool
+    let isCrashReportingAvailable: Bool
+    let onToggleCrashReporting: () -> Void
 
     var body: some View {
         Text("\(Localized.s("상태")): \(backend.state.displayLabel)")
@@ -145,6 +169,15 @@ struct MenuBarContent: View {
         ))
         .disabled(!isLaunchAtLoginAvailable)
 
+        // 익명 오류 보고(opt-in). DSN이 빌드에 주입된 경우에만 노출한다 —
+        // 개발 빌드(DSN 없음)에선 토글 자체가 보이지 않는다.
+        if isCrashReportingAvailable {
+            Toggle(Localized.s("익명 오류 보고"), isOn: Binding(
+                get: { isCrashReportingEnabled() },
+                set: { _ in onToggleCrashReporting() }
+            ))
+        }
+
         Divider()
 
         Button(Localized.s("종료")) {
@@ -165,6 +198,25 @@ final class PhotomeAppDelegate: NSObject, NSApplicationDelegate {
         // 선택값은 UserDefaults에 저장되고, 백엔드 env(TROVE_LOCALE)로도 전달돼
         // 웹 UI 기본 언어까지 맞춘다.
         promptForLanguageIfNeeded()
+        // 언어 선택 직후, 아직 결정하지 않았다면 익명 오류 보고 동의를 한 번 묻는다
+        // (DSN이 주입된 정식 빌드에서만). 그 다음 동의 상태에 맞춰 Sentry를 시작한다.
+        promptForCrashReportingIfNeeded()
+        CrashReporting.startIfConsented()
+    }
+
+    /// 첫 실행 1회: 익명 오류 보고 동의(기본 OFF)를 묻는다. 이미 결정했거나
+    /// DSN이 없는(개발) 빌드면 건너뛴다.
+    @MainActor
+    private func promptForCrashReportingIfNeeded() {
+        guard CrashReporting.isAvailable, !CrashReporting.isDecided else { return }
+        let alert = NSAlert()
+        alert.messageText = Localized.s("익명 오류 보고를 보낼까요?")
+        alert.informativeText = Localized.s("크래시·오류 정보만 익명으로 전송해 안정성을 개선합니다. 사진·파일 경로·검색어는 절대 수집하지 않습니다. 나중에 메뉴에서 바꿀 수 있습니다.")
+        alert.addButton(withTitle: Localized.s("허용"))
+        alert.addButton(withTitle: Localized.s("보내지 않음"))
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+        CrashReporting.setEnabled(response == .alertFirstButtonReturn)
     }
 
     @MainActor
