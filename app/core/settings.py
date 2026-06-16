@@ -137,6 +137,11 @@ class AppSettings:
     face_detection_score_threshold: float
     face_min_size: int
     face_match_threshold: float
+    # 콜드스타트 분열로 named 인물의 사진이 무명 군집으로 새는 것을 사후 치유.
+    # 무명 군집 센트로이드가 named 인물과 이 임계 이상으로 유사하면 자동 흡수한다.
+    # 매칭 임계(face_match_threshold)보다 충분히 높게 둬 오병합을 막는다.
+    face_cluster_reconcile_enabled: bool
+    face_cluster_reconcile_threshold: float
     face_analysis_version: str
     place_tag_precision: int
     geocoding_enabled: bool
@@ -251,6 +256,8 @@ def load_settings() -> AppSettings:
         face_detection_score_threshold=_env_float("TROVE_FACE_DETECTION_SCORE_THRESHOLD", 0.8),
         face_min_size=_env_int("TROVE_FACE_MIN_SIZE", 60),
         face_match_threshold=_env_float("TROVE_FACE_MATCH_THRESHOLD", 0.363),
+        face_cluster_reconcile_enabled=_env_bool("TROVE_FACE_CLUSTER_RECONCILE_ENABLED", True),
+        face_cluster_reconcile_threshold=_env_float("TROVE_FACE_CLUSTER_RECONCILE_THRESHOLD", 0.5),
         face_analysis_version=_env("TROVE_FACE_ANALYSIS_VERSION", "face-v2"),
         place_tag_precision=_env_int("TROVE_PLACE_TAG_PRECISION", 3),
         geocoding_enabled=geocoding_enabled,

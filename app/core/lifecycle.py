@@ -97,6 +97,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         derived_root=settings.derived_root,
         embeddings_root=settings.embeddings_root,
         face_match_threshold=settings.face_match_threshold,
+        face_cluster_reconcile_enabled=settings.face_cluster_reconcile_enabled,
+        face_cluster_reconcile_threshold=settings.face_cluster_reconcile_threshold,
         face_analysis_version=settings.face_analysis_version,
         place_tag_precision=settings.place_tag_precision,
         semantic_ocr_enabled=settings.semantic_ocr_enabled,

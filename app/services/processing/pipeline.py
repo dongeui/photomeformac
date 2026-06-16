@@ -43,6 +43,7 @@ from app.services.fingerprint.service import FingerprintService
 from app.services.metadata.service import MetadataService
 from app.services.ocr import OCRResult, extract as extract_ocr
 from app.services.processing.incremental import IncrementalScanService, IncrementalScanSummary
+from app.services.processing.cluster_reconcile import reconcile_unnamed_clusters
 from app.services.processing.person_labels import (
     find_files_needing_person_label_sync,
     person_label_values,
@@ -144,6 +145,8 @@ class ProcessingPipeline:
         derived_root: Path | None = None,
         embeddings_root: Path | None = None,
         face_match_threshold: float = 0.363,
+        face_cluster_reconcile_enabled: bool = True,
+        face_cluster_reconcile_threshold: float = 0.5,
         face_analysis_version: str = "face-v1",
         place_tag_precision: int = 3,
         semantic_ocr_enabled: bool = True,
@@ -172,6 +175,8 @@ class ProcessingPipeline:
         self._derived_root = (derived_root or Path("./derived_root")).expanduser().resolve()
         self._embeddings_root = (embeddings_root or (self._derived_root / "embeddings")).expanduser().resolve()
         self._face_match_threshold = max(-1.0, min(1.0, face_match_threshold))
+        self._face_cluster_reconcile_enabled = face_cluster_reconcile_enabled
+        self._face_cluster_reconcile_threshold = max(-1.0, min(1.0, face_cluster_reconcile_threshold))
         self._face_analysis_version = face_analysis_version
         self._place_tag_precision = max(0, place_tag_precision)
         self._semantic_ocr_enabled = semantic_ocr_enabled
@@ -1075,8 +1080,30 @@ class ProcessingPipeline:
                 aggregate["stopped_reason"] = "cancelled"
                 break
 
+        aggregate["face_clusters"] = self._reconcile_face_clusters()
         aggregate["person_labels"] = self._reconcile_person_label_tags(job)
         return aggregate
+
+    def _reconcile_face_clusters(self, *, max_clusters: int = 200) -> dict[str, Any]:
+        """Absorb fragmented unnamed clusters into the named person they belong
+        to, so a known person's newest photos don't stay stranded in an unnamed
+        cluster (and out of name search). Reversible via unmerge; bounded per
+        sync; idempotent once drained. See cluster_reconcile for the rationale.
+        """
+        if not self._face_cluster_reconcile_enabled or self._face_analysis_service is None:
+            return {"scanned": 0, "merged": 0, "faces_moved": 0, "has_more": False}
+        try:
+            with self._session_factory() as session:
+                return reconcile_unnamed_clusters(
+                    session,
+                    embeddings_root=self._embeddings_root,
+                    search_version=self._semantic_search_version,
+                    similarity_threshold=self._face_cluster_reconcile_threshold,
+                    max_clusters=max_clusters,
+                )
+        except Exception:
+            logger.exception("face cluster reconciliation pass failed")
+            return {"scanned": 0, "merged": 0, "faces_moved": 0, "has_more": False, "error": True}
 
     def _reconcile_person_label_tags(
         self,
