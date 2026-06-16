@@ -114,6 +114,48 @@ def test_multi_face_analysis_persists_multiple_person_tags_and_faces(
     assert {person.display_name for person in people} == {"Alice Kim", "Bob Lee"}
 
 
+def test_manual_photo_assign_tags_zero_face_photo_and_is_removable(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    # 얼굴 0검출 사진(평범한 이미지) — 자동 인물 태그가 안 붙는 케이스(아기·HEIC 대용)
+    image_path = source_root / "no-face.jpg"
+    create_image(image_path)
+    scan_twice(client)
+    item = get_media_item(client, filename="no-face.jpg")
+    fid = item["file_id"]
+
+    detail = client.get(f"/media/{fid}").json()
+    assert not any(t["tag_type"] == "person" for t in detail["tags"])
+
+    # 수동으로 이름 지정 → 새 인물 생성 + 박스리스 Face
+    res = client.post("/people/photo-assign", json={"file_id": fid, "name": "정이한"})
+    assert res.status_code == 200
+    person_id = res.json()["id"]
+    assert res.json()["display_name"] == "정이한"
+
+    detail = client.get(f"/media/{fid}").json()
+    assert ("person", "정이한") in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
+    # 동기화에도 살아남도록 Face row로 모델링됨(박스리스 = 학습은 안 하지만 검색은 됨)
+    assert any(f["person_id"] == person_id for f in detail["faces"])
+
+    # 멱등: 같은 인물 재지정해도 중복 Face가 쌓이지 않는다
+    client.post("/people/photo-assign", json={"file_id": fid, "person_id": person_id})
+    detail = client.get(f"/media/{fid}").json()
+    assert sum(1 for f in detail["faces"] if f["person_id"] == person_id) == 1
+
+    # 동기화 후에도 수동 태그 보존(reconcile이 얼굴기반이라 Face가 있어야 안 지워짐)
+    scan_twice(client)
+    detail = client.get(f"/media/{fid}").json()
+    assert ("person", "정이한") in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
+
+    # 제거
+    rm = client.delete("/people/photo-assign", params={"file_id": fid, "person_id": person_id})
+    assert rm.status_code == 204
+    detail = client.get(f"/media/{fid}").json()
+    assert ("person", "정이한") not in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
+
+
 def test_person_alias_mapping_updates_tags_search_and_dashboard(
     client: TestClient,
     source_root: Path,

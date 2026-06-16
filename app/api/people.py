@@ -6,7 +6,7 @@ from html import escape
 from io import BytesIO
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -73,6 +73,18 @@ class MergePeopleRequest(BaseModel):
 
 class AssignFaceRequest(BaseModel):
     person_id: Optional[int] = None
+
+
+class PhotoAssignRequest(BaseModel):
+    """Manually put a person in a photo — for shots the face detector missed
+    (babies, HEIC, faces turned away). Either an existing person_id or a name
+    (existing match or a new named person). Optional bbox (normalized x/y/w/h in
+    0..1) for a manual face region that we try to embed so the model learns."""
+
+    file_id: str
+    person_id: Optional[int] = None
+    name: Optional[str] = None
+    bbox: Optional[dict[str, float]] = None
 
 
 @router.get("", response_model=list[PersonResponse])
@@ -690,6 +702,106 @@ def assign_face(face_id: int, body: AssignFaceRequest, request: Request) -> Resp
             person = session.get(Person, int(person_id))
             if person is not None:
                 recompute_person_centroid(session, embeddings_root=embeddings_root, person=person)
+    return Response(status_code=204)
+
+
+def _resolve_or_create_person(session, *, person_id: int | None, name: str | None) -> Person:
+    """Find the target person by id, or by name (existing match), else create a
+    new named person. Used by manual photo tagging."""
+    if person_id is not None:
+        person = session.get(Person, person_id)
+        if person is None or person.merged_into_id is not None:
+            raise HTTPException(status_code=404, detail="Target person not found")
+        return person
+    label = " ".join((name or "").strip().split())
+    if not label or _INTERNAL_PERSON_ID_RE.match(label):
+        raise HTTPException(status_code=422, detail="a valid person name or id is required")
+    folded = label.casefold()
+    # Reuse an existing non-merged person if the name matches its display name or
+    # any alias — so "정이한" tags the same person the detector already knows.
+    for person in session.scalars(select(Person).where(Person.merged_into_id.is_(None))):
+        if folded in {value.casefold() for value in _person_labels(person)}:
+            return person
+    person = Person(display_name=label, aliases_json=[])
+    session.add(person)
+    session.flush()
+    return person
+
+
+@router.post("/photo-assign", response_model=PersonResponse)
+def assign_person_to_photo(body: PhotoAssignRequest, request: Request) -> PersonResponse:
+    """Manually put a person in a photo the detector missed.
+
+    Models the association as a Face row so it flows through the existing
+    reconcile/search/centroid machinery and survives re-sync (unlike a bare
+    person tag, which the face-driven reconcile would wipe). A boxless face
+    (no embedding) makes the photo findable by name; a boxed face whose region
+    we can embed also teaches the classifier (best-effort — wired next).
+    """
+    database = require_state(request, "database")
+    settings = request.app.state.settings
+    search_version = settings.semantic_search_version
+    with database.session_factory() as session:
+        media = session.get(MediaFile, body.file_id)
+        if media is None:
+            raise HTTPException(status_code=404, detail="photo not found")
+        person = _resolve_or_create_person(session, person_id=body.person_id, name=body.name)
+
+        bbox_payload: dict[str, Any] = dict(body.bbox) if body.bbox else {}
+        # Idempotent: if this person is already manually (boxless) on the photo and
+        # no new region was drawn, do nothing rather than stacking duplicate rows.
+        if not bbox_payload:
+            already = session.scalars(
+                select(Face).where(Face.file_id == body.file_id, Face.person_id == person.id)
+            ).all()
+            if any((face.embedding_ref is None and not face.bbox) for face in already):
+                session.refresh(person)
+                return _person_response(session, person)
+
+        session.add(
+            Face(file_id=body.file_id, person_id=person.id, bbox=bbox_payload, embedding_ref=None)
+        )
+        session.flush()
+        _sync_single_file_person_labels(session, body.file_id, search_version=search_version)
+        session.commit()
+        clear_query_cache()
+        TagVocabularyCache.invalidate()
+        session.refresh(person)
+        return _person_response(session, person)
+
+
+@router.delete("/photo-assign", status_code=204)
+def remove_person_from_photo(file_id: str, person_id: int, request: Request) -> Response:
+    """Remove a *manual* (boxless, embedding-less) person association from a photo.
+
+    Detector-found faces are not touched here — those are managed via the face
+    assignment endpoint. Only the hand-added "this person is in this photo" rows
+    are removed."""
+    database = require_state(request, "database")
+    search_version = request.app.state.settings.semantic_search_version
+    with database.session_factory() as session:
+        # Manual = no embedding AND no box. Filter the box in Python so we stay
+        # dialect-agnostic (JSON {} comparison differs across SQLite/Postgres).
+        candidates = session.scalars(
+            select(Face).where(
+                Face.file_id == file_id,
+                Face.person_id == person_id,
+                Face.embedding_ref.is_(None),
+            )
+        ).all()
+        deleted = 0
+        for face in candidates:
+            if not face.bbox:
+                session.delete(face)
+                deleted += 1
+        if deleted:
+            # 태그 재계산 전에 삭제를 확정해야 persons_in_file에서 빠진다
+            # (안 그러면 _sync가 아직 살아있는 얼굴을 보고 태그를 되살린다).
+            session.flush()
+            _sync_single_file_person_labels(session, file_id, search_version=search_version)
+            session.commit()
+            clear_query_cache()
+            TagVocabularyCache.invalidate()
     return Response(status_code=204)
 
 
