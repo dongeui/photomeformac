@@ -1489,6 +1489,52 @@ def gallery_page(
         if (r.ok) location.reload();
       }} catch (e) {{}}
     }}
+    // B: 라이트박스 이미지 위에 얼굴 영역을 드래그 → 그 크롭으로 학습(검출 성공 시).
+    function tvFaceBox(fileId, btn) {{
+      var panel = btn.closest(".lightbox-panel");
+      var img = panel && panel.querySelector("img");
+      if (!img) return;
+      var input = panel.querySelector(".lb-person-input");
+      btn.textContent = "영역을 드래그";
+      img.style.cursor = "crosshair";
+      var box = null, sx = 0, sy = 0;
+      function move(e) {{
+        if (!box) return;
+        box.style.left = Math.min(e.clientX, sx) + "px";
+        box.style.top = Math.min(e.clientY, sy) + "px";
+        box.style.width = Math.abs(e.clientX - sx) + "px";
+        box.style.height = Math.abs(e.clientY - sy) + "px";
+      }}
+      async function up(e) {{
+        window.removeEventListener("pointermove", move);
+        var r = img.getBoundingClientRect();
+        var x0 = Math.min(e.clientX, sx), y0 = Math.min(e.clientY, sy);
+        var w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
+        if (box) {{ box.remove(); box = null; }}
+        img.style.cursor = ""; btn.textContent = "얼굴 지정";
+        if (w < 8 || h < 8) return;
+        var nb = {{ x: (x0 - r.left) / r.width, y: (y0 - r.top) / r.height, width: w / r.width, height: h / r.height }};
+        var name = (((input && input.value) || "").trim()) || ((window.prompt("이 얼굴의 이름", "") || "").trim());
+        if (!name) return;
+        try {{
+          var res = await fetch("/people/photo-assign", {{
+            method: "POST", headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{ file_id: fileId, name: name, bbox: nb }})
+          }});
+          if (res.ok) location.reload();
+        }} catch (e) {{}}
+      }}
+      function down(e) {{
+        e.preventDefault();
+        sx = e.clientX; sy = e.clientY;
+        box = document.createElement("div");
+        box.style.cssText = "position:fixed;border:2px solid #fff;background:rgba(255,255,255,0.18);z-index:9999;pointer-events:none;left:" + sx + "px;top:" + sy + "px;";
+        document.body.appendChild(box);
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up, {{ once: true }});
+      }}
+      img.addEventListener("pointerdown", down, {{ once: true }});
+    }}
   </script>
 </body>
 </html>"""
@@ -1723,6 +1769,7 @@ def _render_card(
         f'aria-label="인물 추가" '
         f"onkeydown=\"if(event.key==='Enter'){{event.preventDefault();tvAddPerson('{fid_js}',this);}}\">"
         f"<button type=\"button\" class=\"lb-person-addbtn\" onclick=\"tvAddPerson('{fid_js}',this.previousElementSibling)\">추가</button>"
+        f"<button type=\"button\" class=\"lb-person-addbtn lb-facebox\" title=\"이름 입력 후 얼굴 영역을 드래그하면 그 얼굴로 학습합니다\" onclick=\"tvFaceBox('{fid_js}',this)\">얼굴 지정</button>"
         f"</span></div>"
     )
     lightbox_html = (
