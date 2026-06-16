@@ -138,6 +138,11 @@ if [[ -n "$SENTRY_DSN" ]]; then
     <key>TroveSentryDSN</key>
     <string>$SENTRY_DSN</string>
 PLIST
+  echo "crash reporting: TroveSentryDSN 주입됨 (opt-in 활성)"
+else
+  # 없어도 정상 빌드(기능 숨김)지만, 실수로 빠뜨린 경우를 알 수 있게 경고만 남긴다.
+  # 의도적으로 끄려면 그냥 TROVE_SENTRY_DSN을 설정하지 않으면 된다.
+  echo "warning: TROVE_SENTRY_DSN 미설정 — 익명 오류 보고 기능이 빠진 채 빌드됩니다(토글·전송 없음)." >&2
 fi
 cat >> "$CONTENTS_DIR/Info.plist" <<'PLIST'
 </dict>

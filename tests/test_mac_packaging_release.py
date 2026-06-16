@@ -30,6 +30,8 @@ def test_build_script_injects_sentry_dsn_into_info_plist_when_provided():
     assert "TroveSentryDSN" in text
     # Sentry.framework도 Sparkle과 함께 .app/Contents/Frameworks/ 에 embed돼야 한다.
     assert "for fw in Sparkle Sentry" in text
+    # DSN 누락 시(없어도 정상 빌드지만) 실수 방지용 경고를 남긴다.
+    assert "warning: TROVE_SENTRY_DSN 미설정" in text
 
 
 def test_notarize_script_uses_keychain_profile_or_env_without_committed_secret():
