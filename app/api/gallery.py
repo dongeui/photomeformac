@@ -19,6 +19,7 @@ from app.api.deps import require_state
 from app.api.i18n_web import render_lang_switcher, request_translator
 from app.models.annotation import MediaAnnotation
 from app.models.asset import DerivedAsset
+from app.models.face import Face
 from app.models.media import MediaFile
 from app.models.person import Person
 from app.models.semantic import SearchDocument
@@ -195,6 +196,7 @@ def gallery_page(
         annotation_map: dict[str, MediaAnnotation] = {}
         asset_map: dict[str, list[DerivedAsset]] = defaultdict(list)
         tag_map: dict[str, list[Tag]] = defaultdict(list)
+        people_map: dict[str, list[tuple[int, str]]] = defaultdict(list)
         if file_ids:
             items = list(
                 session.scalars(
@@ -220,6 +222,17 @@ def gallery_page(
                 select(MediaAnnotation).where(MediaAnnotation.file_id.in_(file_ids))
             ):
                 annotation_map[annotation.file_id] = annotation
+            # 라이트박스 "인물" 칩: 사진 속 named 인물(id+이름). 무명 클러스터·애칭은
+            # 제외하고 사람당 한 번만(중복 face가 있어도). 수동 태깅 UI가 이걸 쓴다.
+            for fid_, pid_, pname_ in session.execute(
+                select(Face.file_id, Person.id, Person.display_name)
+                .join(Person, Person.id == Face.person_id)
+                .where(Face.file_id.in_(file_ids), Person.merged_into_id.is_(None))
+                .where(Person.display_name.not_like("person-%"))
+            ):
+                bucket = people_map[str(fid_)]
+                if not any(existing[0] == int(pid_) for existing in bucket):
+                    bucket.append((int(pid_), str(pname_)))
 
         person_options = _list_named_person_display_names(session)
         place_options = _list_tag_values(session, PLACE_TAG_TYPES)
@@ -248,6 +261,8 @@ def gallery_page(
             index=index,
             next_url=f"{current_url}#card-{item.file_id}",
             original_offline=_original_offline(item.source_root),
+            people=people_map.get(item.file_id, []),
+            person_options=person_options,
         )
         for index, item in enumerate(items)
     ]
@@ -924,6 +939,35 @@ def gallery_page(
       color: rgba(255, 255, 255, 0.6);
       word-break: break-all;
     }}
+    .lb-people {{
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin: 6px 0;
+    }}
+    .lb-people-label {{ font-size: 0.74rem; color: rgba(255,255,255,0.55); margin-right: 2px; }}
+    .lb-person {{
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.8rem; color: #fff;
+      background: rgba(255,255,255,0.14); border-radius: 999px; padding: 3px 6px 3px 10px;
+    }}
+    .lb-person-x {{
+      border: none; background: rgba(255,255,255,0.2); color: #fff;
+      width: 16px; height: 16px; line-height: 14px; border-radius: 50%;
+      cursor: pointer; font-size: 0.8rem; padding: 0;
+    }}
+    .lb-person-x:hover {{ background: var(--accent); }}
+    .lb-person-add {{ display: inline-flex; gap: 4px; }}
+    .lb-person-input {{
+      font-size: 0.8rem; color: #fff; background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.25); border-radius: 999px; padding: 3px 10px; width: 9rem;
+    }}
+    .lb-person-addbtn {{
+      font-size: 0.78rem; color: #fff; background: rgba(255,255,255,0.18);
+      border: none; border-radius: 999px; padding: 3px 10px; cursor: pointer;
+    }}
+    .lb-person-addbtn:hover {{ background: var(--accent); }}
     .lightbox-actions {{
       display: flex;
       gap: 8px;
@@ -1146,6 +1190,7 @@ def gallery_page(
       </section>
     </section>
   </main>
+  <datalist id="lb-person-dl">{_render_datalist_options(person_options)}</datalist>
   <footer class="statusbar">
     <span>{_("gallery.count_photos", count=total)}</span>
     <span>{_("gallery.range", start=offset + 1, end=offset + len(items)) if items else _("gallery.empty")}</span>
@@ -1424,6 +1469,26 @@ def gallery_page(
       }}
       setInterval(beat, 5000);
     }})();
+
+    // 수동 인물 태깅: 라이트박스에서 사진에 인물을 더하거나 뺀다(P2). 성공 시
+    // 새 태그/검색 상태를 반영하려 페이지를 다시 읽는다.
+    async function tvAddPerson(fileId, inputEl) {{
+      var name = ((inputEl && inputEl.value) || "").trim();
+      if (!name) return;
+      try {{
+        var r = await fetch("/people/photo-assign", {{
+          method: "POST", headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify({{ file_id: fileId, name: name }})
+        }});
+        if (r.ok) location.reload();
+      }} catch (e) {{}}
+    }}
+    async function tvRmPerson(fileId, personId, btn) {{
+      try {{
+        var r = await fetch("/people/photo-assign?file_id=" + encodeURIComponent(fileId) + "&person_id=" + personId, {{ method: "DELETE" }});
+        if (r.ok) location.reload();
+      }} catch (e) {{}}
+    }}
   </script>
 </body>
 </html>"""
@@ -1617,6 +1682,8 @@ def _render_card(
     index: int,
     next_url: str,
     original_offline: bool = False,
+    people: list[tuple[int, str]] | None = None,
+    person_options: list[str] | None = None,
 ) -> str:
     eager = index < 6
     loading_attr = "eager" if eager else "lazy"
@@ -1641,6 +1708,23 @@ def _render_card(
         if original_offline
         else f'<a class="lightbox-download" href="/media/{escape(media_file.file_id)}/download" download="{escape(media_file.filename)}" title="원본 다운로드">↓ 원본</a>'
     )
+    fid_js = media_file.file_id
+    chips = "".join(
+        f'<span class="lb-person">{escape(name)}'
+        f'<button type="button" class="lb-person-x" title="제거" '
+        f"onclick=\"tvRmPerson('{fid_js}',{pid},this)\">×</button></span>"
+        for pid, name in (people or [])
+    )
+    people_html = (
+        f'<div class="lb-people">'
+        f'<span class="lb-people-label">인물</span>{chips}'
+        f'<span class="lb-person-add">'
+        f'<input type="text" class="lb-person-input" list="lb-person-dl" placeholder="인물 추가" '
+        f'aria-label="인물 추가" '
+        f"onkeydown=\"if(event.key==='Enter'){{event.preventDefault();tvAddPerson('{fid_js}',this);}}\">"
+        f"<button type=\"button\" class=\"lb-person-addbtn\" onclick=\"tvAddPerson('{fid_js}',this.previousElementSibling)\">추가</button>"
+        f"</span></div>"
+    )
     lightbox_html = (
         f"""
       <div id="{preview_id}" class="lightbox" aria-label="{escape(title)} 미리보기">
@@ -1655,6 +1739,7 @@ def _render_card(
                 <a class="lightbox-close" href="#gallery">닫기</a>
               </div>
             </div>
+            {people_html}
             <span class="lightbox-path" title="{escape(media_file.current_path)}">{escape(media_file.current_path)}</span>
           </div>
         </div>
