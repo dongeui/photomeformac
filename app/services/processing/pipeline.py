@@ -2204,6 +2204,29 @@ class ProcessingPipeline:
             warnings=analysis.warnings,
         )
 
+    def detect_largest_face_embedding(
+        self, image_path: Path
+    ) -> tuple[tuple[float, ...], dict[str, Any]] | None:
+        """Detect faces in an image (e.g. a user-drawn crop) and return the
+        largest face's (embedding, bbox), or None if face analysis is
+        unavailable or finds nothing.
+
+        Manual photo tagging uses this to learn from a tight region the
+        full-image detector missed — zooming into the box sometimes lets the
+        detector lock on where it couldn't on the whole frame.
+        """
+        if self._face_analysis_service is None:
+            return None
+        try:
+            result = self._face_analysis_service.analyze_image_file(image_path)
+        except FaceAnalysisError:
+            return None
+        faces = list(result.faces)
+        if not faces:
+            return None
+        best = max(faces, key=lambda face: int(face.bbox.width) * int(face.bbox.height))
+        return best.embedding, _build_bbox_payload(best.bbox)
+
     def _load_person_centroids(self, session: Session) -> list[PersonCentroidState]:
         states: list[PersonCentroidState] = []
         # 병합돼 숨겨진 사람은 제외 — 새 얼굴이 숨은 클러스터에 붙으면 안 된다.

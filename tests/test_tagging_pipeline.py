@@ -156,6 +156,45 @@ def test_manual_photo_assign_tags_zero_face_photo_and_is_removable(
     assert ("person", "정이한") not in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
 
 
+def test_manual_photo_assign_with_box_learns_face_when_detected(
+    client: TestClient,
+    source_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.processing.person_centroids import person_centroid_path
+
+    image_path = source_root / "boxed.jpg"
+    create_image(image_path)
+    scan_twice(client)
+    item = get_media_item(client, filename="boxed.jpg")
+    fid = item["file_id"]
+
+    # 박스 안에서 얼굴+임베딩이 검출된 것처럼 흉내(실모델 없이 B 경로 검증)
+    monkeypatch.setattr(
+        client.app.state.pipeline,
+        "detect_largest_face_embedding",
+        lambda path: ((0.1, 0.2, 0.3, 0.4), {"x": 1, "y": 1, "width": 2, "height": 2}),
+    )
+    res = client.post(
+        "/people/photo-assign",
+        json={"file_id": fid, "name": "정이한", "bbox": {"x": 0.3, "y": 0.3, "width": 0.3, "height": 0.3}},
+    )
+    assert res.status_code == 200
+    person_id = res.json()["id"]
+
+    with client.app.state.database.session_factory() as session:
+        face = session.scalars(select(Face).where(Face.file_id == fid, Face.person_id == person_id)).one()
+        assert face.embedding_ref is not None       # 학습되는 진짜 face
+        assert face.bbox.get("manual") is True
+
+    # 센트로이드 파일 생성 → 분류기에 반영(학습신호)
+    centroid = person_centroid_path(client.app.state.settings.embeddings_root, person_id)
+    assert centroid.is_file()
+
+    detail = client.get(f"/media/{fid}").json()
+    assert ("person", "정이한") in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
+
+
 def test_person_alias_mapping_updates_tags_search_and_dashboard(
     client: TestClient,
     source_root: Path,

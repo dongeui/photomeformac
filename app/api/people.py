@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from html import escape
 from io import BytesIO
 import json
 from pathlib import Path
+import tempfile
 from typing import Any, Optional
 from urllib.parse import quote
 
@@ -728,6 +730,92 @@ def _resolve_or_create_person(session, *, person_id: int | None, name: str | Non
     return person
 
 
+def _try_embed_face_region(
+    request: Request, session, media: MediaFile, bbox_norm: dict[str, float], settings
+) -> tuple[dict[str, Any], tuple[float, ...]] | None:
+    """Crop the user's normalized box from the photo and try to detect+embed a
+    face in it. Returns (full-image-pixel bbox, embedding) on success, else None
+    (caller falls back to a boxless tag). Zooming into the box sometimes lets the
+    detector lock on a face it missed on the whole frame."""
+    pipeline = getattr(request.app.state, "pipeline", None)
+    if pipeline is None or Image is None:
+        return None
+    asset = session.scalars(
+        select(DerivedAsset)
+        .where(DerivedAsset.file_id == media.file_id, DerivedAsset.asset_kind == "thumb")
+        .order_by(DerivedAsset.id.asc())
+        .limit(1)
+    ).first()
+    source_path = Path(media.current_path)
+    if not source_path.is_file():
+        if asset is None:
+            return None
+        source_path = _resolve_derived_path(settings.derived_root, asset.derived_path)
+    if not source_path.is_file():
+        return None
+
+    tmp_path: Path | None = None
+    try:
+        ensure_heif_support()
+        with Image.open(source_path) as image:
+            image = image.convert("RGB")
+            width, height = image.size
+            x = max(0.0, float(bbox_norm.get("x") or 0)) * width
+            y = max(0.0, float(bbox_norm.get("y") or 0)) * height
+            w = max(0.0, float(bbox_norm.get("width", bbox_norm.get("w", 0)) or 0)) * width
+            h = max(0.0, float(bbox_norm.get("height", bbox_norm.get("h", 0)) or 0)) * height
+            if w < 1 or h < 1:
+                return None
+            pad = max(w, h) * 0.25
+            left, top = int(max(0, x - pad)), int(max(0, y - pad))
+            right, bottom = int(min(width, x + w + pad)), int(min(height, y + h + pad))
+            if right <= left or bottom <= top:
+                return None
+            crop = image.crop((left, top, right, bottom))
+            # 작은 크롭은 검출기가 잡기 쉽게 키운다.
+            if max(crop.size) < 320:
+                scale = 320 / max(crop.size)
+                crop = crop.resize((int(crop.width * scale), int(crop.height * scale)))
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as handle:
+                tmp_path = Path(handle.name)
+                crop.save(handle, format="JPEG", quality=92)
+            face_bbox = {"x": int(x), "y": int(y), "width": int(w), "height": int(h), "manual": True}
+    except Exception:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        return None
+
+    try:
+        result = pipeline.detect_largest_face_embedding(tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+    if result is None:
+        return None
+    embedding, _detected_bbox = result
+    return face_bbox, embedding
+
+
+def _store_manual_face_embedding(
+    embeddings_root: Path, *, file_id: str, face_index: int, person: Person,
+    bbox: dict[str, Any], embedding: tuple[float, ...],
+) -> str:
+    """Write a manual face embedding to the same store the pipeline uses, so the
+    centroid recompute picks it up. Returns the ``embeddings/...`` relative ref."""
+    shard = file_id[:2] if len(file_id) >= 2 else "xx"
+    filename = f"{file_id}-face-{face_index:03d}.json"
+    abs_path = Path(embeddings_root) / "faces" / "v1" / shard / filename
+    abs_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "file_id": file_id, "face_index": int(face_index), "person_id": int(person.id),
+        "person": person.display_name, "bbox": bbox, "embedding": list(embedding),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    tmp = abs_path.with_name(abs_path.name + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=True, sort_keys=True), encoding="utf-8")
+    tmp.replace(abs_path)
+    return f"embeddings/faces/v1/{shard}/{filename}"
+
+
 @router.post("/photo-assign", response_model=PersonResponse)
 def assign_person_to_photo(body: PhotoAssignRequest, request: Request) -> PersonResponse:
     """Manually put a person in a photo the detector missed.
@@ -747,25 +835,38 @@ def assign_person_to_photo(body: PhotoAssignRequest, request: Request) -> Person
             raise HTTPException(status_code=404, detail="photo not found")
         person = _resolve_or_create_person(session, person_id=body.person_id, name=body.name)
 
-        bbox_payload: dict[str, Any] = dict(body.bbox) if body.bbox else {}
-        # Idempotent: if this person is already manually (boxless) on the photo and
-        # no new region was drawn, do nothing rather than stacking duplicate rows.
-        if not bbox_payload:
+        learned = False
+        if body.bbox:
+            # B: try to learn from the drawn region (detect + embed → real face).
+            region = _try_embed_face_region(request, session, media, body.bbox, settings)
+            if region is not None:
+                face_bbox, embedding = region
+                face = Face(file_id=body.file_id, person_id=person.id, bbox=face_bbox, embedding_ref=None)
+                session.add(face)
+                session.flush()  # stable id → unique embedding filename
+                face.embedding_ref = _store_manual_face_embedding(
+                    settings.embeddings_root, file_id=body.file_id, face_index=int(face.id),
+                    person=person, bbox=face_bbox, embedding=embedding,
+                )
+                learned = True
+
+        if not learned:
+            # A (or B fallback when detection missed): boxless association.
+            # Idempotent — don't stack duplicate boxless rows for the same person.
             already = session.scalars(
                 select(Face).where(Face.file_id == body.file_id, Face.person_id == person.id)
             ).all()
-            if any((face.embedding_ref is None and not face.bbox) for face in already):
-                session.refresh(person)
-                return _person_response(session, person)
+            if not any((face.embedding_ref is None and not face.bbox) for face in already):
+                session.add(Face(file_id=body.file_id, person_id=person.id, bbox={}, embedding_ref=None))
+                session.flush()
 
-        session.add(
-            Face(file_id=body.file_id, person_id=person.id, bbox=bbox_payload, embedding_ref=None)
-        )
-        session.flush()
         _sync_single_file_person_labels(session, body.file_id, search_version=search_version)
         session.commit()
         clear_query_cache()
         TagVocabularyCache.invalidate()
+        if learned:
+            # 사용자 확정 얼굴을 분류기에 반영 → 미래 자동매칭 개선(학습신호).
+            recompute_person_centroid(session, embeddings_root=settings.embeddings_root, person=person)
         session.refresh(person)
         return _person_response(session, person)
 
