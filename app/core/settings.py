@@ -152,6 +152,10 @@ class AppSettings:
     semantic_maintenance_batch_size: int
     semantic_manual_batch_size: int
     lan_admin_token: str
+    # opt-in 크래시 리포팅. 둘 다 채워졌을 때만 Sentry가 초기화된다(동의 + DSN).
+    # mac 앱이 사용자 동의 시 TROVE_CRASH_REPORTING=1 + TROVE_SENTRY_DSN을 넘긴다.
+    crash_reporting_enabled: bool
+    sentry_dsn: str
 
     @property
     def thumbnail_root(self) -> Path:
@@ -274,4 +278,6 @@ def load_settings() -> AppSettings:
             5000,
         ),
         lan_admin_token=_env("TROVE_LAN_ADMIN_TOKEN", ""),
+        crash_reporting_enabled=_env_bool("TROVE_CRASH_REPORTING", False),
+        sentry_dsn=_env("TROVE_SENTRY_DSN", ""),
     )

@@ -44,6 +44,22 @@ def test_mac_app_env_is_always_local_only(tmp_path: Path) -> None:
     assert not (tmp_path / "lan-admin-token").exists()
 
 
+def test_mac_app_env_crash_reporting_is_opt_in(tmp_path: Path) -> None:
+    # 기본은 미수집. 동의 + DSN이 둘 다 있을 때만 백엔드 env에 실린다.
+    default_env = build_backend_env(tmp_path)
+    assert "TROVE_CRASH_REPORTING" not in default_env
+    assert "TROVE_SENTRY_DSN" not in default_env
+
+    # 동의만 있고 DSN이 없으면 실리지 않는다.
+    consent_only = build_backend_env(tmp_path, crash_reporting=True)
+    assert "TROVE_CRASH_REPORTING" not in consent_only
+
+    dsn = "https://k@example.test/1"
+    enabled = build_backend_env(tmp_path, crash_reporting=True, sentry_dsn=dsn)
+    assert enabled["TROVE_CRASH_REPORTING"] == "1"
+    assert enabled["TROVE_SENTRY_DSN"] == dsn
+
+
 def test_mac_app_env_can_disable_clip_without_disabling_app(tmp_path: Path) -> None:
     env = build_backend_env(tmp_path, clip_enabled=False)
 

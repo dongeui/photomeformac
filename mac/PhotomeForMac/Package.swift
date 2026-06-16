@@ -15,13 +15,17 @@ let package = Package(
         // Sparkle 2 — macOS 자동 업데이트 표준 프레임워크.
         // edDSA 서명된 appcast.xml을 GitHub Pages 같은 정적 호스팅에서 제공하면
         // 사용자가 클릭 한 번으로 새 DMG 다운로드 + 자동 교체 + 재시작까지 수행.
-        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0")
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0"),
+        // Sentry — opt-in 크래시 리포팅. 사용자가 동의하고 DSN이 빌드에 주입된
+        // 경우에만 start한다(CrashReporting.swift). 동의 없으면 SDK를 시작하지 않는다.
+        .package(url: "https://github.com/getsentry/sentry-cocoa.git", from: "8.0.0")
     ],
     targets: [
         .executableTarget(
             name: "PhotomeForMac",
             dependencies: [
-                .product(name: "Sparkle", package: "Sparkle")
+                .product(name: "Sparkle", package: "Sparkle"),
+                .product(name: "Sentry", package: "sentry-cocoa")
             ]
         )
         // 테스트 타깃은 43ff060에서 Tests/ 삭제와 함께 제거됨. 디렉터리 없이

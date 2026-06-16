@@ -20,6 +20,8 @@ def build_backend_env(
     port: int = 8000,
     clip_enabled: bool = True,
     offline_mode: bool = True,
+    crash_reporting: bool = False,
+    sentry_dsn: str | None = None,
 ) -> dict[str, str]:
     """Mac 앱에서 로컬 Trove 백엔드를 실행할 때 쓸 환경 변수를 만든다.
 
@@ -55,6 +57,10 @@ def build_backend_env(
 
     if source_roots:
         env["TROVE_SOURCE_ROOTS"] = ",".join(_abs(path) for path in source_roots)
+    # opt-in 크래시 리포팅. 동의 + DSN이 모두 있을 때만 백엔드로 넘긴다.
+    if crash_reporting and sentry_dsn:
+        env["TROVE_CRASH_REPORTING"] = "1"
+        env["TROVE_SENTRY_DSN"] = sentry_dsn
 
     return env
 
@@ -66,6 +72,8 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--no-clip", action="store_true", help="CLIP 비활성화")
     parser.add_argument("--online", action="store_true", help="오프라인 모드 해제")
+    parser.add_argument("--crash-reporting", action="store_true", help="opt-in 크래시 리포팅 활성화")
+    parser.add_argument("--sentry-dsn", default="", help="Sentry DSN (crash-reporting 동의 시)")
     args = parser.parse_args()
 
     env = build_backend_env(
@@ -74,6 +82,8 @@ def main() -> None:
         port=args.port,
         clip_enabled=not args.no_clip,
         offline_mode=not args.online,
+        crash_reporting=args.crash_reporting,
+        sentry_dsn=args.sentry_dsn,
     )
     print(json.dumps(env, ensure_ascii=False, indent=2, sort_keys=True))
 

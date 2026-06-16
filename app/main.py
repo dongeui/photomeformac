@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.api.router import api_router
 from app.core.lifecycle import lifespan
 from app.core.settings import AppSettings, load_settings
+from app.core.telemetry import init_crash_reporting
 
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,8 @@ def _lan_admin_authorized(request: Request, settings: AppSettings) -> bool:
 
 def create_app(settings: AppSettings | None = None) -> FastAPI:
     resolved_settings = settings or load_settings()
+    # opt-in 크래시 리포팅 — 동의 + DSN이 모두 있을 때만 초기화(아니면 no-op).
+    init_crash_reporting(resolved_settings)
     app = FastAPI(
         title=resolved_settings.app_name,
         version=resolved_settings.app_version,
