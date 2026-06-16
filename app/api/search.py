@@ -500,6 +500,8 @@ def search_index_status(request: Request) -> dict[str, Any]:
     - whether FAISS vector index is loaded
     - approximate vector count from media_embeddings
     """
+    from app.models.media import MediaFile
+    from app.models.person import Person
     from app.models.semantic import MediaEmbedding
     from app.services.search.vector import _global_faiss_index
 
@@ -507,6 +509,31 @@ def search_index_status(request: Request) -> dict[str, Any]:
     with database.session_factory() as session:
         doc_count = session.scalar(select(func.count()).select_from(SearchDocument)) or 0
         embedding_count = session.scalar(select(func.count()).select_from(MediaEmbedding)) or 0
+
+        # Findability gap: photos visible in the gallery (thumbnailed) that are
+        # not yet in the search index. This is the "visible but not searchable"
+        # number the findability contract tracks as an SLO. See
+        # docs/engineering/FINDABILITY_CONTRACT.md.
+        _visible_predicate = (
+            MediaFile.status.in_(("thumb_done", "analysis_done")),
+            MediaFile.media_kind == "image",
+        )
+        visible_image_media = session.scalar(
+            select(func.count()).select_from(MediaFile).where(*_visible_predicate)
+        ) or 0
+        pending_search_document = session.scalar(
+            select(func.count())
+            .select_from(MediaFile)
+            .outerjoin(SearchDocument, SearchDocument.file_id == MediaFile.file_id)
+            .where(*_visible_predicate, SearchDocument.file_id.is_(None))
+        ) or 0
+        # Unnamed auto-clusters still awaiting absorption/naming — the face
+        # fragmentation backlog that strands a person's photos out of name search.
+        unnamed_face_clusters = session.scalar(
+            select(func.count())
+            .select_from(Person)
+            .where(Person.merged_into_id.is_(None), Person.display_name.like("person-%"))
+        ) or 0
 
         fts_count: int | None = None
         fts_ko_count: int | None = None
@@ -530,12 +557,27 @@ def search_index_status(request: Request) -> dict[str, Any]:
     if faiss_loaded and _global_faiss_index is not None:
         faiss_ntotal = getattr(_global_faiss_index._index, "ntotal", None)
 
+    searchable_image_media = max(0, int(visible_image_media) - int(pending_search_document))
+    coverage_pct = (
+        round(searchable_image_media / int(visible_image_media) * 100, 1)
+        if visible_image_media
+        else 100.0
+    )
+
     return {
         "search_documents": doc_count,
         "embeddings": embedding_count,
         "fts": {
             "unicode61_rows": fts_count,
             "trigram_rows": fts_ko_count,
+        },
+        # "보이는데 검색 안 됨" 갭. coverage_pct가 SLO 헤드라인 숫자.
+        "findability": {
+            "visible_image_media": int(visible_image_media),
+            "searchable_image_media": searchable_image_media,
+            "pending_search_document": int(pending_search_document),
+            "coverage_pct": coverage_pct,
+            "unnamed_face_clusters": int(unnamed_face_clusters),
         },
         "vector_index": {
             "backend": "faiss" if _global_faiss_index is not None else "numpy",

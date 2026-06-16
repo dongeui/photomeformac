@@ -246,6 +246,26 @@ def test_status_reports_phase2_coverage(
     assert any("CLIP 임베딩 상태" in note for note in ai_payload["notes"])
 
 
+def test_index_status_reports_findability_gap(
+    client: TestClient,
+    source_root: Path,
+) -> None:
+    create_image(source_root / "findable.jpg")
+    scan_twice(client)
+
+    payload = client.get("/search/index/status").json()
+    gap = payload["findability"]
+
+    # 갤러리에 보이는 이미지 수 = 검색됨 + 검색 대기. 항상 성립해야 한다.
+    assert gap["visible_image_media"] >= 1
+    assert gap["searchable_image_media"] + gap["pending_search_document"] == gap["visible_image_media"]
+    assert gap["pending_search_document"] >= 0
+    assert 0 <= gap["coverage_pct"] <= 100
+    # scan_twice가 Phase 2까지 돌려 검색문서를 만들었으므로 그 이미지는 검색가능.
+    assert gap["searchable_image_media"] >= 1
+    assert gap["unnamed_face_clusters"] >= 0
+
+
 def test_status_detail_files_and_ai_include_summary_notes(
     client: TestClient,
     source_root: Path,

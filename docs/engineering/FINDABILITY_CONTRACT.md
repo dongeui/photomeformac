@@ -69,10 +69,13 @@
   개선으로 전환. 실패→참여→모델 개선의 선순환.
 
 ## 계측 (SLO)
-- **핵심 지표:** "사진첩에 보이는데 `search_documents` 없는 사진 수" + "named 인물
-  얼굴이 있는데 인물라벨 없는 사진 수" → 대시보드 숫자로 노출.
+- **핵심 지표 (구현됨):** `GET /search/index/status`의 `findability` 블록 —
+  `visible_image_media`(갤러리에 보이는 이미지), `searchable_image_media`,
+  `pending_search_document`("보이는데 검색 안 됨" 수), `coverage_pct`(SLO 헤드라인),
+  `unnamed_face_clusters`(군집 분열 백로그). `app/api/search.py` search_index_status.
 - **SLO 후보:** 신규 visible 사진이 검색가능해지기까지 p95 < N분(값은 측정 후 확정).
-- 지금은 우리 갭을 우리가 못 본다. 먼저 숫자로 만든다.
+  현재 라이브 기준선: coverage ≈ 93.8% (2026-06-16, 병합 직후 재색인 진행 중).
+- 다음: 이 숫자를 설정/상태 페이지에 노출(P1 정직한 상태표시) + 시계열화.
 
 ## 논 골 (Non-goals)
 - 얼굴 매칭 정확도 100%. (불가능·불필요 — 갭을 작게+자가치유로 해결)
