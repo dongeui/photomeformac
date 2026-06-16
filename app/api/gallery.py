@@ -263,6 +263,7 @@ def gallery_page(
             original_offline=_original_offline(item.source_root),
             people=people_map.get(item.file_id, []),
             person_options=person_options,
+            _=_,
         )
         for index, item in enumerate(items)
     ]
@@ -1495,7 +1496,7 @@ def gallery_page(
       var img = panel && panel.querySelector("img");
       if (!img) return;
       var input = panel.querySelector(".lb-person-input");
-      btn.textContent = "영역을 드래그";
+      btn.textContent = {_json("gallery.tag_face_dragging")};
       img.style.cursor = "crosshair";
       var box = null, sx = 0, sy = 0;
       function move(e) {{
@@ -1511,10 +1512,10 @@ def gallery_page(
         var x0 = Math.min(e.clientX, sx), y0 = Math.min(e.clientY, sy);
         var w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
         if (box) {{ box.remove(); box = null; }}
-        img.style.cursor = ""; btn.textContent = "얼굴 지정";
+        img.style.cursor = ""; btn.textContent = {_json("gallery.tag_face")};
         if (w < 8 || h < 8) return;
         var nb = {{ x: (x0 - r.left) / r.width, y: (y0 - r.top) / r.height, width: w / r.width, height: h / r.height }};
-        var name = (((input && input.value) || "").trim()) || ((window.prompt("이 얼굴의 이름", "") || "").trim());
+        var name = (((input && input.value) || "").trim()) || ((window.prompt({_json("gallery.face_name_prompt")}, "") || "").trim());
         if (!name) return;
         try {{
           var res = await fetch("/people/photo-assign", {{
@@ -1730,6 +1731,7 @@ def _render_card(
     original_offline: bool = False,
     people: list[tuple[int, str]] | None = None,
     person_options: list[str] | None = None,
+    _=lambda key, **kw: key,
 ) -> str:
     eager = index < 6
     loading_attr = "eager" if eager else "lazy"
@@ -1755,21 +1757,23 @@ def _render_card(
         else f'<a class="lightbox-download" href="/media/{escape(media_file.file_id)}/download" download="{escape(media_file.filename)}" title="원본 다운로드">↓ 원본</a>'
     )
     fid_js = media_file.file_id
+    _rm = escape(_("gallery.remove_person"))
     chips = "".join(
         f'<span class="lb-person">{escape(name)}'
-        f'<button type="button" class="lb-person-x" title="제거" '
+        f'<button type="button" class="lb-person-x" title="{_rm}" '
         f"onclick=\"tvRmPerson('{fid_js}',{pid},this)\">×</button></span>"
         for pid, name in (people or [])
     )
+    _add_person = escape(_("gallery.add_person"))
     people_html = (
         f'<div class="lb-people">'
-        f'<span class="lb-people-label">인물</span>{chips}'
+        f'<span class="lb-people-label">{escape(_("gallery.people_label"))}</span>{chips}'
         f'<span class="lb-person-add">'
-        f'<input type="text" class="lb-person-input" list="lb-person-dl" placeholder="인물 추가" '
-        f'aria-label="인물 추가" '
+        f'<input type="text" class="lb-person-input" list="lb-person-dl" placeholder="{_add_person}" '
+        f'aria-label="{_add_person}" '
         f"onkeydown=\"if(event.key==='Enter'){{event.preventDefault();tvAddPerson('{fid_js}',this);}}\">"
-        f"<button type=\"button\" class=\"lb-person-addbtn\" onclick=\"tvAddPerson('{fid_js}',this.previousElementSibling)\">추가</button>"
-        f"<button type=\"button\" class=\"lb-person-addbtn lb-facebox\" title=\"이름 입력 후 얼굴 영역을 드래그하면 그 얼굴로 학습합니다\" onclick=\"tvFaceBox('{fid_js}',this)\">얼굴 지정</button>"
+        f"<button type=\"button\" class=\"lb-person-addbtn\" onclick=\"tvAddPerson('{fid_js}',this.previousElementSibling)\">{escape(_('gallery.add'))}</button>"
+        f"<button type=\"button\" class=\"lb-person-addbtn lb-facebox\" title=\"{escape(_('gallery.tag_face_hint'))}\" onclick=\"tvFaceBox('{fid_js}',this)\">{escape(_('gallery.tag_face'))}</button>"
         f"</span></div>"
     )
     lightbox_html = (
