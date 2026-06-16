@@ -177,7 +177,9 @@ def gallery_page(
                     select(func.count())
                     .select_from(MediaFile)
                     .where(
-                        MediaFile.status.not_in(("missing", "replaced", "excluded")),
+                        # error는 영구 실패라 "분석 중"이 아니다 — 제외해 배너가 영원히
+                        # 안 사라지는 거짓 표시를 막는다(게이트는 어차피 숨김 유지).
+                        MediaFile.status.not_in(("missing", "replaced", "excluded", "error")),
                         MediaFile.media_kind == "image",
                         ~exists().where(SearchDocument.file_id == MediaFile.file_id),
                     )
