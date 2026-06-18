@@ -820,7 +820,7 @@ def test_scan_accepts_host_path_and_maps_it_to_docker_mount(
 ) -> None:
     import app.api.scan as scan_api
 
-    host_root = tmp_path / "Volumes" / "homes" / "dejeong" / "Photos"
+    host_root = tmp_path / "Volumes" / "homes" / "user" / "Photos"
     mount_root = tmp_path / "mounted-photos"
     host_album = host_root / "album"
     mount_album = mount_root / "album"
@@ -1252,7 +1252,7 @@ def test_preferred_input_source_roots_ignores_mount_exists_errors(monkeypatch: p
     result = status_api._preferred_input_source_roots(
         settings,
         configured=["/photos"],
-        known=["/Volumes/homes/dejeong/Photos"],
+        known=["/Volumes/homes/user/Photos"],
     )
 
     assert result == ["/photos"]
@@ -1825,12 +1825,12 @@ def test_scan_missing_mapped_source_root_explains_auto_mapping(
         return original_exists(path)
 
     monkeypatch.setattr(scan_api.os.path, "exists", fake_exists)
-    monkeypatch.setenv("TROVE_SOURCE_ROOT_HOST", "/Volumes/homes/dejeong/Photos")
+    monkeypatch.setenv("TROVE_SOURCE_ROOT_HOST", "/Volumes/homes/user/Photos")
     monkeypatch.setenv("TROVE_SOURCE_ROOT_MOUNT", "/photos")
 
     app = create_app(load_settings())
     with TestClient(app) as mapped_client:
-        response = mapped_client.post("/scan", params={"source_roots": "/Volumes/homes/dejeong/Photos/missing"})
+        response = mapped_client.post("/scan", params={"source_roots": "/Volumes/homes/user/Photos/missing"})
 
     assert response.status_code == 400
     assert "Source root does not exist" in response.json()["detail"]

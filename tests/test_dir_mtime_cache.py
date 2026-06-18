@@ -173,8 +173,8 @@ def test_cache_keys_normalize_unicode_forms_to_nfc(tmp_path: Path) -> None:
     (2026-06-12 19,643개 실사고 회귀)."""
     import unicodedata
 
-    nfd = Path(unicodedata.normalize("NFD", "/photos/동의"))
-    nfc = Path(unicodedata.normalize("NFC", "/photos/동의"))
+    nfd = Path(unicodedata.normalize("NFD", "/photos/사진"))
+    nfc = Path(unicodedata.normalize("NFC", "/photos/사진"))
     assert str(nfd) != str(nfc)
 
     cache = DirMtimeCache()

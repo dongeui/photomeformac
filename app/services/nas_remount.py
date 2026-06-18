@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 REMOUNT_URLS_FILENAME = "nas-remount-urls.json"
 _REMOUNT_MIN_INTERVAL_SECONDS = 600.0
 
-# `mount` 출력 예: "//dongeui@DS920._smb._tcp.local/homes on /Volumes/homes (smbfs, ...)"
+# `mount` 출력 예: "//user@NAS._smb._tcp.local/homes on /Volumes/homes (smbfs, ...)"
 _MOUNT_LINE_RE = re.compile(r"^//(?P<spec>\S+) on (?P<mountpoint>/\S+) \((?P<fstype>[a-z]+)")
 
 

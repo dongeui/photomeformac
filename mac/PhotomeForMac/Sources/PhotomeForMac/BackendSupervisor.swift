@@ -1369,7 +1369,8 @@ final class BackendSupervisor: ObservableObject {
             candidates.append(bundled)
         }
         candidates.append(URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true))
-        candidates.append(URL(fileURLWithPath: "/Users/dongeui/Desktop/code/photomeformac", isDirectory: true))
+        // 개발용 폴백(소스 실행 시). 사용자명을 박지 않도록 홈 기준 상대 경로.
+        candidates.append(URL(fileURLWithPath: NSHomeDirectory() + "/Desktop/code/photomeformac", isDirectory: true))
 
         for start in candidates {
             var current = start.standardizedFileURL
@@ -1395,10 +1396,8 @@ final class BackendSupervisor: ObservableObject {
             repoRoot.appendingPathComponent(".venv311/bin/python"),
             Bundle.main.resourceURL?.appendingPathComponent("python-runtime/bin/python"),
             Bundle.main.resourceURL?.appendingPathComponent("python-runtime/bin/python3"),
-            URL(fileURLWithPath: "/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python"),
-            URL(fileURLWithPath: "/Users/dongeui/Desktop/code/photomeformac/.venv311/bin/python"),
-            URL(fileURLWithPath: "/Users/dongeui/Desktop/code/photome/.venv/bin/python"),
-            URL(fileURLWithPath: "/Users/dongeui/Desktop/code/photome/.venv311/bin/python"),
+            URL(fileURLWithPath: NSHomeDirectory() + "/Desktop/code/photomeformac/.venv/bin/python"),
+            URL(fileURLWithPath: NSHomeDirectory() + "/Desktop/code/photomeformac/.venv311/bin/python"),
             URL(fileURLWithPath: "/usr/bin/python3")
         ].compactMap { $0 }
 

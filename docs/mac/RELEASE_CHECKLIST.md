@@ -118,7 +118,7 @@ python3.11 -m venv .venv311
 1. `TROVE_REPO_ROOT` 명시값
 2. 앱 리소스 `Contents/Resources/trove-backend`
 3. 현재 작업 디렉토리 상위 탐색
-4. 개발 경로 `/Users/dongeui/Desktop/code/photomeformac`
+4. 개발 경로 `~/Desktop/code/photomeformac`
 
 Python 탐색 순서:
 

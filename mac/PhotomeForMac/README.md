@@ -54,7 +54,7 @@ scripts/build_mac_app_bundle.sh
 Xcode 실행은 `Package.swift`를 열어서 `PhotomeForMac` scheme으로 진행한다.
 
 ```text
-/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Package.swift
+~/Desktop/code/photomeformac/mac/PhotomeForMac/Package.swift
 ```
 
 필수 환경변수와 실행 순서는 `docs/mac/XCODE_RUN.md`를 따른다.

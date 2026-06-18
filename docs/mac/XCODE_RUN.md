@@ -5,14 +5,14 @@
 터미널에서 한 번만 실행한다.
 
 ```bash
-cd /Users/dongeui/Desktop/code/photomeformac
+cd ~/Desktop/code/photomeformac
 bash scripts/bootstrap_mac_backend_venv.sh
 ```
 
 완료 후 Python 경로는 다음이다.
 
 ```text
-/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python
+~/Desktop/code/photomeformac/.venv/bin/python
 ```
 
 ## 2. Xcode에서 열기
@@ -20,7 +20,7 @@ bash scripts/bootstrap_mac_backend_venv.sh
 Xcode에서 아래 파일을 연다.
 
 ```text
-/Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac/Package.swift
+~/Desktop/code/photomeformac/mac/PhotomeForMac/Package.swift
 ```
 
 중요: 지금은 `.xcodeproj`가 아니라 Swift Package 구조다. Scheme은 `PhotomeForMac`을 선택한다.
@@ -36,8 +36,8 @@ PhotomeForMac > Edit Scheme... > Run > Arguments > Environment Variables
 아래 2개를 추가하고 체크박스를 켠다.
 
 ```text
-TROVE_REPO_ROOT=/Users/dongeui/Desktop/code/photomeformac
-TROVE_PYTHON=/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python
+TROVE_REPO_ROOT=~/Desktop/code/photomeformac
+TROVE_PYTHON=~/Desktop/code/photomeformac/.venv/bin/python
 ```
 
 중요: `source .venv/bin/activate` 같은 활성화 스크립트를 Xcode에 넣는 게 아니다. Xcode에는 `TROVE_PYTHON` 값으로 실제 Python 실행 파일 경로를 넣는다.
@@ -49,7 +49,7 @@ Run 버튼을 누르면 메뉴바에 Trove 아이콘이 뜨고, 앱이 내부에
 CLI에서 Xcode 빌드 검증만 먼저 하고 싶으면 아래로 확인 가능하다.
 
 ```bash
-cd /Users/dongeui/Desktop/code/photomeformac/mac/PhotomeForMac
+cd ~/Desktop/code/photomeformac/mac/PhotomeForMac
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -scheme PhotomeForMac -destination 'platform=macOS' build
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 ```
@@ -57,7 +57,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 임시 `.app`/`.dmg` 산출물은 아래로 만들 수 있다.
 
 ```bash
-cd /Users/dongeui/Desktop/code/photomeformac
+cd ~/Desktop/code/photomeformac
 scripts/build_mac_app_bundle.sh
 ```
 
@@ -70,7 +70,7 @@ scripts/build_mac_app_bundle.sh
 대부분 Xcode가 시스템 Python(`/usr/bin/python3`)을 잡아서 생긴다. `TROVE_PYTHON`이 아래 값인지 확인한다.
 
 ```text
-/Users/dongeui/Desktop/code/photomeformac/.venv/bin/python
+~/Desktop/code/photomeformac/.venv/bin/python
 ```
 
 ### 메뉴바 아이콘은 뜨는데 사진첩/설정이 안 열림

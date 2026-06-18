@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="${TROVE_REPO_ROOT:-/Users/dongeui/Desktop/code/photomeformac}"
+# 스크립트 위치 기준으로 repo 루트를 잡는다(개인 경로 하드코딩 회피).
+REPO_ROOT="${TROVE_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$REPO_ROOT"
 
 if command -v python3.11 >/dev/null 2>&1; then
