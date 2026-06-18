@@ -1,0 +1,27 @@
+Trove — Proprietary License
+Copyright (c) 2026 정동의 (dongeui). All rights reserved.
+
+This software, including its source code, assets, and documentation
+(collectively, "Trove"), is proprietary. The source is made available for
+transparency and evaluation only.
+
+No license or right is granted, expressly or by implication, to any person to
+use, copy, reproduce, modify, adapt, merge, publish, distribute, sublicense,
+sell, or create derivative works of Trove, in whole or in part, except under a
+separate written agreement signed by the copyright holder. Personal evaluation
+by viewing the source in this repository is permitted; redistribution of the
+software or any build artifact (including the packaged .app or .dmg) is not.
+
+Third-party components included with or used by Trove (e.g. Python packages,
+Sparkle, sentry-cocoa, CLIP/OpenCV models and weights, and other dependencies)
+remain governed by their own respective licenses; nothing in this license
+modifies those terms.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+For licensing inquiries, contact the copyright holder.

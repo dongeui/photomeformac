@@ -112,3 +112,9 @@ trove
 - [docs/engineering/ARCHITECTURE.md](docs/engineering/ARCHITECTURE.md) — 구조 개요
 - [docs/ops/DOCKER.md](docs/ops/DOCKER.md) — Docker 실행 및 볼륨 설정
 - [docs/ops/RUNBOOK.md](docs/ops/RUNBOOK.md) — 운영 규칙·장애 처리
+
+## 라이선스
+
+독점 소프트웨어 — 소스는 투명성·평가 목적으로만 공개한다. 사용·복제·수정·재배포는
+저작권자의 별도 서면 동의 없이는 허용되지 않는다. 전문은 [LICENSE](LICENSE) 참고.
+(번들된 서드파티 구성요소는 각자의 라이선스를 따른다.)
