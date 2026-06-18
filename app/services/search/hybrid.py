@@ -905,7 +905,7 @@ def _query_matches_vocab_tags(lowered_query: str, tokens: set[str], vocab_tags: 
     """Mirror planner-style dynamic tag matching for mode routing.
 
     normalize_query() may strip trailing Korean particles from nicknames such as
-    "꼬물이" -> "꼬물". Exact token intersection then misses valid person tags
+    "방울이" -> "방울". Exact token intersection then misses valid person tags
     even though planner already recognised the query as a person term.
     """
     if not vocab_tags:

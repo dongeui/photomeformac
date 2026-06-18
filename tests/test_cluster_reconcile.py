@@ -30,7 +30,7 @@ def test_absorbs_similar_unnamed_cluster_and_leaves_distinct_one(tmp_path):
     embeddings_root = tmp_path / "embeddings"
     factory = _session_factory()
     with factory() as session:
-        named = Person(id=40, display_name="정이한", aliases_json=["이한"])
+        named = Person(id=40, display_name="박지호", aliases_json=["지호"])
         near = Person(id=600, display_name="person-000600", aliases_json=[])   # same person, fragmented
         far = Person(id=601, display_name="person-000601", aliases_json=[])    # genuinely different
         session.add_all([named, near, far])
@@ -71,7 +71,7 @@ def test_absorbs_similar_unnamed_cluster_and_leaves_distinct_one(tmp_path):
         tags_a = set(
             session.scalars(select(Tag.tag_value).where(Tag.file_id == "a", Tag.tag_type == "person"))
         )
-        assert {"정이한", "이한"} <= tags_a
+        assert {"박지호", "지호"} <= tags_a
         # the distinct cluster's file is unchanged
         face_b = session.scalars(select(Face).where(Face.file_id == "b")).one()
         assert face_b.person_id == 601
@@ -82,7 +82,7 @@ def test_is_idempotent_and_respects_threshold(tmp_path):
     factory = _session_factory()
     with factory() as session:
         session.add_all([
-            Person(id=40, display_name="정이한", aliases_json=[]),
+            Person(id=40, display_name="박지호", aliases_json=[]),
             Person(id=600, display_name="person-000600", aliases_json=[]),
         ])
         session.add(Face(file_id="a", person_id=600))

@@ -720,7 +720,7 @@ def _resolve_or_create_person(session, *, person_id: int | None, name: str | Non
         raise HTTPException(status_code=422, detail="a valid person name or id is required")
     folded = label.casefold()
     # Reuse an existing non-merged person if the name matches its display name or
-    # any alias — so "정이한" tags the same person the detector already knows.
+    # any alias — so "박지호" tags the same person the detector already knows.
     for person in session.scalars(select(Person).where(Person.merged_into_id.is_(None))):
         if folded in {value.casefold() for value in _person_labels(person)}:
             return person

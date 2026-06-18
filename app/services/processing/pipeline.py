@@ -2143,7 +2143,7 @@ class ProcessingPipeline:
         people = session.scalars(select(Person).where(Person.id.in_(person_ids))).all()
         # display_name뿐 아니라 별칭까지 모두 태깅한다. 이래야 새로 들어온
         # 사진의 person 태그가 일괄 라벨 동기화(_sync_person_search_labels)와
-        # 동일해져, "정이한"+별칭("이한") 같은 require_all_persons 검색에서도
+        # 동일해져, "박지호"+별칭("지호") 같은 require_all_persons 검색에서도
         # 최신 사진이 누락되지 않는다. 라벨 산출은 person_labels와 공유한다.
         return [
             MediaTagInput(tag_type="person", tag_value=label)

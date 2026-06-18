@@ -129,13 +129,13 @@ def test_manual_photo_assign_tags_zero_face_photo_and_is_removable(
     assert not any(t["tag_type"] == "person" for t in detail["tags"])
 
     # 수동으로 이름 지정 → 새 인물 생성 + 박스리스 Face
-    res = client.post("/people/photo-assign", json={"file_id": fid, "name": "정이한"})
+    res = client.post("/people/photo-assign", json={"file_id": fid, "name": "박지호"})
     assert res.status_code == 200
     person_id = res.json()["id"]
-    assert res.json()["display_name"] == "정이한"
+    assert res.json()["display_name"] == "박지호"
 
     detail = client.get(f"/media/{fid}").json()
-    assert ("person", "정이한") in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
+    assert ("person", "박지호") in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
     # 동기화에도 살아남도록 Face row로 모델링됨(박스리스 = 학습은 안 하지만 검색은 됨)
     assert any(f["person_id"] == person_id for f in detail["faces"])
     # 검색문서까지 즉시 갱신돼야 이름으로 잡힌다(autoflush=False 회귀 가드)
@@ -143,8 +143,8 @@ def test_manual_photo_assign_tags_zero_face_photo_and_is_removable(
 
     with client.app.state.database.session_factory() as session:
         doc = session.scalars(select(SearchDocument).where(SearchDocument.file_id == fid)).one()
-        assert "정이한" in (doc.search_text or "")
-        assert "정이한" in (doc.people_json or [])
+        assert "박지호" in (doc.search_text or "")
+        assert "박지호" in (doc.people_json or [])
 
     # 멱등: 같은 인물 재지정해도 중복 Face가 쌓이지 않는다
     client.post("/people/photo-assign", json={"file_id": fid, "person_id": person_id})
@@ -154,13 +154,13 @@ def test_manual_photo_assign_tags_zero_face_photo_and_is_removable(
     # 동기화 후에도 수동 태그 보존(reconcile이 얼굴기반이라 Face가 있어야 안 지워짐)
     scan_twice(client)
     detail = client.get(f"/media/{fid}").json()
-    assert ("person", "정이한") in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
+    assert ("person", "박지호") in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
 
     # 제거
     rm = client.delete("/people/photo-assign", params={"file_id": fid, "person_id": person_id})
     assert rm.status_code == 204
     detail = client.get(f"/media/{fid}").json()
-    assert ("person", "정이한") not in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
+    assert ("person", "박지호") not in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
 
 
 def test_manual_photo_assign_with_box_learns_face_when_detected(
@@ -184,7 +184,7 @@ def test_manual_photo_assign_with_box_learns_face_when_detected(
     )
     res = client.post(
         "/people/photo-assign",
-        json={"file_id": fid, "name": "정이한", "bbox": {"x": 0.3, "y": 0.3, "width": 0.3, "height": 0.3}},
+        json={"file_id": fid, "name": "박지호", "bbox": {"x": 0.3, "y": 0.3, "width": 0.3, "height": 0.3}},
     )
     assert res.status_code == 200
     person_id = res.json()["id"]
@@ -199,7 +199,7 @@ def test_manual_photo_assign_with_box_learns_face_when_detected(
     assert centroid.is_file()
 
     detail = client.get(f"/media/{fid}").json()
-    assert ("person", "정이한") in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
+    assert ("person", "박지호") in {(t["tag_type"], t["tag_value"]) for t in detail["tags"]}
 
 
 def test_person_alias_mapping_updates_tags_search_and_dashboard(
@@ -231,14 +231,14 @@ def test_person_alias_mapping_updates_tags_search_and_dashboard(
 
     update = client.patch(
         f"/people/{person_id}",
-        json={"display_name": "민준", "aliases": ["쭈니", "아들"]},
+        json={"display_name": "민준", "aliases": ["쭈니", "꼬마"]},
     )
 
     assert update.status_code == 200
-    assert update.json()["aliases"] == ["쭈니", "아들"]
+    assert update.json()["aliases"] == ["쭈니", "꼬마"]
     with client.app.state.database.session_factory() as session:
         vocab_after = TagVocabularyCache(session).get()
-        assert {"민준", "쭈니", "아들"}.issubset(vocab_after.person_tags)
+        assert {"민준", "쭈니", "꼬마"}.issubset(vocab_after.person_tags)
 
     face_id = update.json()["sample_face_ids"][0]
     crop = client.get(f"/people/faces/{face_id}/crop")
@@ -249,7 +249,7 @@ def test_person_alias_mapping_updates_tags_search_and_dashboard(
         (tag["tag_type"], tag["tag_value"])
         for tag in detail["tags"]
         if tag["tag_type"] == "person"
-    } == {("person", "민준"), ("person", "쭈니"), ("person", "아들")}
+    } == {("person", "민준"), ("person", "쭈니"), ("person", "꼬마")}
 
     search = client.get("/search", params={"q": "쭈니 사진"})
     assert search.status_code == 200
@@ -259,7 +259,7 @@ def test_person_alias_mapping_updates_tags_search_and_dashboard(
     dashboard = client.get("/dashboard").text
     assert "사람 이름" in dashboard
     assert f"/people/faces/{face_id}/crop" in dashboard
-    assert "쭈니, 아들" in dashboard
+    assert "쭈니, 꼬마" in dashboard
     assert 'class="btn-copy person-preview-trigger"' in dashboard
     assert "trove.dashboard.people_manager.open" in dashboard
     assert 'id="people-filter"' in dashboard

@@ -291,13 +291,13 @@ def test_face_query_routes_to_semantic() -> None:
 
 def test_person_alias_with_stripped_particle_still_routes_to_auto_face() -> None:
     mode, reason = resolve_effective_mode(
-        normalize_query("꼬물이"),
+        normalize_query("방울이"),
         "hybrid",
         [],
         planner_intent="visual",
         tag_vocab=TagVocabulary(
-            person_tags=frozenset({"정이한", "꼬물이", "꼬맹이"}),
-            all_tags=frozenset({"정이한", "꼬물이", "꼬맹이"}),
+            person_tags=frozenset({"박지호", "방울이", "깜찍이"}),
+            all_tags=frozenset({"박지호", "방울이", "깜찍이"}),
         ),
     )
 
@@ -323,7 +323,7 @@ def test_place_alias_with_stripped_particle_still_routes_to_auto_travel() -> Non
 
 def test_shadow_backend_skips_generic_face_hint_for_named_person_query(monkeypatch) -> None:
     backend = object.__new__(SqlAlchemyHybridSearchBackend)
-    tagged = [{"file_id": "named-face", "tags": [{"type": "person", "value": "정이한"}]}]
+    tagged = [{"file_id": "named-face", "tags": [{"type": "person", "value": "박지호"}]}]
 
     monkeypatch.setattr(backend, "_tagged_shadow_results", lambda query, *, limit, extra_terms=None, plan=None: tagged)
     monkeypatch.setattr(backend, "_resolve_person_tag_ids", lambda query: {"person-000001"})
@@ -336,16 +336,16 @@ def test_shadow_backend_skips_generic_face_hint_for_named_person_query(monkeypat
 
     results = SqlAlchemyHybridSearchBackend.search_by_shadow_doc(
         backend,
-        "정이한",
+        "박지호",
         limit=10,
         plan=QueryPlan(
-            original_query="정이한",
-            normalized_query="정이한",
-            keyword_query="정이한",
-            visual_queries=["정이한"],
+            original_query="박지호",
+            normalized_query="박지호",
+            keyword_query="박지호",
+            visual_queries=["박지호"],
             date_from=None,
             date_to=None,
-            person_terms=["정이한"],
+            person_terms=["박지호"],
             place_terms=[],
             ocr_terms=[],
             visual_terms=[],
@@ -396,10 +396,10 @@ def test_semantic_query_uses_auto_tags_as_ranking_signal() -> None:
 
 def test_single_named_person_search_prefers_solo_photos_over_group_photos() -> None:
     plan = plan_query(
-        "윤겸",
+        "서연",
         tag_vocab=TagVocabulary(
-            person_tags=frozenset({"윤겸", "윤겸이"}),
-            all_tags=frozenset({"윤겸", "윤겸이"}),
+            person_tags=frozenset({"서연", "서연이"}),
+            all_tags=frozenset({"서연", "서연이"}),
         ),
     )
     results = [
@@ -408,14 +408,14 @@ def test_single_named_person_search_prefers_solo_photos_over_group_photos() -> N
             "tag_exact_match": True,
             "rank_score": 1.0,
             "person_count": 2,
-            "tags": [{"type": "person", "value": "윤겸"}],
+            "tags": [{"type": "person", "value": "서연"}],
         },
         {
             "file_id": "solo",
             "tag_exact_match": True,
             "rank_score": 0.2,
             "person_count": 1,
-            "tags": [{"type": "person", "value": "윤겸"}],
+            "tags": [{"type": "person", "value": "서연"}],
         },
     ]
 
@@ -429,10 +429,10 @@ def test_single_named_person_search_prefers_solo_photos_over_group_photos() -> N
 
 def test_named_person_search_skips_burst_and_daily_caps() -> None:
     plan = plan_query(
-        "정이한",
+        "박지호",
         tag_vocab=TagVocabulary(
-            person_tags=frozenset({"정이한"}),
-            all_tags=frozenset({"정이한"}),
+            person_tags=frozenset({"박지호"}),
+            all_tags=frozenset({"박지호"}),
         ),
     )
     results = [
@@ -440,37 +440,37 @@ def test_named_person_search_skips_burst_and_daily_caps() -> None:
             "file_id": "a",
             "rank_score": 1.0,
             "captured_at": "2026-05-01T10:00:00",
-            "tags": [{"type": "person", "value": "정이한"}],
+            "tags": [{"type": "person", "value": "박지호"}],
         },
         {
             "file_id": "b",
             "rank_score": 0.9,
             "captured_at": "2026-05-01T10:00:01",
-            "tags": [{"type": "person", "value": "정이한"}],
+            "tags": [{"type": "person", "value": "박지호"}],
         },
         {
             "file_id": "c",
             "rank_score": 0.8,
             "captured_at": "2026-05-01T12:00:00",
-            "tags": [{"type": "person", "value": "정이한"}],
+            "tags": [{"type": "person", "value": "박지호"}],
         },
         {
             "file_id": "d",
             "rank_score": 0.7,
             "captured_at": "2026-05-01T13:00:00",
-            "tags": [{"type": "person", "value": "정이한"}],
+            "tags": [{"type": "person", "value": "박지호"}],
         },
         {
             "file_id": "e",
             "rank_score": 0.6,
             "captured_at": "2026-05-01T14:00:00",
-            "tags": [{"type": "person", "value": "정이한"}],
+            "tags": [{"type": "person", "value": "박지호"}],
         },
         {
             "file_id": "f",
             "rank_score": 0.5,
             "captured_at": "2026-05-01T15:00:00",
-            "tags": [{"type": "person", "value": "정이한"}],
+            "tags": [{"type": "person", "value": "박지호"}],
         },
     ]
 
@@ -654,13 +654,13 @@ def test_place_hard_filter_accepts_hierarchical_geocode_tag() -> None:
 
 def test_compound_person_place_query_requires_both_terms() -> None:
     plan = QueryPlan(
-        original_query="윤겸이랑 바다에서 찍은 사진",
-        normalized_query="윤겸이랑 바다에서 찍은 사진",
-        keyword_query="윤겸 바다",
-        visual_queries=["윤겸이랑 바다에서 찍은 사진"],
+        original_query="서연이랑 바다에서 찍은 사진",
+        normalized_query="서연이랑 바다에서 찍은 사진",
+        keyword_query="서연 바다",
+        visual_queries=["서연이랑 바다에서 찍은 사진"],
         date_from=None,
         date_to=None,
-        person_terms=["윤겸", "윤겸이"],
+        person_terms=["서연", "서연이"],
         place_terms=["바다"],
         ocr_terms=[],
         visual_terms=[],
@@ -668,8 +668,8 @@ def test_compound_person_place_query_requires_both_terms() -> None:
         require_place_match=True,
     )
     results = [
-        {"file_id": "both", "tags": [{"type": "person", "value": "윤겸"}, {"type": "place", "value": "바다"}]},
-        {"file_id": "person-only", "tags": [{"type": "person", "value": "윤겸"}]},
+        {"file_id": "both", "tags": [{"type": "person", "value": "서연"}, {"type": "place", "value": "바다"}]},
+        {"file_id": "person-only", "tags": [{"type": "person", "value": "서연"}]},
         {"file_id": "place-only", "tags": [{"type": "place", "value": "바다"}]},
     ]
 
@@ -809,17 +809,17 @@ def test_feedback_reranker_tolerates_backend_without_support() -> None:
 
 def test_plan_query_requires_all_persons_for_multiple_names() -> None:
     vocab = TagVocabulary(
-        person_tags=frozenset({"정이한", "장윤겸"}),
-        all_tags=frozenset({"정이한", "장윤겸"}),
+        person_tags=frozenset({"박지호", "이서연"}),
+        all_tags=frozenset({"박지호", "이서연"}),
     )
-    plan = plan_query("정이한이랑 장윤겸이랑 찍은 사진", tag_vocab=vocab)
-    assert set(plan.person_terms) == {"정이한", "장윤겸"}
+    plan = plan_query("박지호이랑 이서연이랑 찍은 사진", tag_vocab=vocab)
+    assert set(plan.person_terms) == {"박지호", "이서연"}
     assert plan.require_all_persons is True
     assert plan.requires_person_match() is True
 
     # 명시적 OR 표현이 있으면 합집합(OR)로 둔다
-    plan_or = plan_query("정이한 또는 장윤겸", tag_vocab=vocab)
-    assert set(plan_or.person_terms) == {"정이한", "장윤겸"}
+    plan_or = plan_query("박지호 또는 이서연", tag_vocab=vocab)
+    assert set(plan_or.person_terms) == {"박지호", "이서연"}
     assert plan_or.require_all_persons is False
 
 
@@ -828,16 +828,16 @@ def test_matches_person_terms_and_requires_every_named_person() -> None:
     from app.services.search.planner import QueryPlan
 
     plan = QueryPlan(
-        original_query="정이한이랑 장윤겸이랑 찍은 사진",
-        normalized_query="정이한 장윤겸 찍은 사진",
-        keyword_query="정이한 장윤겸",
+        original_query="박지호이랑 이서연이랑 찍은 사진",
+        normalized_query="박지호 이서연 찍은 사진",
+        keyword_query="박지호 이서연",
         visual_queries=[], date_from=None, date_to=None,
-        person_terms=["정이한", "장윤겸"], place_terms=[], ocr_terms=[],
+        person_terms=["박지호", "이서연"], place_terms=[], ocr_terms=[],
         visual_terms=[], intent="visual", require_all_persons=True,
     )
-    both = {"tags": [{"type": "person", "value": "정이한"},
-                     {"type": "person", "value": "장윤겸"}]}
-    only_one = {"tags": [{"type": "person", "value": "정이한"}],
+    both = {"tags": [{"type": "person", "value": "박지호"},
+                     {"type": "person", "value": "이서연"}]}
+    only_one = {"tags": [{"type": "person", "value": "박지호"}],
                 "matched_person_ids": [40]}
     # 두 사람 모두 있는 사진만 통과(AND), 한 사람만 있으면 matched id가 있어도 제외
     assert _matches_person_terms(both, plan) is True

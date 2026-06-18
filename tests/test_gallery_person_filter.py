@@ -97,14 +97,14 @@ def test_combo_lists_only_representative_names_not_aliases() -> None:
     with factory() as session:
         _add_media(session)
         # 대표 이름 + 애칭들이 전부 같은 'person' 태그로 저장돼 있다
-        session.add(Person(display_name="정이한", aliases_json=["이한", "아들", "꼬맹이"]))
-        for value in ("정이한", "이한", "아들", "꼬맹이"):
+        session.add(Person(display_name="박지호", aliases_json=["지호", "꼬마", "깜찍이"]))
+        for value in ("박지호", "지호", "꼬마", "깜찍이"):
             session.add(Tag(file_id="f1", tag_type="person", tag_value=value))
         session.commit()
 
         options = _list_named_person_display_names(session)
 
-    assert options == ["정이한"]  # 애칭(이한·아들·꼬맹이)은 빠진다
+    assert options == ["박지호"]  # 애칭(지호·꼬마·깜찍이)은 빠진다
 
 
 def test_combo_excludes_internal_ids_and_orphan_named_people() -> None:
@@ -117,20 +117,20 @@ def test_combo_excludes_internal_ids_and_orphan_named_people() -> None:
         # 이름은 있으나 사진(태그)이 없는 인물 → 콤보에 넣어도 결과 0이므로 제외
         session.add(Person(display_name="유령이름"))
         # 정상: 이름 + 태그 둘 다 있음
-        session.add(Person(display_name="김건우"))
-        session.add(Tag(file_id="f1", tag_type="person", tag_value="김건우"))
+        session.add(Person(display_name="최유진"))
+        session.add(Tag(file_id="f1", tag_type="person", tag_value="최유진"))
         session.commit()
 
         options = _list_named_person_display_names(session)
 
-    assert options == ["김건우"]
+    assert options == ["최유진"]
 
 
 def test_combo_orders_by_name_case_insensitive() -> None:
     factory = _session_factory()
     with factory() as session:
         _add_media(session)
-        for name in ("정동의", "김건우", "장윤겸"):
+        for name in ("김민준", "최유진", "이서연"):
             session.add(Person(display_name=name))
             session.add(Tag(file_id="f1", tag_type="person", tag_value=name))
         session.commit()
@@ -138,4 +138,4 @@ def test_combo_orders_by_name_case_insensitive() -> None:
         options = _list_named_person_display_names(session)
 
     assert options == sorted(options, key=str.lower)
-    assert set(options) == {"정동의", "김건우", "장윤겸"}
+    assert set(options) == {"김민준", "최유진", "이서연"}
