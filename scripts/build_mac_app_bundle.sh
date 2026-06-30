@@ -22,7 +22,8 @@ BUNDLE_PYTHON="${TROVE_BUNDLE_PYTHON:-1}"
 BUNDLE_WEIGHTS="${TROVE_BUNDLE_WEIGHTS:-1}"
 VERSION="${TROVE_MAC_VERSION:-0.1.0}"
 BUILD_NUMBER="${TROVE_MAC_BUILD:-1}"
-BUNDLE_ID="${TROVE_MAC_BUNDLE_ID:-com.trove.mac}"
+# 번들 ID는 회사(oovelo).앱(trove) 역DNS 관례. 퍼블리셔=oovelo, 앱=Trove.
+BUNDLE_ID="${TROVE_MAC_BUNDLE_ID:-com.oovelo.trove}"
 # Sparkle 2 자동 업데이트 메타데이터. 둘 다 설정되어야 정상 동작한다.
 # - SUFeedURL: appcast.xml의 정식 https URL (GitHub Pages 등 정적 호스팅).
 # - SUPublicEDKey: Sparkle generate_keys로 만든 edDSA public key (base64).
@@ -96,6 +97,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <string>6.0</string>
     <key>CFBundleName</key>
     <string>Trove</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>© 2026 oovelo. All rights reserved.</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

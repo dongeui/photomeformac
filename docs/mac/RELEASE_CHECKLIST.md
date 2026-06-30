@@ -26,7 +26,7 @@
 ```bash
 security find-identity -v -p codesigning        # 인증서 확인
 export TROVE_MAC_SIGN_IDENTITY="Developer ID Application: <NAME> (<TEAMID>)"
-export TROVE_MAC_BUNDLE_ID="com.trove.mac"
+export TROVE_MAC_BUNDLE_ID="com.oovelo.trove"
 export TROVE_MAC_VERSION="0.1.0"
 export TROVE_MAC_BUILD="1"
 ```
@@ -68,7 +68,8 @@ scripts/notarize_mac_app.sh
 
 현재 포함:
 
-- `CFBundleIdentifier`: `TROVE_MAC_BUNDLE_ID` 기본값 `com.trove.mac`
+- `CFBundleIdentifier`: `TROVE_MAC_BUNDLE_ID` 기본값 `com.oovelo.trove` (회사 oovelo · 앱 trove)
+- `NSHumanReadableCopyright`: © 2026 oovelo
 - version/build env override
 - `CFBundleIconFile=AppIcon`
 - 사진/문서/다운로드/데스크탑/로컬 네트워크 권한 설명
